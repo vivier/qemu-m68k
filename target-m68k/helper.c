@@ -242,7 +242,7 @@ void cpu_m68k_flush_flags(CPUM68KState *env, int cc_op)
     uint32_t dest;
     uint32_t tmp;
 
-#define HIGHBIT 0x80000000u
+#define HIGHBIT(type) (1u << (sizeof(type) * 8 - 1))
 
 #define SET_NZ(x) do { \
     if ((x) == 0) \
@@ -256,7 +256,34 @@ void cpu_m68k_flush_flags(CPUM68KState *env, int cc_op)
     tmp = dest + src; \
     if ((utype) tmp < (utype) src) \
         flags |= CCF_C; \
-    if ((1u << (sizeof(type) * 8 - 1)) & (tmp ^ dest) & (tmp ^ src)) \
+    if (HIGHBIT(type) & (tmp ^ dest) & (tmp ^ src)) \
+        flags |= CCF_V; \
+    } while (0)
+
+#define SET_FLAGS_ADD(type, utype) do { \
+    SET_NZ((type)dest); \
+    if ((utype) dest < (utype) src) \
+        flags |= CCF_C; \
+    tmp = dest - src; \
+    if (HIGHBIT(type) & (src ^ dest) & ~(tmp ^ src)) \
+        flags |= CCF_V; \
+    } while (0)
+
+#define SET_FLAGS_ADDX(type, utype) do { \
+    SET_NZ((type)dest); \
+    if ((utype) dest <= (utype) src) \
+        flags |= CCF_C; \
+    tmp = dest - src - 1; \
+    if (HIGHBIT(type) & (src ^ dest) & ~(tmp ^ src)) \
+        flags |= CCF_V; \
+    } while (0)
+
+#define SET_FLAGS_SUBX(type, utype) do { \
+    SET_NZ((type)dest); \
+    tmp = dest + src + 1; \
+    if ((utype) tmp <= (utype) src) \
+        flags |= CCF_C; \
+    if (HIGHBIT(type) & (tmp ^ dest) & (tmp ^ src)) \
         flags |= CCF_V; \
     } while (0)
 
@@ -270,38 +297,41 @@ void cpu_m68k_flush_flags(CPUM68KState *env, int cc_op)
     case CC_OP_LOGIC:
         SET_NZ(dest);
         break;
+    case CC_OP_ADDB:
+        SET_FLAGS_ADD(int8_t, uint8_t);
+        break;
+    case CC_OP_ADDW:
+        SET_FLAGS_ADD(int16_t, uint16_t);
+        break;
     case CC_OP_ADD:
-        SET_NZ(dest);
-        if (dest < src)
-            flags |= CCF_C;
-        tmp = dest - src;
-        if (HIGHBIT & (src ^ dest) & ~(tmp ^ src))
-            flags |= CCF_V;
+        SET_FLAGS_ADD(int32_t, uint32_t);
+        break;
+    case CC_OP_SUBB:
+        SET_FLAGS_SUB(int8_t, uint8_t);
+        break;
+    case CC_OP_SUBW:
+        SET_FLAGS_SUB(int16_t, uint16_t);
         break;
     case CC_OP_SUB:
         SET_FLAGS_SUB(int32_t, uint32_t);
         break;
-    case CC_OP_CMPB:
-        SET_FLAGS_SUB(int8_t, uint8_t);
+    case CC_OP_ADDXB:
+        SET_FLAGS_ADDX(int8_t, uint8_t);
         break;
-    case CC_OP_CMPW:
-        SET_FLAGS_SUB(int16_t, uint16_t);
+    case CC_OP_ADDXW:
+        SET_FLAGS_ADDX(int16_t, uint16_t);
         break;
     case CC_OP_ADDX:
-        SET_NZ(dest);
-        if (dest <= src)
-            flags |= CCF_C;
-        tmp = dest - src - 1;
-        if (HIGHBIT & (src ^ dest) & ~(tmp ^ src))
-            flags |= CCF_V;
+        SET_FLAGS_ADDX(int32_t, uint32_t);
+        break;
+    case CC_OP_SUBXB:
+        SET_FLAGS_SUBX(int8_t, uint8_t);
+        break;
+    case CC_OP_SUBXW:
+        SET_FLAGS_SUBX(int16_t, uint16_t);
         break;
     case CC_OP_SUBX:
-        SET_NZ(dest);
-        tmp = dest + src + 1;
-        if (tmp <= src)
-            flags |= CCF_C;
-        if (HIGHBIT & (tmp ^ dest) & (tmp ^ src))
-            flags |= CCF_V;
+        SET_FLAGS_SUBX(int32_t, uint32_t);
         break;
     case CC_OP_SHIFT:
         SET_NZ(dest);

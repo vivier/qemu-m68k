@@ -262,6 +262,22 @@ static TCGv gen_ldst(DisasContext *s, int opsize, TCGv addr, TCGv val,
     }
 }
 
+/* Read an 8-bit immediate constant */
+static inline uint32_t read_im8(DisasContext *s)
+{
+    uint32_t im;
+    im = ldsb_code(s->pc + 1);
+    s->pc += 2;
+    return im;
+}
+/* Read a 16-bit immediate constant */
+static inline uint32_t read_im16(DisasContext *s)
+{
+    uint32_t im;
+    im = ldsw_code(s->pc);
+    s->pc += 2;
+    return im;
+}
 /* Read a 32-bit immediate constant.  */
 static inline uint32_t read_im32(DisasContext *s)
 {
@@ -437,6 +453,25 @@ static inline int opsize_bytes(int opsize)
         return 0;
     }
 }
+
+static inline int insn_opsize(int insn, int pos)
+{
+    switch ((insn >> pos) & 3) {
+    case 0: return OS_BYTE;
+    case 1: return OS_WORD;
+    case 2: return OS_LONG;
+    default: abort();
+    }
+}
+
+#define SET_CC_OP(opsize, op) do { \
+    switch (opsize) { \
+    case OS_BYTE: s->cc_op = CC_OP_##op##B; break; \
+    case OS_WORD: s->cc_op = CC_OP_##op##W; break; \
+    case OS_LONG: s->cc_op = CC_OP_##op; break; \
+    default: abort(); \
+    } \
+} while (0)
 
 /* Assign value to a register.  If the width is less than the register width
    only the low part of the register is set.  */
@@ -974,31 +1009,33 @@ DISAS_INSN(addsub)
     TCGv tmp;
     TCGv addr;
     int add;
+    int opsize;
 
     add = (insn & 0x4000) != 0;
+    opsize = insn_opsize(insn, 6);
     reg = DREG(insn, 9);
     dest = tcg_temp_new();
     if (insn & 0x100) {
-        SRC_EA(tmp, OS_LONG, 0, &addr);
+        SRC_EA(tmp, opsize, -1, &addr);
         src = reg;
     } else {
         tmp = reg;
-        SRC_EA(src, OS_LONG, 0, NULL);
+        SRC_EA(src, opsize, -1, NULL);
     }
     if (add) {
         tcg_gen_add_i32(dest, tmp, src);
         gen_helper_xflag_lt(QREG_CC_X, dest, src);
-        s->cc_op = CC_OP_ADD;
+        SET_CC_OP(opsize, ADD);
     } else {
         gen_helper_xflag_lt(QREG_CC_X, tmp, src);
         tcg_gen_sub_i32(dest, tmp, src);
-        s->cc_op = CC_OP_SUB;
+        SET_CC_OP(opsize, SUB);
     }
     gen_update_cc_add(dest, src);
     if (insn & 0x100) {
-        DEST_EA(insn, OS_LONG, dest, &addr);
+        DEST_EA(insn, opsize, dest, &addr);
     } else {
-        tcg_gen_mov_i32(reg, dest);
+        gen_partset_reg(opsize, reg, dest);
     }
 }
 
@@ -1189,10 +1226,24 @@ DISAS_INSN(arith_im)
     TCGv src1;
     TCGv dest;
     TCGv addr;
+    int opsize;
 
     op = (insn >> 9) & 7;
-    SRC_EA(src1, OS_LONG, 0, (op == 6) ? NULL : &addr);
-    im = read_im32(s);
+    opsize = insn_opsize(insn, 6);
+    switch (opsize) {
+    case OS_BYTE:
+        im = read_im8(s);
+        break;
+    case OS_WORD:
+        im = read_im16(s);
+        break;
+    case OS_LONG:
+        im = read_im32(s);
+        break;
+    default:
+       abort();
+    }
+    SRC_EA(src1, opsize, -1, (op == 6) ? NULL : &addr);
     dest = tcg_temp_new();
     switch (op) {
     case 0: /* ori */
@@ -1208,14 +1259,14 @@ DISAS_INSN(arith_im)
         gen_helper_xflag_lt(QREG_CC_X, dest, tcg_const_i32(im));
         tcg_gen_subi_i32(dest, dest, im);
         gen_update_cc_add(dest, tcg_const_i32(im));
-        s->cc_op = CC_OP_SUB;
+        SET_CC_OP(opsize, SUB);
         break;
     case 3: /* addi */
         tcg_gen_mov_i32(dest, src1);
         tcg_gen_addi_i32(dest, dest, im);
         gen_update_cc_add(dest, tcg_const_i32(im));
         gen_helper_xflag_lt(QREG_CC_X, dest, tcg_const_i32(im));
-        s->cc_op = CC_OP_ADD;
+	SET_CC_OP(opsize, ADD);
         break;
     case 5: /* eori */
         tcg_gen_xori_i32(dest, src1, im);
@@ -1225,13 +1276,13 @@ DISAS_INSN(arith_im)
         tcg_gen_mov_i32(dest, src1);
         tcg_gen_subi_i32(dest, dest, im);
         gen_update_cc_add(dest, tcg_const_i32(im));
-        s->cc_op = CC_OP_SUB;
+        SET_CC_OP(opsize, SUB);
         break;
     default:
         abort();
     }
     if (op != 6) {
-        DEST_EA(insn, OS_LONG, dest, &addr);
+        DEST_EA(insn, opsize, dest, &addr);
     }
 }
 
@@ -1307,19 +1358,7 @@ DISAS_INSN(clr)
 {
     int opsize;
 
-    switch ((insn >> 6) & 3) {
-    case 0: /* clr.b */
-        opsize = OS_BYTE;
-        break;
-    case 1: /* clr.w */
-        opsize = OS_WORD;
-        break;
-    case 2: /* clr.l */
-        opsize = OS_LONG;
-        break;
-    default:
-        abort();
-    }
+    opsize = insn_opsize(insn, 6);
     DEST_EA(insn, opsize, tcg_const_i32(0), NULL);
     gen_logic_cc(s, tcg_const_i32(0));
 }
@@ -1347,17 +1386,20 @@ DISAS_INSN(move_from_ccr)
 
 DISAS_INSN(neg)
 {
-    TCGv reg;
     TCGv src1;
+    TCGv dest;
+    TCGv addr;
+    int opsize;
 
-    reg = DREG(insn, 0);
-    src1 = tcg_temp_new();
-    tcg_gen_mov_i32(src1, reg);
-    tcg_gen_neg_i32(reg, src1);
-    s->cc_op = CC_OP_SUB;
-    gen_update_cc_add(reg, src1);
-    gen_helper_xflag_lt(QREG_CC_X, tcg_const_i32(0), src1);
-    s->cc_op = CC_OP_SUB;
+    opsize = insn_opsize(insn, 6);
+    SRC_EA(src1, opsize, -1, &addr);
+    dest = tcg_temp_new();
+    tcg_gen_neg_i32(dest, src1);
+    DEST_EA(insn, opsize, dest, &addr);
+    SET_CC_OP(opsize, SUB);
+    gen_update_cc_add(src1, dest);
+    gen_helper_xflag_lt(QREG_CC_X, tcg_const_i32(0), dest);
+    SET_CC_OP(opsize, SUB);
 }
 
 static void gen_set_sr_im(DisasContext *s, uint16_t val, int ccr_only)
@@ -1404,11 +1446,17 @@ DISAS_INSN(move_to_ccr)
 
 DISAS_INSN(not)
 {
-    TCGv reg;
+    TCGv src1;
+    TCGv dest;
+    TCGv addr;
+    int opsize;
 
-    reg = DREG(insn, 0);
-    tcg_gen_not_i32(reg, reg);
-    gen_logic_cc(s, reg);
+    opsize = insn_opsize(insn, 6);
+    SRC_EA(src1, opsize, -1, &addr);
+    dest = tcg_temp_new();
+    tcg_gen_not_i32(dest, src1);
+    DEST_EA(insn, opsize, dest, &addr);
+    gen_logic_cc(s, dest);
 }
 
 DISAS_INSN(swap)
@@ -1463,20 +1511,8 @@ DISAS_INSN(tst)
     int opsize;
     TCGv tmp;
 
-    switch ((insn >> 6) & 3) {
-    case 0: /* tst.b */
-        opsize = OS_BYTE;
-        break;
-    case 1: /* tst.w */
-        opsize = OS_WORD;
-        break;
-    case 2: /* tst.l */
-        opsize = OS_LONG;
-        break;
-    default:
-        abort();
-    }
-    SRC_EA(tmp, opsize, 1, NULL);
+    opsize = insn_opsize(insn, 6);
+    SRC_EA(tmp, opsize, -1, NULL);
     gen_logic_cc(s, tmp);
 }
 
@@ -1597,8 +1633,14 @@ DISAS_INSN(addsubq)
     TCGv dest;
     int val;
     TCGv addr;
+    int opsize;
 
-    SRC_EA(src1, OS_LONG, 0, &addr);
+    if ((insn & 070) == 010) {
+        /* Operation on address register is always long.  */
+        opsize = OS_LONG;
+    } else
+        opsize = insn_opsize(insn, 6);
+    SRC_EA(src1, opsize, -1, &addr);
     val = (insn >> 9) & 7;
     if (val == 0)
         val = 8;
@@ -1617,11 +1659,11 @@ DISAS_INSN(addsubq)
         if (insn & 0x0100) {
             gen_helper_xflag_lt(QREG_CC_X, dest, src2);
             tcg_gen_subi_i32(dest, dest, val);
-            s->cc_op = CC_OP_SUB;
+            SET_CC_OP(opsize, SUB);
         } else {
             tcg_gen_addi_i32(dest, dest, val);
             gen_helper_xflag_lt(QREG_CC_X, dest, src2);
-            s->cc_op = CC_OP_ADD;
+            SET_CC_OP(opsize, ADD);
         }
         gen_update_cc_add(dest, src2);
     }
@@ -1709,17 +1751,19 @@ DISAS_INSN(or)
     TCGv dest;
     TCGv src;
     TCGv addr;
+    int opsize;
 
+    opsize = insn_opsize(insn, 6);
     reg = DREG(insn, 9);
     dest = tcg_temp_new();
     if (insn & 0x100) {
-        SRC_EA(src, OS_LONG, 0, &addr);
+        SRC_EA(src, opsize, -1, &addr);
         tcg_gen_or_i32(dest, src, reg);
-        DEST_EA(insn, OS_LONG, dest, &addr);
+        DEST_EA(insn, opsize, dest, &addr);
     } else {
-        SRC_EA(src, OS_LONG, 0, NULL);
+        SRC_EA(src, opsize, -1, NULL);
         tcg_gen_or_i32(dest, src, reg);
-        tcg_gen_mov_i32(reg, dest);
+        gen_partset_reg(opsize, reg, dest);
     }
     gen_logic_cc(s, dest);
 }
@@ -1760,34 +1804,18 @@ DISAS_INSN(mov3q)
 
 DISAS_INSN(cmp)
 {
-    int op;
     TCGv src;
     TCGv reg;
     TCGv dest;
     int opsize;
 
-    op = (insn >> 6) & 3;
-    switch (op) {
-    case 0: /* cmp.b */
-        opsize = OS_BYTE;
-        s->cc_op = CC_OP_CMPB;
-        break;
-    case 1: /* cmp.w */
-        opsize = OS_WORD;
-        s->cc_op = CC_OP_CMPW;
-        break;
-    case 2: /* cmp.l */
-        opsize = OS_LONG;
-        s->cc_op = CC_OP_SUB;
-        break;
-    default:
-        abort();
-    }
-    SRC_EA(src, opsize, 1, NULL);
+    opsize = insn_opsize(insn, 6);
+    SRC_EA(src, opsize, -1, NULL);
     reg = DREG(insn, 9);
     dest = tcg_temp_new();
     tcg_gen_sub_i32(dest, reg, src);
     gen_update_cc_add(dest, src);
+    SET_CC_OP(opsize, SUB);
 }
 
 DISAS_INSN(cmpa)
@@ -1807,7 +1835,7 @@ DISAS_INSN(cmpa)
     dest = tcg_temp_new();
     tcg_gen_sub_i32(dest, reg, src);
     gen_update_cc_add(dest, src);
-    s->cc_op = CC_OP_SUB;
+    SET_CC_OP(opsize, SUB);
 }
 
 DISAS_INSN(eor)
@@ -1816,13 +1844,15 @@ DISAS_INSN(eor)
     TCGv reg;
     TCGv dest;
     TCGv addr;
+    int opsize;
 
-    SRC_EA(src, OS_LONG, 0, &addr);
+    opsize = insn_opsize(insn, 6);
+    SRC_EA(src, opsize, -1, &addr);
     reg = DREG(insn, 9);
     dest = tcg_temp_new();
     tcg_gen_xor_i32(dest, src, reg);
     gen_logic_cc(s, dest);
-    DEST_EA(insn, OS_LONG, dest, &addr);
+    DEST_EA(insn, opsize, dest, &addr);
 }
 
 DISAS_INSN(and)
@@ -1831,17 +1861,19 @@ DISAS_INSN(and)
     TCGv reg;
     TCGv dest;
     TCGv addr;
+    int opsize;
 
+    opsize = insn_opsize(insn, 6);
     reg = DREG(insn, 9);
     dest = tcg_temp_new();
     if (insn & 0x100) {
-        SRC_EA(src, OS_LONG, 0, &addr);
+        SRC_EA(src, opsize, -1, &addr);
         tcg_gen_and_i32(dest, src, reg);
-        DEST_EA(insn, OS_LONG, dest, &addr);
+        DEST_EA(insn, opsize, dest, &addr);
     } else {
-        SRC_EA(src, OS_LONG, 0, NULL);
+        SRC_EA(src, opsize, -1, NULL);
         tcg_gen_and_i32(dest, src, reg);
-        tcg_gen_mov_i32(reg, dest);
+        gen_partset_reg(opsize, reg, dest);
     }
     gen_logic_cc(s, dest);
 }
