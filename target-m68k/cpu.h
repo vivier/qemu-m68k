@@ -182,6 +182,7 @@ void do_m68k_semihosting(CPUM68KState *env, int nr);
    ISA revisions mentioned.  */
 
 enum m68k_features {
+    M68K_FEATURE_M68000,
     M68K_FEATURE_CF_ISA_A,
     M68K_FEATURE_CF_ISA_B, /* (ISA B or C).  */
     M68K_FEATURE_CF_ISA_APLUSC, /* BIT/BITREV, FF1, STRLDSR (ISA A+ or C).  */
@@ -192,7 +193,13 @@ enum m68k_features {
     M68K_FEATURE_CF_EMAC_B, /* Revision B EMAC (dual accumulate).  */
     M68K_FEATURE_USP, /* User Stack Pointer.  (ISA A+, B or C).  */
     M68K_FEATURE_EXT_FULL, /* 68020+ full extension word.  */
-    M68K_FEATURE_WORD_INDEX /* word sized address index registers.  */
+    M68K_FEATURE_WORD_INDEX, /* word sized address index registers.  */
+    M68K_FEATURE_SCALED_INDEX, /* scaled address index registers.  */
+    M68K_FEATURE_LONG_MULDIV,	/* 32 bit multiply/divide. */
+    M68K_FEATURE_QUAD_MULDIV,	/* 64 bit multiply/divide. */
+    M68K_FEATURE_BCCL,		/* Long conditional branches.  */
+    M68K_FEATURE_BITFIELD,	/* Bit field insns.  */
+    M68K_FEATURE_FPU
 };
 
 static inline int m68k_feature(CPUM68KState *env, int feature)
@@ -205,8 +212,8 @@ void m68k_cpu_list(FILE *f, fprintf_function cpu_fprintf);
 void register_m68k_insns (CPUM68KState *env);
 
 #ifdef CONFIG_USER_ONLY
-/* Linux uses 8k pages.  */
-#define TARGET_PAGE_BITS 13
+/* Linux uses 4k pages.  */
+#define TARGET_PAGE_BITS 12
 #else
 /* Smallest TLB entry size is 1k.  */
 #define TARGET_PAGE_BITS 10
