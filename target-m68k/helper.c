@@ -31,6 +31,10 @@
 #define SIGNBIT (1u << 31)
 
 enum m68k_cpuid {
+    M68K_CPUID_M68000,
+    M68K_CPUID_M68020,
+    M68K_CPUID_M68040,
+    M68K_CPUID_M68060,
     M68K_CPUID_M5206,
     M68K_CPUID_M5208,
     M68K_CPUID_CFV4E,
@@ -45,6 +49,10 @@ struct m68k_def_t {
 };
 
 static m68k_def_t m68k_cpu_defs[] = {
+    {"m68000", M68K_CPUID_M68000},
+    {"m68020", M68K_CPUID_M68020},
+    {"m68040", M68K_CPUID_M68040},
+    {"m68060", M68K_CPUID_M68060},
     {"m5206", M68K_CPUID_M5206},
     {"m5208", M68K_CPUID_M5208},
     {"cfv4e", M68K_CPUID_CFV4E},
@@ -110,12 +118,30 @@ static int cpu_m68k_set_model(CPUM68KState *env, const char *name)
         return -1;
 
     switch (def->id) {
+    case M68K_CPUID_M68020:
+    case M68K_CPUID_M68040:
+        m68k_set_feature(env, M68K_FEATURE_QUAD_MULDIV);
+    case M68K_CPUID_M68060:
+        m68k_set_feature(env, M68K_FEATURE_BRAL);
+        m68k_set_feature(env, M68K_FEATURE_BCCL);
+        m68k_set_feature(env, M68K_FEATURE_BITFIELD);
+        m68k_set_feature(env, M68K_FEATURE_EXT_FULL);
+        m68k_set_feature(env, M68K_FEATURE_SCALED_INDEX);
+        m68k_set_feature(env, M68K_FEATURE_LONG_MULDIV);
+        m68k_set_feature(env, M68K_FEATURE_FPU);
+    case M68K_CPUID_M68000:
+        m68k_set_feature(env, M68K_FEATURE_M68000);
+        m68k_set_feature(env, M68K_FEATURE_USP);
+        m68k_set_feature(env, M68K_FEATURE_WORD_INDEX);
+        break;
     case M68K_CPUID_M5206:
         m68k_set_feature(env, M68K_FEATURE_CF_ISA_A);
+        m68k_set_feature(env, M68K_FEATURE_SCALED_INDEX);
         break;
     case M68K_CPUID_M5208:
         m68k_set_feature(env, M68K_FEATURE_CF_ISA_A);
         m68k_set_feature(env, M68K_FEATURE_CF_ISA_APLUSC);
+        m68k_set_feature(env, M68K_FEATURE_SCALED_INDEX);
         m68k_set_feature(env, M68K_FEATURE_BRAL);
         m68k_set_feature(env, M68K_FEATURE_CF_EMAC);
         m68k_set_feature(env, M68K_FEATURE_USP);
@@ -123,16 +149,19 @@ static int cpu_m68k_set_model(CPUM68KState *env, const char *name)
     case M68K_CPUID_CFV4E:
         m68k_set_feature(env, M68K_FEATURE_CF_ISA_A);
         m68k_set_feature(env, M68K_FEATURE_CF_ISA_B);
+        m68k_set_feature(env, M68K_FEATURE_SCALED_INDEX);
         m68k_set_feature(env, M68K_FEATURE_BRAL);
         m68k_set_feature(env, M68K_FEATURE_CF_FPU);
         m68k_set_feature(env, M68K_FEATURE_CF_EMAC);
         m68k_set_feature(env, M68K_FEATURE_USP);
         break;
     case M68K_CPUID_ANY:
+        m68k_set_feature(env, M68K_FEATURE_M68000);
         m68k_set_feature(env, M68K_FEATURE_CF_ISA_A);
         m68k_set_feature(env, M68K_FEATURE_CF_ISA_B);
         m68k_set_feature(env, M68K_FEATURE_CF_ISA_APLUSC);
         m68k_set_feature(env, M68K_FEATURE_BRAL);
+        m68k_set_feature(env, M68K_FEATURE_BCCL);
         m68k_set_feature(env, M68K_FEATURE_CF_FPU);
         /* MAC and EMAC are mututally exclusive, so pick EMAC.
            It's mostly backwards compatible.  */
@@ -140,12 +169,17 @@ static int cpu_m68k_set_model(CPUM68KState *env, const char *name)
         m68k_set_feature(env, M68K_FEATURE_CF_EMAC_B);
         m68k_set_feature(env, M68K_FEATURE_USP);
         m68k_set_feature(env, M68K_FEATURE_EXT_FULL);
+        m68k_set_feature(env, M68K_FEATURE_SCALED_INDEX);
         m68k_set_feature(env, M68K_FEATURE_WORD_INDEX);
+        m68k_set_feature(env, M68K_FEATURE_BITFIELD);
+        m68k_set_feature(env, M68K_FEATURE_LONG_MULDIV);
+        m68k_set_feature(env, M68K_FEATURE_QUAD_MULDIV);
         break;
     }
 
     register_m68k_insns(env);
-    if (m68k_feature (env, M68K_FEATURE_CF_FPU)) {
+    if (m68k_feature (env, M68K_FEATURE_CF_FPU) ||
+        m68k_feature (env, M68K_FEATURE_FPU)) {
         gdb_register_coprocessor(env, fpu_gdb_get_reg, fpu_gdb_set_reg,
                                  11, "cf-fp.xml", 18);
     }
