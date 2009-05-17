@@ -219,8 +219,11 @@ void HELPER(divu)(CPUState *env, uint32_t word)
         flags |= CCF_Z;
     else if ((int32_t)quot < 0)
         flags |= CCF_N;
-    env->div1 = quot;
-    env->div2 = rem;
+    /* Don't modify destination if overflow occured.  */
+    if ((flags & CCF_V) == 0) {
+        env->div1 = quot;
+        env->div2 = rem;
+    }
     env->cc_dest = flags;
 }
 
@@ -245,7 +248,73 @@ void HELPER(divs)(CPUState *env, uint32_t word)
         flags |= CCF_Z;
     else if (quot < 0)
         flags |= CCF_N;
-    env->div1 = quot;
-    env->div2 = rem;
+    /* Don't modify destination if overflow occured.  */
+    if ((flags & CCF_V) == 0) {
+        env->div1 = quot;
+        env->div2 = rem;
+    }
+    env->cc_dest = flags;
+}
+
+void HELPER(divu64)(CPUState *env)
+{
+    uint32_t num;
+    uint32_t den;
+    uint32_t quot;
+    uint32_t rem;
+    uint32_t flags;
+
+    num = env->div1;
+    den = env->div2;
+    /* ??? This needs to make sure the throwing location is accurate.  */
+    if (den == 0)
+        raise_exception(EXCP_DIV0);
+    quot = (num | ((uint64_t)env->quadh << 32)) / den;
+    rem = (num | ((uint64_t)env->quadh << 32)) % den;
+    flags = 0;
+    /* Avoid using a PARAM1 of zero.  This breaks dyngen because it uses
+       the address of a symbol, and gcc knows symbols can't have address
+       zero.  */
+    if (quot > 0xffffffff)
+        flags |= CCF_V;
+    if (quot == 0)
+        flags |= CCF_Z;
+    else if ((int32_t)quot < 0)
+        flags |= CCF_N;
+    /* Don't modify destination if overflow occured.  */
+    if ((flags & CCF_V) == 0) {
+        env->div1 = quot;
+        env->div2 = rem;
+    }
+    env->cc_dest = flags;
+}
+
+void HELPER(divs64)(CPUState *env)
+{
+    int32_t num;
+    int32_t den;
+    int32_t quot;
+    int32_t rem;
+    int32_t flags;
+
+    num = env->div1;
+    den = env->div2;
+    if (den == 0)
+        raise_exception(EXCP_DIV0);
+    quot = (num | ((int64_t)env->quadh << 32)) / den;
+    rem = (num | ((int64_t)env->quadh << 32)) % den;
+    rem = num % den;
+    flags = 0;
+    if (quot != (int32_t)quot)
+        flags |= CCF_V;
+    if (quot == 0)
+        flags |= CCF_Z;
+    else if (quot < 0)
+        flags |= CCF_N;
+    /* Don't modify destination if overflow occured.  */
+    if ((flags & CCF_V) == 0) {
+        env->div1 = quot;
+        env->div2 = rem;
+    }
     env->cc_dest = flags;
 }
