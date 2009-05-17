@@ -1020,10 +1020,27 @@ DISAS_INSN(divl)
     TCGv reg;
     uint16_t ext;
 
-    ext = lduw_code(s->pc);
-    s->pc += 2;
-    if (ext & 0x87f8) {
-        gen_exception(s, s->pc - 4, EXCP_UNSUPPORTED);
+    ext = read_im16(s);
+    if (ext & 0x400) {
+        if (!m68k_feature(s->env, M68K_FEATURE_QUAD_MULDIV)) {
+            gen_exception(s, s->pc - 4, EXCP_UNSUPPORTED);
+            return;
+        }
+        num = DREG(ext, 12);
+        reg = DREG(ext, 0);
+        tcg_gen_mov_i32(QREG_DIV1, num);
+        tcg_gen_mov_i32(QREG_QUADH, reg);
+        SRC_EA(den, OS_LONG, 0, NULL);
+        tcg_gen_mov_i32(QREG_DIV2, den);
+        if (ext & 0x0800) {
+            gen_helper_divs64(cpu_env);
+        } else {
+            gen_helper_divu64(cpu_env);
+        }
+        tcg_gen_mov_i32(num, QREG_DIV1);
+        if (!TCGV_EQUAL(num, reg))
+            tcg_gen_mov_i32(reg, QREG_DIV2);
+        s->cc_op = CC_OP_FLAGS;
         return;
     }
     num = DREG(ext, 12);
@@ -1036,10 +1053,12 @@ DISAS_INSN(divl)
     } else {
         gen_helper_divu(cpu_env, tcg_const_i32(0));
     }
-    if ((ext & 7) == ((ext >> 12) & 7)) {
+    if (TCGV_EQUAL(num, reg) ||
+        m68k_feature(s->env, M68K_FEATURE_LONG_MULDIV)) {
         /* div */
-        tcg_gen_mov_i32 (reg, QREG_DIV1);
-    } else {
+        tcg_gen_mov_i32 (num, QREG_DIV1);
+    }
+    if (!TCGV_EQUAL(num, reg)) {
         /* rem */
         tcg_gen_mov_i32 (reg, QREG_DIV2);
     }
@@ -3010,6 +3029,7 @@ void register_m68k_insns (CPUM68KState *env)
     INSN(illegal,   4afc, ffff, M68000);
     INSN(mull,      4c00, ffc0, CF_ISA_A);
     INSN(divl,      4c40, ffc0, CF_ISA_A);
+    INSN(divl,      4c40, ffc0, LONG_MULDIV);
     INSN(sats,      4c80, fff8, CF_ISA_B);
     INSN(trap,      4e40, fff0, CF_ISA_A);
     INSN(trap,      4e40, fff0, M68000);
