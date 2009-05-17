@@ -90,6 +90,9 @@ typedef struct CPUM68KState {
     uint32_t div1;
     uint32_t div2;
 
+    /* Upper 32 bits of a 64bit operand for quad MUL/DIV.  */
+    uint32_t quadh;
+
     /* MMU status.  */
     struct {
         uint32_t ar;
