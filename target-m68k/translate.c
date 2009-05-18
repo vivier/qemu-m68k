@@ -325,6 +325,9 @@ static TCGv gen_lea_indexed(DisasContext *s, int opsize, TCGv base)
     if ((ext & 0x800) == 0 && !m68k_feature(s->env, M68K_FEATURE_WORD_INDEX))
         return NULL_QREG;
 
+    if (!m68k_feature(s->env, M68K_FEATURE_SCALED_INDEX))
+        ext &= ~(3 << 9);
+
     if (ext & 0x100) {
         /* full extension word format */
         if (!m68k_feature(s->env, M68K_FEATURE_EXT_FULL))
@@ -333,7 +336,7 @@ static TCGv gen_lea_indexed(DisasContext *s, int opsize, TCGv base)
         if ((ext & 0x30) > 0x10) {
             /* base displacement */
             if ((ext & 0x30) == 0x20) {
-                bd = (int16_t)lduw_code(s->pc);
+                bd = ldsw_code(s->pc);
                 s->pc += 2;
             } else {
                 bd = read_im32(s);
@@ -382,7 +385,7 @@ static TCGv gen_lea_indexed(DisasContext *s, int opsize, TCGv base)
             if ((ext & 3) > 1) {
                 /* outer displacement */
                 if ((ext & 3) == 2) {
-                    od = (int16_t)lduw_code(s->pc);
+                    od = ldsw_code(s->pc);
                     s->pc += 2;
                 } else {
                     od = read_im32(s);
@@ -2856,85 +2859,149 @@ void register_m68k_insns (CPUM68KState *env)
         register_opcode(disas_##name, 0x##opcode, 0x##mask); \
     } while(0)
     INSN(undef,     0000, 0000, CF_ISA_A);
+    INSN(undef,     0000, 0000, M68000);
     INSN(arith_im,  0080, fff8, CF_ISA_A);
+    INSN(arith_im,  0000, ff00, M68000);
+    INSN(undef,     00c0, ffc0, M68000);
     INSN(bitrev,    00c0, fff8, CF_ISA_APLUSC);
     INSN(bitop_reg, 0100, f1c0, CF_ISA_A);
+    INSN(bitop_reg, 0100, f1c0, M68000);
     INSN(bitop_reg, 0140, f1c0, CF_ISA_A);
+    INSN(bitop_reg, 0140, f1c0, M68000);
     INSN(bitop_reg, 0180, f1c0, CF_ISA_A);
+    INSN(bitop_reg, 0180, f1c0, M68000);
     INSN(bitop_reg, 01c0, f1c0, CF_ISA_A);
+    INSN(bitop_reg, 01c0, f1c0, M68000);
     INSN(arith_im,  0280, fff8, CF_ISA_A);
+    INSN(arith_im,  0200, ff00, M68000);
+    INSN(undef,     02c0, ffc0, M68000);
     INSN(byterev,   02c0, fff8, CF_ISA_APLUSC);
     INSN(arith_im,  0480, fff8, CF_ISA_A);
+    INSN(arith_im,  0400, ff00, M68000);
+    INSN(undef,     04c0, ffc0, M68000);
+    INSN(arith_im,  0600, ff00, M68000);
+    INSN(undef,     06c0, ffc0, M68000);
     INSN(ff1,       04c0, fff8, CF_ISA_APLUSC);
     INSN(arith_im,  0680, fff8, CF_ISA_A);
     INSN(bitop_im,  0800, ffc0, CF_ISA_A);
+    INSN(bitop_im,  0800, ffc0, M68000);
     INSN(bitop_im,  0840, ffc0, CF_ISA_A);
+    INSN(bitop_im,  0840, ffc0, M68000);
     INSN(bitop_im,  0880, ffc0, CF_ISA_A);
+    INSN(bitop_im,  0880, ffc0, M68000);
     INSN(bitop_im,  08c0, ffc0, CF_ISA_A);
+    INSN(bitop_im,  08c0, ffc0, M68000);
     INSN(arith_im,  0a80, fff8, CF_ISA_A);
+    INSN(arith_im,  0a00, ff00, M68000);
+    INSN(undef,     0ac0, ffc0, M68000);
     INSN(arith_im,  0c00, ff38, CF_ISA_A);
+    INSN(arith_im,  0c00, ff00, M68000);
+    INSN(undef,     0cc0, ffc0, M68000);
     INSN(move,      1000, f000, CF_ISA_A);
+    INSN(move,      1000, f000, M68000);
     INSN(move,      2000, f000, CF_ISA_A);
+    INSN(move,      2000, f000, M68000);
     INSN(move,      3000, f000, CF_ISA_A);
+    INSN(move,      3000, f000, M68000);
     INSN(strldsr,   40e7, ffff, CF_ISA_APLUSC);
     INSN(negx,      4080, fff8, CF_ISA_A);
+    INSN(negx,      4080, fff8, M68000);
+    INSN(undef,     40c0, ffc0, M68000);
     INSN(move_from_sr, 40c0, fff8, CF_ISA_A);
+    INSN(move_from_sr, 40c0, fff8, M68000);
     INSN(lea,       41c0, f1c0, CF_ISA_A);
+    INSN(lea,       41c0, f1c0, M68000);
     INSN(clr,       4200, ff00, CF_ISA_A);
+    INSN(clr,       4200, ff00, M68000);
     INSN(undef,     42c0, ffc0, CF_ISA_A);
+    INSN(undef,     42c0, ffc0, M68000);
     INSN(move_from_ccr, 42c0, fff8, CF_ISA_A);
     INSN(neg,       4480, fff8, CF_ISA_A);
+    INSN(neg,       4400, ff00, M68000);
+    INSN(undef,     44c0, ffc0, M68000);
     INSN(move_to_ccr, 44c0, ffc0, CF_ISA_A);
+    INSN(move_to_ccr, 44c0, ffc0, M68000);
     INSN(not,       4680, fff8, CF_ISA_A);
+    INSN(not,       4600, ff00, M68000);
+    INSN(undef,     46c0, ffc0, M68000);
     INSN(move_to_sr, 46c0, ffc0, CF_ISA_A);
     INSN(pea,       4840, ffc0, CF_ISA_A);
+    INSN(pea,       4840, ffc0, M68000);
     INSN(swap,      4840, fff8, CF_ISA_A);
+    INSN(swap,      4840, fff8, M68000);
     INSN(movem,     48c0, fbc0, CF_ISA_A);
     INSN(ext,       4880, fff8, CF_ISA_A);
+    INSN(ext,       4880, fff8, M68000);
     INSN(ext,       48c0, fff8, CF_ISA_A);
+    INSN(ext,       48c0, fff8, M68000);
     INSN(ext,       49c0, fff8, CF_ISA_A);
+    INSN(ext,       49c0, fff8, M68000);
     INSN(tst,       4a00, ff00, CF_ISA_A);
+    INSN(tst,       4a00, ff00, M68000);
     INSN(tas,       4ac0, ffc0, CF_ISA_B);
+    INSN(tas,       4ac0, ffc0, M68000);
     INSN(halt,      4ac8, ffff, CF_ISA_A);
     INSN(pulse,     4acc, ffff, CF_ISA_A);
     INSN(illegal,   4afc, ffff, CF_ISA_A);
+    INSN(illegal,   4afc, ffff, M68000);
     INSN(mull,      4c00, ffc0, CF_ISA_A);
     INSN(divl,      4c40, ffc0, CF_ISA_A);
     INSN(sats,      4c80, fff8, CF_ISA_B);
     INSN(trap,      4e40, fff0, CF_ISA_A);
+    INSN(trap,      4e40, fff0, M68000);
     INSN(link,      4e50, fff8, CF_ISA_A);
+    INSN(link,      4e50, fff8, M68000);
     INSN(unlk,      4e58, fff8, CF_ISA_A);
+    INSN(unlk,      4e58, fff8, M68000);
     INSN(move_to_usp, 4e60, fff8, USP);
     INSN(move_from_usp, 4e68, fff8, USP);
     INSN(nop,       4e71, ffff, CF_ISA_A);
+    INSN(nop,       4e71, ffff, M68000);
     INSN(stop,      4e72, ffff, CF_ISA_A);
+    INSN(stop,      4e72, ffff, M68000);
     INSN(rte,       4e73, ffff, CF_ISA_A);
+    INSN(rte,       4e73, ffff, M68000);
     INSN(rts,       4e75, ffff, CF_ISA_A);
+    INSN(rts,       4e75, ffff, M68000);
     INSN(movec,     4e7b, ffff, CF_ISA_A);
     INSN(jump,      4e80, ffc0, CF_ISA_A);
+    INSN(jump,      4e80, ffc0, M68000);
     INSN(jump,      4ec0, ffc0, CF_ISA_A);
-    INSN(addsubq,   5180, f1c0, CF_ISA_A);
+    INSN(jump,      4ec0, ffc0, M68000);
+    INSN(addsubq,   5080, f0c0, CF_ISA_A);
+    INSN(addsubq,   5000, f080, M68000);
+    INSN(addsubq,   5080, f0c0, M68000);
     INSN(scc,       50c0, f0f8, CF_ISA_A);
-    INSN(addsubq,   5080, f1c0, CF_ISA_A);
+    INSN(scc,       50c0, f0f8, M68000);
     INSN(tpf,       51f8, fff8, CF_ISA_A);
 
     /* Branch instructions.  */
     INSN(branch,    6000, f000, CF_ISA_A);
+    INSN(branch,    6000, f000, M68000);
     /* Disable long branch instructions, then add back the ones we want.  */
     INSN(undef,     60ff, f0ff, CF_ISA_A); /* All long branches.  */
+    INSN(undef,     60ff, f0ff, M68000); /* All long branches.  */
     INSN(branch,    60ff, f0ff, CF_ISA_B);
     INSN(undef,     60ff, ffff, CF_ISA_B); /* bra.l */
     INSN(branch,    60ff, ffff, BRAL);
+    INSN(branch,    60ff, f0ff, BCCL);
 
     INSN(moveq,     7000, f100, CF_ISA_A);
+    INSN(moveq,     7000, f100, M68000);
     INSN(mvzs,      7100, f100, CF_ISA_B);
     INSN(or,        8000, f000, CF_ISA_A);
+    INSN(or,        8000, f000, M68000);
     INSN(divw,      80c0, f0c0, CF_ISA_A);
+    INSN(divw,      80c0, f0c0, M68000);
     INSN(addsub,    9000, f000, CF_ISA_A);
+    INSN(addsub,    9000, f000, M68000);
+    INSN(undef,     90c0, f0c0, CF_ISA_A);
     INSN(subx,      9180, f1f8, CF_ISA_A);
+    INSN(subx,      9100, f138, M68000);
     INSN(suba,      91c0, f1c0, CF_ISA_A);
 
     INSN(undef_mac, a000, f000, CF_ISA_A);
+    INSN(undef_mac, a000, f000, M68000);
     INSN(mac,       a000, f100, CF_EMAC);
     INSN(from_mac,  a180, f9b0, CF_EMAC);
     INSN(move_mac,  a110, f9fc, CF_EMAC);
@@ -2953,19 +3020,33 @@ void register_m68k_insns (CPUM68KState *env)
     INSN(cmpa,      b0c0, f1c0, CF_ISA_B); /* cmpa.w */
     INSN(cmp,       b080, f1c0, CF_ISA_A);
     INSN(cmpa,      b1c0, f1c0, CF_ISA_A);
+    INSN(cmp,       b000, f100, M68000);
+    INSN(eor,       b100, f100, M68000);
+    INSN(cmpa,      b0c0, f0c0, M68000);
     INSN(eor,       b180, f1c0, CF_ISA_A);
     INSN(and,       c000, f000, CF_ISA_A);
+    INSN(and,       c000, f000, M68000);
     INSN(mulw,      c0c0, f0c0, CF_ISA_A);
+    INSN(mulw,      c0c0, f0c0, M68000);
     INSN(addsub,    d000, f000, CF_ISA_A);
+    INSN(addsub,    d000, f000, M68000);
+    INSN(undef,     d0c0, f0c0, CF_ISA_A);
     INSN(addx,      d180, f1f8, CF_ISA_A);
+    INSN(addx,      d100, f138, M68000);
     INSN(adda,      d1c0, f1c0, CF_ISA_A);
     INSN(shift_im,  e080, f0f0, CF_ISA_A);
     INSN(shift_reg, e0a0, f0f0, CF_ISA_A);
+    INSN(shift_im,    e080, f0f0, M68000);
+    INSN(shift_reg,   e0a0, f0f0, M68000);
     INSN(undef_fpu, f000, f000, CF_ISA_A);
+    INSN(undef_fpu, f000, f000, M68000);
     INSN(fpu,       f200, ffc0, CF_FPU);
     INSN(fbcc,      f280, ffc0, CF_FPU);
     INSN(frestore,  f340, ffc0, CF_FPU);
     INSN(fsave,     f340, ffc0, CF_FPU);
+    INSN(fbcc,      f280, ffc0, FPU);
+    INSN(frestore,  f340, ffc0, FPU);
+    INSN(fsave,     f340, ffc0, FPU);
     INSN(intouch,   f340, ffc0, CF_ISA_A);
     INSN(cpushl,    f428, ff38, CF_ISA_A);
     INSN(wddata,    fb00, ff00, CF_ISA_A);
