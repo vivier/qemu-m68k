@@ -1631,22 +1631,45 @@ DISAS_INSN(mull)
     TCGv reg;
     TCGv src1;
     TCGv dest;
+    TCGv regh;
 
     /* The upper 32 bits of the product are discarded, so
        muls.l and mulu.l are functionally equivalent.  */
     ext = lduw_code(s->pc);
     s->pc += 2;
-    if (ext & 0x87ff) {
-        gen_exception(s, s->pc - 4, EXCP_UNSUPPORTED);
-        return;
+    if (ext & 0x400) {
+       if (!m68k_feature(s->env, M68K_FEATURE_QUAD_MULDIV)) {
+           gen_exception(s, s->pc - 4, EXCP_UNSUPPORTED);
+           return;
+       }
+       reg = DREG(ext, 12);
+       regh = DREG(ext, 0);
+       SRC_EA(src1, OS_LONG, 0, NULL);
+       dest = tcg_temp_new();
+       if (ext & 0x800)
+           gen_helper_muls64(dest, cpu_env, src1, reg);
+       else
+           gen_helper_mulu64(dest, cpu_env, src1, reg);
+       tcg_gen_mov_i32(reg, dest);
+       tcg_gen_mov_i32(regh, QREG_QUADH);
+       s->cc_op = CC_OP_FLAGS;
+       return;
     }
     reg = DREG(ext, 12);
     SRC_EA(src1, OS_LONG, 0, NULL);
     dest = tcg_temp_new();
-    tcg_gen_mul_i32(dest, src1, reg);
+    if (m68k_feature(s->env, M68K_FEATURE_M68000)) {
+       if (ext & 0x800)
+           gen_helper_muls32_cc(dest, cpu_env, src1, reg);
+       else
+           gen_helper_mulu32_cc(dest, cpu_env, src1, reg);
+       s->cc_op = CC_OP_FLAGS;
+    } else {
+       tcg_gen_mul_i32(dest, src1, reg);
+       /* Unlike m68k, coldfire always clears the overflow bit.  */
+       gen_logic_cc(s, dest);
+    }
     tcg_gen_mov_i32(reg, dest);
-    /* Unlike m68k, coldfire always clears the overflow bit.  */
-    gen_logic_cc(s, dest);
 }
 
 DISAS_INSN(link)
@@ -3028,6 +3051,7 @@ void register_m68k_insns (CPUM68KState *env)
     INSN(illegal,   4afc, ffff, CF_ISA_A);
     INSN(illegal,   4afc, ffff, M68000);
     INSN(mull,      4c00, ffc0, CF_ISA_A);
+    INSN(mull,      4c00, ffc0, LONG_MULDIV);
     INSN(divl,      4c40, ffc0, CF_ISA_A);
     INSN(divl,      4c40, ffc0, LONG_MULDIV);
     INSN(sats,      4c80, fff8, CF_ISA_B);
