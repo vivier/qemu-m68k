@@ -317,3 +317,69 @@ void HELPER(divs64)(CPUState *env)
     }
     env->cc_dest = flags;
 }
+
+uint32_t HELPER(mulu32_cc)(CPUState *env, uint32_t op1, uint32_t op2)
+{
+    uint64_t res = (uint32_t)op1 * op2;
+    uint32_t flags;
+
+    flags = 0;
+    if (res >> 32)
+       flags |= CCF_V;
+    if ((uint32_t)res == 0)
+       flags |= CCF_Z;
+    if ((int32_t)res < 0)
+       flags |= CCF_N;
+    env->cc_dest = flags;
+
+    return res;
+}
+
+uint32_t HELPER(muls32_cc)(CPUState *env, uint32_t op1, uint32_t op2)
+{
+    int64_t res = (int32_t)op1 * (int32_t)op2;
+    uint32_t flags;
+
+    flags = 0;
+    if (res != (int64_t)(int32_t)res)
+       flags |= CCF_V;
+    if ((uint32_t)res == 0)
+       flags |= CCF_Z;
+    if ((int32_t)res < 0)
+       flags |= CCF_N;
+    env->cc_dest = flags;
+
+    return res;
+}
+
+uint32_t HELPER(mulu64)(CPUState *env, uint32_t op1, uint32_t op2)
+{
+    uint64_t res = (uint64_t)op1 * op2;
+    uint32_t flags;
+
+    env->quadh = res >> 32;
+    flags = 0;
+    if (res == 0)
+       flags |= CCF_Z;
+    if ((int64_t)res < 0)
+       flags |= CCF_N;
+    env->cc_dest = flags;
+
+    return res;
+}
+
+uint32_t HELPER(muls64)(CPUState *env, uint32_t op1, uint32_t op2)
+{
+    int64_t res = (uint64_t)(int32_t)op1 * (int32_t)op2;
+    uint32_t flags;
+
+    env->quadh = res >> 32;
+    flags = 0;
+    if (res == 0)
+       flags |= CCF_Z;
+    if (res < 0)
+       flags |= CCF_N;
+    env->cc_dest = flags;
+
+    return res;
+}
