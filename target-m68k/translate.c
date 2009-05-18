@@ -1173,6 +1173,8 @@ DISAS_INSN(movem)
     TCGv reg;
     TCGv tmp;
     int is_load;
+    int opsize;
+    int32_t incr;
 
     mask = lduw_code(s->pc);
     s->pc += 2;
@@ -1184,21 +1186,40 @@ DISAS_INSN(movem)
     addr = tcg_temp_new();
     tcg_gen_mov_i32(addr, tmp);
     is_load = ((insn & 0x0400) != 0);
-    for (i = 0; i < 16; i++, mask >>= 1) {
-        if (mask & 1) {
-            if (i < 8)
-                reg = DREG(i, 0);
-            else
-                reg = AREG(i, 0);
-            if (is_load) {
-                tmp = gen_load(s, OS_LONG, addr, 0);
-                tcg_gen_mov_i32(reg, tmp);
-            } else {
-                gen_store(s, OS_LONG, addr, reg);
-            }
-            if (mask != 1)
-                tcg_gen_addi_i32(addr, addr, 4);
-        }
+    opsize = (insn & 0x40) != 0 ? OS_LONG : OS_WORD;
+    incr = opsize_bytes(opsize);
+    if (!is_load && (insn & 070) == 040) {
+       for (i = 15; i >= 0; i--, mask >>= 1) {
+           if (mask & 1) {
+               if (i < 8)
+                   reg = DREG(i, 0);
+               else
+                   reg = AREG(i, 0);
+               gen_store(s, opsize, addr, reg);
+               if (mask != 1)
+                   tcg_gen_subi_i32(addr, addr, incr);
+           }
+       }
+       tcg_gen_mov_i32(AREG(insn, 0), addr);
+    } else {
+       for (i = 0; i < 16; i++, mask >>= 1) {
+           if (mask & 1) {
+               if (i < 8)
+                   reg = DREG(i, 0);
+               else
+                   reg = AREG(i, 0);
+               if (is_load) {
+                   tmp = gen_load(s, opsize, addr, 1);
+                   tcg_gen_mov_i32(reg, tmp);
+               } else {
+                   gen_store(s, opsize, addr, reg);
+               }
+               if (mask != 1 || (insn & 070) == 030)
+                   tcg_gen_addi_i32(addr, addr, incr);
+           }
+       }
+       if ((insn & 070) == 030)
+           tcg_gen_mov_i32(AREG(insn, 0), addr);
     }
 }
 
@@ -2972,6 +2993,7 @@ void register_m68k_insns (CPUM68KState *env)
     INSN(swap,      4840, fff8, CF_ISA_A);
     INSN(swap,      4840, fff8, M68000);
     INSN(movem,     48c0, fbc0, CF_ISA_A);
+    INSN(movem,     48c0, fbc0, M68000);
     INSN(ext,       4880, fff8, CF_ISA_A);
     INSN(ext,       4880, fff8, M68000);
     INSN(ext,       48c0, fff8, CF_ISA_A);
