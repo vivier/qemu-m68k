@@ -2342,18 +2342,43 @@ DISAS_INSN(fpu)
     case 7:
         {
             TCGv addr;
+            int incr;
             uint16_t mask;
             int i;
-            if ((ext & 0x1f00) != 0x1000 || (ext & 0xff) == 0)
+            if ((ext & 0xf00) != 0 || (ext & 0xff) == 0)
                 goto undef;
-            tmp32 = gen_lea(s, insn, OS_LONG);
-            if (IS_NULL_QREG(tmp32)) {
-                gen_addr_fault(s);
-                return;
+            if ((ext & 0x1000) == 0 && !m68k_feature(s->env, M68K_FEATURE_FPU))
+                goto undef;
+            if ((insn & 070) == 040)
+                tmp32 = AREG(insn, 0);
+            else {
+                tmp32 = gen_lea(s, insn, OS_LONG);
+                 if (IS_NULL_QREG(tmp32)) {
+                     gen_addr_fault(s);
+                     return;
+                 }
             }
             addr = tcg_temp_new_i32();
             tcg_gen_mov_i32(addr, tmp32);
             mask = 0x80;
+            if (m68k_feature(s->env, M68K_FEATURE_FPU))
+                incr = 12;
+            else
+                incr = 8;
+            if ((ext & (1 << 13)) && (insn & 070) == 040) {
+                for (i = 0; i < 8; i++) {
+                    if (ext & mask) {
+                        s->is_mem = 1;
+                        dest = FREG(i, 7);
+                        tcg_gen_subi_i32(addr, addr, incr);
+                        tcg_gen_mov_i32(AREG(insn, 0), addr);
+                        tcg_gen_qemu_stf64(dest, addr, IS_USER(s));
+                    }
+                    mask >>= 1;
+                }
+                tcg_temp_free_i32(addr);
+                return;
+            }
             for (i = 0; i < 8; i++) {
                 if (ext & mask) {
                     s->is_mem = 1;
@@ -2365,8 +2390,11 @@ DISAS_INSN(fpu)
                         /* load */
                         tcg_gen_qemu_ldf64(dest, addr, IS_USER(s));
                     }
-                    if (ext & (mask - 1))
-                        tcg_gen_addi_i32(addr, addr, 8);
+                    if (ext & (mask - 1) || (insn & 070) == 030) {
+                        tcg_gen_addi_i32(addr, addr, incr);
+                        if ((insn & 070) == 030)
+                            tcg_gen_mov_i32(AREG(insn, 0), addr);
+                    }
                 }
                 mask >>= 1;
             }
@@ -2472,6 +2500,12 @@ DISAS_INSN(fpu)
         gen_helper_add_f64(res, cpu_env, res, src);
         break;
     case 0x23: case 0x63: case 0x67: /* fmul */
+        gen_helper_mul_f64(res, cpu_env, res, src);
+        break;
+    case 0x24:                      /* fsgldiv */
+        gen_helper_div_f64(res, cpu_env, res, src);
+        break;
+    case 0x27:                      /* fsglmul */
         gen_helper_mul_f64(res, cpu_env, res, src);
         break;
     case 0x28: case 0x68: case 0x6c: /* fsub */
@@ -3156,6 +3190,7 @@ void register_m68k_insns (CPUM68KState *env)
     INSN(fbcc,      f280, ffc0, CF_FPU);
     INSN(frestore,  f340, ffc0, CF_FPU);
     INSN(fsave,     f340, ffc0, CF_FPU);
+    INSN(fpu,       f200, ffc0, FPU);
     INSN(fbcc,      f280, ffc0, FPU);
     INSN(frestore,  f340, ffc0, FPU);
     INSN(fsave,     f340, ffc0, FPU);
