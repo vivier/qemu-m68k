@@ -903,6 +903,23 @@ static void gen_jmp_tb(DisasContext *s, int n, uint32_t dest)
     s->is_jmp = DISAS_TB_JUMP;
 }
 
+DISAS_INSN(scc_mem)
+{
+    int l1;
+    int cond;
+    TCGv dest;
+
+    l1 = gen_new_label();
+    cond = (insn >> 8) & 0xf;
+    dest = tcg_temp_local_new();
+    tcg_gen_movi_i32(dest, 0);
+    gen_jmpcc(s, cond ^ 1, l1);
+    tcg_gen_movi_i32(dest, 0xff);
+    gen_set_label(l1);
+    DEST_EA(insn, OS_BYTE, dest, NULL);
+    tcg_temp_free(dest);
+}
+
 DISAS_INSN(undef_mac)
 {
     gen_exception(s, s->pc - 2, EXCP_LINEA);
@@ -2972,6 +2989,7 @@ void register_m68k_insns (CPUM68KState *env)
     INSN(addsubq,   5000, f080, M68000);
     INSN(addsubq,   5080, f0c0, M68000);
     INSN(scc,       50c0, f0f8, CF_ISA_A);
+    INSN(scc_mem,   50c0, f0c0, M68000);
     INSN(scc,       50c0, f0f8, M68000);
     INSN(tpf,       51f8, fff8, CF_ISA_A);
 
