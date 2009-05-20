@@ -2386,6 +2386,327 @@ DISAS_INSN(rotate_mem)
     DEST_EA(insn, OS_WORD, dest, &addr);
 }
 
+DISAS_INSN(bitfield_reg)
+{
+    uint16_t ext;
+    TCGv tmp;
+    TCGv tmp1;
+    TCGv reg;
+    int offset;
+    int width;
+    int op;
+    TCGv reg2;
+    uint32_t mask;
+
+    reg = DREG(insn, 0);
+    op = (insn >> 8) & 7;
+    ext = lduw_code(s->pc);
+    s->pc += 2;
+    if ((ext & 0x820) == 0) {
+       /* constant offset and width */
+       offset = (ext >> 6) & 31;
+       width = (ext & 31);
+       if (width == 0)
+           width = 32;
+       reg2 = DREG(ext, 12);
+       mask = 0xffffffff << (32 - width);
+       if (offset > 0)
+           mask = (mask >> offset) | (mask << (32 - offset));
+       tmp = tcg_temp_new_i32();
+       tcg_gen_andi_i32(tmp, reg, mask);
+       if (offset > 0) {
+           tmp1 = tcg_temp_new_i32();
+           gen_helper_rol32(tmp1, tmp, tcg_const_i32(offset));
+       } else
+           tmp1 = tmp;
+       gen_logic_cc(s, tmp1);
+       switch (op) {
+       case 0: /* bftst */
+           break;
+       case 1: /* bfextu */
+           if (offset + width != 32)
+               gen_helper_rol32(reg2, tmp, tcg_const_i32((offset + width) & 31));
+           else
+               tcg_gen_mov_i32(reg2, tmp);
+           break;
+       case 2: /* bfchg */
+           tcg_gen_xor_i32(reg, reg, tcg_const_i32(mask));
+           break;
+       case 3: /* bfexts */
+           if (offset > 0)
+               gen_helper_rol32(reg2, tmp, tcg_const_i32(offset));
+           if (width < 32)
+               tcg_gen_sari_i32(reg2, reg2, 32 - width);
+           break;
+       case 4: /* bfclr */
+	   tcg_gen_and_i32(reg, reg, tcg_const_i32(mask));
+           break;
+       case 5: /* bfffo */
+           if (offset > 0)
+               gen_helper_rol32(reg2, tmp, tcg_const_i32(offset));
+           gen_helper_bfffo(tmp, tmp, tcg_const_i32(width));
+           tcg_gen_addi_i32(reg2, tmp, offset);
+           break;
+       case 6: /* bfset */
+           tcg_gen_ori_i32(reg, reg, mask);
+           break;
+       case 7: /* bfins */
+           if (width == 32) {
+               if (offset > 0)
+                   gen_helper_ror32(reg, reg2, tcg_const_i32(offset));
+               else
+                   tcg_gen_mov_i32(reg, reg2);
+           } else {
+               tcg_gen_andi_i32(tmp, reg2, (1u << width) - 1);
+               if (offset + width != 32)
+                   gen_helper_ror32(tmp, tmp, tcg_const_i32((offset + width) & 31));
+               tcg_gen_andi_i32(reg, reg, ~mask);
+               tcg_gen_or_i32(reg, reg, tmp);
+           }
+           break;
+       }
+       return;
+    }
+    /* Not yet implemented */
+    gen_exception(s, s->pc - 4, EXCP_UNSUPPORTED);
+}
+
+/* Generate a load from a bitfield.  */
+static void gen_bitfield_load(DisasContext *s, TCGv addr, int endpos,
+                             TCGv *val1, TCGv *val2)
+{
+    TCGv tmp;
+
+    if (endpos <= 8)
+       *val1 = gen_load(s, OS_BYTE, addr, 0);
+    else if (endpos <= 24) {
+       *val1 = gen_load(s, OS_WORD, addr, 0);
+       if (endpos > 16) {
+           tmp = tcg_temp_new_i32();
+           tcg_gen_addi_i32(tmp, addr, 2);
+           *val2 = gen_load(s, OS_BYTE, tmp, 0);
+       }
+    } else {
+       *val1 = gen_load(s, OS_LONG, addr, 0);
+       if (endpos > 32) {
+           tmp = tcg_temp_new_i32();
+           tcg_gen_addi_i32(tmp, addr, 4);
+           *val2 = gen_load(s, OS_BYTE, tmp, 0);
+       }
+    }
+}
+
+/* Generate a store to a bitfield.  */
+static void gen_bitfield_store(DisasContext *s, TCGv addr, int endpos,
+                              TCGv val1, TCGv val2)
+{
+    TCGv tmp;
+
+    if (endpos <= 8)
+       gen_store(s, OS_BYTE, addr, val1);
+    else if (endpos <= 24) {
+       gen_store(s, OS_WORD, addr, val1);
+       if (endpos > 16) {
+           tmp = tcg_temp_new_i32();
+           tcg_gen_addi_i32(tmp, addr, 2);
+           gen_store(s, OS_BYTE, tmp, val2);
+       }
+    } else {
+       gen_store(s, OS_LONG, addr, val1);
+       if (endpos > 32) {
+           tmp = tcg_temp_new_i32();
+           tcg_gen_addi_i32(tmp, addr, 4);
+           gen_store(s, OS_BYTE, tmp, val2);
+       }
+    }
+}
+
+static TCGv gen_bitfield_cc(DisasContext *s, int offset, int width,
+                          TCGv val1, TCGv val2)
+{
+    TCGv dest;
+    TCGv tmp;
+
+    dest = tcg_temp_new_i32();
+
+    if (offset + width <= 8)
+       tcg_gen_shli_i32(dest, val1, 24 + offset);
+    else if (offset + width <= 24) {
+       tcg_gen_shli_i32(dest, val1, 16 + offset);
+       if (offset + width > 16) {
+           tmp = tcg_temp_new_i32();
+           tcg_gen_shli_i32(tmp, val2, 8 + offset);
+           tcg_gen_or_i32(dest, dest, tmp);
+       }
+    } else {
+       tcg_gen_shli_i32(dest, val1, offset);
+       if (offset + width > 32) {
+           tmp = tcg_temp_new_i32();
+           tcg_gen_shri_i32(tmp, val2, offset);
+           tcg_gen_or_i32(dest, dest, tmp);
+       }
+    }
+    tcg_gen_andi_i32(dest, dest, 0xffffffff << (32 - width));
+    gen_logic_cc(s, dest);
+    return dest;
+}
+
+static void gen_bitfield_op(int offset, int width, int op, TCGv val1, TCGv val2)
+{
+    uint32_t mask1;
+    uint32_t mask2;
+    int endpos = offset + width;
+
+    if (endpos <= 8) {
+       mask1 = (0xff >> offset) & (0xff << (8 - endpos));
+       mask2 = 0;
+    } else if (endpos <= 16) {
+       mask1 = (0xffff >> offset) & (0xffff << (16 - endpos));
+       mask2 = 0;
+    } else if (endpos <= 24) {
+       mask1 = 0xffffff >> offset;
+       mask2 = 0xff & (0xff << (24 - endpos));
+    } else if (endpos <= 32) {
+       mask1 = (0xffffffff >> offset) & (0xffffffff << (32 - endpos));
+       mask2 = 0;
+    } else {
+       mask1 = 0xffffffff >> offset;
+       mask2 = 0xff & (0xff << (40 - endpos));
+    }
+    switch (op) {
+    case 2:                    /* bfchg */
+       tcg_gen_xori_i32(val1, val1, mask1);
+       if (mask2)
+           tcg_gen_xori_i32(val2, val2, mask2);
+       break;
+    case 4:                    /* bfclr */
+       tcg_gen_andi_i32(val1, val1, ~mask1);
+       if (mask2)
+           tcg_gen_andi_i32(val2, val2, ~mask2);
+       break;
+    case 6:                    /* bfset */
+       tcg_gen_ori_i32(val1, val1, mask1);
+       if (mask2)
+           tcg_gen_ori_i32(val2, val2, mask2);
+       break;
+    }
+}
+
+static void gen_bitfield_ins(int offset, int width, TCGv src,
+                            TCGv val1, TCGv val2)
+{
+    TCGv tmp;
+    int endpos = offset + width;
+
+    tmp = tcg_temp_new_i32();
+    if (width < 32) {
+       tcg_gen_andi_i32(tmp, src, (1u << width) - 1);
+    } else
+       tcg_gen_mov_i32(tmp, src);
+    if (endpos <= 8) {
+       if (endpos < 8)
+           tcg_gen_shli_i32(tmp, tmp, 8 - endpos);
+       tcg_gen_or_i32(val1, val1, tmp);
+    } else if (endpos <= 16) {
+       if (endpos < 16)
+           tcg_gen_shli_i32(tmp, tmp, 16 - endpos);
+       tcg_gen_or_i32(val1, val1, tmp);
+    } else if (endpos <= 24) {
+       tcg_gen_shri_i32(tmp, tmp, endpos - 16);
+       tcg_gen_or_i32(val1, val1, tmp);
+       tcg_gen_andi_i32(tmp, src, (1u << (endpos - 16)) - 1);
+       if (endpos < 24)
+           tcg_gen_shli_i32(tmp, tmp, 24 - endpos);
+       tcg_gen_or_i32(val2, val2, tmp);
+    } else if (endpos <= 32) {
+       if (endpos < 32)
+           tcg_gen_shli_i32(tmp, tmp, 32 - endpos);
+       tcg_gen_or_i32(val1, val1, tmp);
+    } else {
+       tcg_gen_shri_i32(tmp, tmp, endpos - 32);
+       tcg_gen_or_i32(val1, val1, tmp);
+       tcg_gen_andi_i32(tmp, src, (1u << (endpos - 32)) - 1);
+       tcg_gen_shri_i32(tmp, tmp, 32 - endpos);
+       tcg_gen_or_i32(val2, val2, tmp);
+    }
+}
+
+DISAS_INSN(bitfield_mem)
+{
+    uint16_t ext;
+    TCGv val;
+    TCGv val1, val2;
+    TCGv src;
+    int offset;
+    int width;
+    int op;
+    TCGv reg;
+    TCGv addr;
+    uint32_t mask;
+
+    op = (insn >> 8) & 7;
+    ext = lduw_code(s->pc);
+    s->pc += 2;
+    src = gen_lea(s, insn, OS_LONG);
+    if (IS_NULL_QREG(src)) {
+       gen_addr_fault(s);
+       return;
+    }
+    if ((ext & 0x820) == 0) {
+       /* constant offset and width */
+       offset = (ext >> 6) & 31;
+       width = (ext & 31);
+       if (width == 0)
+           width = 32;
+       reg = DREG(ext, 12);
+       mask = 0xffffffff << (32 - width);
+       addr = tcg_temp_new_i32();
+       if (offset > 7) {
+           tcg_gen_addi_i32(addr, src, offset >> 3);
+           offset &= 7;
+       } else
+           tcg_gen_mov_i32(addr, src);
+       if (offset > 0)
+           mask <<= 32 - offset;
+       gen_bitfield_load(s, addr, offset + width, &val1, &val2);
+       val = gen_bitfield_cc(s, offset, width, val1, val2);
+       switch (op) {
+       case 0: /* bftst */
+           break;
+       case 1: /* bfextu */
+           if (width < 32)
+               tcg_gen_shri_i32(reg, val, 32 - width);
+           else
+               tcg_gen_mov_i32(reg, val);
+           break;
+       case 3: /* bfexts */
+           if (width < 32)
+               tcg_gen_sari_i32(reg, val, 32 - width);
+           else
+               tcg_gen_mov_i32(reg, val);
+           break;
+       case 5: /* bfffo */
+           gen_helper_bfffo(val, val, tcg_const_i32(width));
+           tcg_gen_addi_i32(reg, val, offset);
+           break;
+       case 2: /* bfchg */
+       case 4: /* bfclr */
+       case 6: /* bfset */
+           gen_bitfield_op(offset, width, op, val1, val2);
+           gen_bitfield_store(s, addr, offset + width, val1, val2);
+           break;
+       case 7: /* bfins */
+           gen_bitfield_op(offset, width, 4, val1, val2);
+           gen_bitfield_ins(offset, width, reg, val1, val2);
+           gen_bitfield_store(s, addr, offset + width, val1, val2);
+           break;
+       }
+       return;
+    }
+    /* Not yet implemented */
+    gen_exception(s, s->pc - 4, EXCP_UNSUPPORTED);
+}
+
 DISAS_INSN(ff1)
 {
     TCGv reg;
@@ -3528,6 +3849,8 @@ void register_m68k_insns (CPUM68KState *env)
     INSN(rotate8_reg, e030, f0f0, M68000);
     INSN(rotate16_reg,e070, f0f0, M68000);
     INSN(rotate_mem, e4c0, fcc0, M68000);
+    INSN(bitfield_mem,e8c0, f8c0, BITFIELD);
+    INSN(bitfield_reg,e8c0, f8f8, BITFIELD);
     INSN(undef_fpu, f000, f000, CF_ISA_A);
     INSN(undef_fpu, f000, f000, M68000);
     INSN(fpu,       f200, ffc0, CF_FPU);

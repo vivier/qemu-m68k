@@ -519,6 +519,33 @@ uint32_t HELPER(ff1)(uint32_t x)
     return n;
 }
 
+uint32_t HELPER(bfffo)(uint32_t arg, uint32_t width)
+{
+    int n;
+    uint32_t mask;
+    mask = 0x80000000;
+    for (n = 0; n < width; n++) {
+       if (arg & mask)
+           break;
+       mask >>= 1;
+    }
+    return n;
+}
+
+uint32_t HELPER(rol32)(uint32_t val, uint32_t shift)
+{
+    uint32_t result;
+    result = (val << shift) | (val >> (32 - shift));
+    return result;
+}
+
+uint32_t HELPER(ror32)(uint32_t val, uint32_t shift)
+{
+    uint32_t result;
+    result = (val >> shift) | (val << (32 - shift));
+    return result;
+}
+
 uint32_t HELPER(sats)(uint32_t val, uint32_t ccr)
 {
     /* The result has the opposite sign to the original value.  */
