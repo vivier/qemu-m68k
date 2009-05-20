@@ -60,6 +60,42 @@ static m68k_def_t m68k_cpu_defs[] = {
     {NULL, 0},
 };
 
+/* modulo 33 table */
+const uint8_t rox32_table[64] = {
+    0, 1, 2, 3, 4, 5, 6, 7,
+    8, 9,10,11,12,13,14,15,
+   16,17,18,19,20,21,22,23,
+   24,25,26,27,28,29,30,31,
+   32, 0, 1, 2, 3, 4, 5, 6,
+    7, 8, 9,10,11,12,13,14,
+   15,16,17,18,19,20,21,22,
+   23,24,25,26,27,28,29,30,
+};
+
+/* modulo 17 table */
+const uint8_t rox16_table[64] = {
+    0, 1, 2, 3, 4, 5, 6, 7,
+    8, 9,10,11,12,13,14,15,
+   16, 0, 1, 2, 3, 4, 5, 6,
+    7, 8, 9,10,11,12,13,14,
+   15,16, 0, 1, 2, 3, 4, 5,
+    6, 7, 8, 9,10,11,12,13,
+   14,15,16, 0, 1, 2, 3, 4,
+    5, 6, 7, 8, 9,10,11,12,
+};
+
+/* modulo 9 table */
+const uint8_t rox8_table[64] = {
+    0, 1, 2, 3, 4, 5, 6, 7,
+    8, 0, 1, 2, 3, 4, 5, 6,
+    7, 8, 0, 1, 2, 3, 4, 5,
+    6, 7, 8, 0, 1, 2, 3, 4,
+    5, 6, 7, 8, 0, 1, 2, 3,
+    4, 5, 6, 7, 8, 0, 1, 2,
+    3, 4, 5, 6, 7, 8, 0, 1,
+    2, 3, 4, 5, 6, 7, 8, 0,
+};
+
 void m68k_cpu_list(FILE *f, fprintf_function cpu_fprintf)
 {
     unsigned int i;
@@ -631,6 +667,119 @@ uint32_t HELPER(glue(glue(sar, bits), _cc))(CPUState *env, uint32_t val, uint32_
 HELPER_SAR(int8_t, 8)
 HELPER_SAR(int16_t, 16)
 HELPER_SAR(int32_t, 32)
+
+#define HELPER_ROL(type, bits) \
+uint32_t HELPER(glue(glue(rol,bits),_cc))(CPUState *env, uint32_t val, uint32_t shift) \
+{ \
+    type result; \
+    uint32_t flags; \
+    int count = shift & (bits - 1); \
+    if (count) \
+       result = ((type)val << count) | ((type)val >> (bits - count)); \
+    else \
+       result = (type)val; \
+    flags = 0; \
+    if (result == 0) \
+       flags |= CCF_Z; \
+    if (result & (1 << (bits - 1))) \
+       flags |= CCF_N; \
+    if (shift && result & 1) \
+       flags |= CCF_C; \
+    env->cc_dest = flags; \
+    return result; \
+}
+
+HELPER_ROL(uint8_t, 8)
+HELPER_ROL(uint16_t, 16)
+HELPER_ROL(uint32_t, 32)
+
+#define HELPER_ROR(type, bits) \
+uint32_t HELPER(glue(glue(ror,bits),_cc))(CPUState *env, uint32_t val, uint32_t shift) \
+{ \
+    type result; \
+    uint32_t flags; \
+    int count = shift & (bits - 1); \
+    if (count) \
+       result = ((type)val >> count) | ((type)val << (bits - count)); \
+    else \
+       result = (type)val; \
+    flags = 0; \
+    if (result == 0) \
+       flags |= CCF_Z; \
+    if (result & (1 << (bits - 1))) \
+       flags |= CCF_N; \
+    if (shift && result & (1 << (bits - 1))) \
+       flags |= CCF_C; \
+    env->cc_dest = flags; \
+    return result; \
+}
+
+HELPER_ROR(uint8_t, 8)
+HELPER_ROR(uint16_t, 16)
+HELPER_ROR(uint32_t, 32)
+
+#define HELPER_ROXR(type, bits) \
+uint32_t HELPER(glue(glue(roxr,bits),_cc))(CPUState *env, uint32_t val, uint32_t shift) \
+{ \
+    type result; \
+    uint32_t flags; \
+    int count = shift; \
+    if (bits == 8) count = rox8_table[count]; \
+    if (bits == 16) count = rox16_table[count]; \
+    if (bits == 32) count = rox32_table[count]; \
+    if (count) { \
+       result = ((type)val >> count) | ((type)env->cc_x << (bits - count)); \
+       if (count > 1) \
+           result |= (type)val << (bits + 1 - count); \
+       env->cc_x = ((type)val >> (count - 1)) & 1; \
+    } else \
+       result = (type)val; \
+    flags = 0; \
+    if (result == 0) \
+       flags |= CCF_Z; \
+    if (result & (1 << (bits - 1))) \
+       flags |= CCF_N; \
+    if (env->cc_x) \
+       flags |= CCF_C; \
+    env->cc_dest = flags; \
+    return result; \
+}
+
+HELPER_ROXR(uint8_t, 8)
+HELPER_ROXR(uint16_t, 16)
+HELPER_ROXR(uint32_t, 32)
+
+#define HELPER_ROXL(type, bits) \
+uint32_t HELPER(glue(glue(roxl,bits),_cc))(CPUState *env, uint32_t val, uint32_t shift) \
+{ \
+    type result; \
+    uint32_t flags; \
+    int count; \
+    count = shift; \
+    if (bits == 8) count = rox8_table[count]; \
+    if (bits == 16) count = rox16_table[count]; \
+    if (bits == 32) count = rox32_table[count]; \
+    if (count) { \
+       result = ((type)val << count) | ((type)env->cc_x << (count - 1)); \
+       if (count > 1) \
+           result |= (type)val >> (bits + 1 - count); \
+       env->cc_x = ((type)val >> (bits - count)) & 1; \
+    } else \
+       result = (type)val; \
+    flags = 0; \
+    if (result == 0) \
+       flags |= CCF_Z; \
+    if (result & (1 << (bits - 1))) \
+       flags |= CCF_N; \
+    if (env->cc_x) \
+       flags |= CCF_C; \
+    env->cc_dest = flags; \
+    return result; \
+}
+
+HELPER_ROXL(uint8_t, 8)
+HELPER_ROXL(uint16_t, 16)
+HELPER_ROXL(uint32_t, 32)
 
 /* FPU helpers.  */
 uint32_t HELPER(f64_to_i32)(CPUState *env, float64 val)
