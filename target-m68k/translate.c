@@ -2009,6 +2009,63 @@ DISAS_INSN(addx)
 }
 
 /* TODO: This could be implemented without helper functions.  */
+DISAS_INSN(shift8_im)
+{
+    TCGv reg;
+    int tmp;
+    TCGv shift;
+    TCGv dest;
+
+    reg = DREG(insn, 0);
+    tmp = (insn >> 9) & 7;
+    if (tmp == 0)
+        tmp = 8;
+    shift = tcg_const_i32(tmp);
+    dest = tcg_temp_new_i32();
+    /* No need to flush flags becuse we know we will set C flag.  */
+    if (insn & 0x100) {
+        gen_helper_shl8_cc(dest, cpu_env, reg, shift);
+    } else {
+        if (insn & 8) {
+            gen_helper_shr8_cc(dest, cpu_env, reg, shift);
+        } else {
+            gen_helper_sar8_cc(dest, cpu_env, reg, shift);
+        }
+    }
+    s->cc_op = CC_OP_SHIFTB;
+    gen_partset_reg(OS_BYTE, reg, dest);
+}
+
+/* TODO: This could be implemented without helper functions.  */
+DISAS_INSN(shift16_im)
+{
+    TCGv reg;
+    int tmp;
+    TCGv shift;
+    TCGv dest;
+
+    reg = DREG(insn, 0);
+    tmp = (insn >> 9) & 7;
+    if (tmp == 0)
+        tmp = 8;
+    shift = tcg_const_i32(tmp);
+    dest = tcg_temp_new_i32();
+    /* No need to flush flags becuse we know we will set C flag.  */
+    if (insn & 0x100) {
+        gen_helper_shl16_cc(dest, cpu_env, reg, shift);
+    } else {
+        if (insn & 8) {
+            gen_helper_shr16_cc(dest, cpu_env, reg, shift);
+        } else {
+            gen_helper_sar16_cc(dest, cpu_env, reg, shift);
+        }
+    }
+    s->cc_op = CC_OP_SHIFTW;
+    gen_partset_reg(OS_WORD, reg, dest);
+}
+
+
+/* TODO: This could be implemented without helper functions.  */
 DISAS_INSN(shift_im)
 {
     TCGv reg;
@@ -2022,15 +2079,69 @@ DISAS_INSN(shift_im)
     shift = tcg_const_i32(tmp);
     /* No need to flush flags becuse we know we will set C flag.  */
     if (insn & 0x100) {
-        gen_helper_shl_cc(reg, cpu_env, reg, shift);
+        gen_helper_shl32_cc(reg, cpu_env, reg, shift);
     } else {
         if (insn & 8) {
-            gen_helper_shr_cc(reg, cpu_env, reg, shift);
+            gen_helper_shr32_cc(reg, cpu_env, reg, shift);
         } else {
-            gen_helper_sar_cc(reg, cpu_env, reg, shift);
+            gen_helper_sar32_cc(reg, cpu_env, reg, shift);
         }
     }
     s->cc_op = CC_OP_SHIFT;
+}
+
+DISAS_INSN(shift8_reg)
+{
+    TCGv reg;
+    TCGv shift;
+    TCGv dest;
+    TCGv tmp;
+
+    reg = DREG(insn, 0);
+    shift = DREG(insn, 9);
+    tmp = tcg_temp_new_i32();
+    tcg_gen_andi_i32(tmp, shift, 63);
+    dest = tcg_temp_new_i32();
+    /* Shift by zero leaves C flag unmodified.   */
+    gen_flush_flags(s);
+    if (insn & 0x100) {
+        gen_helper_shl8_cc(dest, cpu_env, reg, tmp);
+    } else {
+        if (insn & 8) {
+            gen_helper_shr8_cc(dest, cpu_env, reg, tmp);
+        } else {
+            gen_helper_sar8_cc(dest, cpu_env, reg, tmp);
+        }
+    }
+    s->cc_op = CC_OP_SHIFTB;
+    gen_partset_reg(OS_BYTE, reg, dest);
+}
+
+DISAS_INSN(shift16_reg)
+{
+    TCGv reg;
+    TCGv shift;
+    TCGv dest;
+    TCGv tmp;
+
+    reg = DREG(insn, 0);
+    shift = DREG(insn, 9);
+    tmp = tcg_temp_new_i32();
+    tcg_gen_andi_i32(tmp, shift, 63);
+    dest = tcg_temp_new_i32();
+    /* Shift by zero leaves C flag unmodified.   */
+    gen_flush_flags(s);
+    if (insn & 0x100) {
+        gen_helper_shl16_cc(dest, cpu_env, reg, tmp);
+    } else {
+        if (insn & 8) {
+            gen_helper_shr16_cc(dest, cpu_env, reg, tmp);
+        } else {
+            gen_helper_sar16_cc(dest, cpu_env, reg, tmp);
+        }
+    }
+    s->cc_op = CC_OP_SHIFTW;
+    gen_partset_reg(OS_WORD, reg, dest);
 }
 
 DISAS_INSN(shift_reg)
@@ -2043,15 +2154,38 @@ DISAS_INSN(shift_reg)
     /* Shift by zero leaves C flag unmodified.   */
     gen_flush_flags(s);
     if (insn & 0x100) {
-        gen_helper_shl_cc(reg, cpu_env, reg, shift);
+        gen_helper_shl32_cc(reg, cpu_env, reg, shift);
     } else {
         if (insn & 8) {
-            gen_helper_shr_cc(reg, cpu_env, reg, shift);
+            gen_helper_shr32_cc(reg, cpu_env, reg, shift);
         } else {
-            gen_helper_sar_cc(reg, cpu_env, reg, shift);
+            gen_helper_sar32_cc(reg, cpu_env, reg, shift);
         }
     }
     s->cc_op = CC_OP_SHIFT;
+}
+
+DISAS_INSN(shift_mem)
+{
+    TCGv src;
+    TCGv dest;
+    TCGv addr;
+    TCGv shift;
+
+    SRC_EA(src, OS_WORD, 0, &addr);
+    dest = tcg_temp_new_i32();
+    shift = tcg_const_i32(1);
+    if (insn & 0x100) {
+        gen_helper_shl16_cc(dest, cpu_env, src, shift);
+    } else {
+        if (insn & 8) {
+            gen_helper_shr16_cc(dest, cpu_env, src, shift);
+        } else {
+            gen_helper_sar16_cc(dest, cpu_env, src, shift);
+        }
+    }
+    s->cc_op = CC_OP_SHIFTW;
+    DEST_EA(insn, OS_WORD, dest, &addr);
 }
 
 DISAS_INSN(ff1)
@@ -3182,8 +3316,13 @@ void register_m68k_insns (CPUM68KState *env)
     INSN(adda,      d0c0, f0c0, M68000);
     INSN(shift_im,  e080, f0f0, CF_ISA_A);
     INSN(shift_reg, e0a0, f0f0, CF_ISA_A);
-    INSN(shift_im,    e080, f0f0, M68000);
-    INSN(shift_reg,   e0a0, f0f0, M68000);
+    INSN(shift8_im, e000, f0f0, M68000);
+    INSN(shift16_im, e040, f0f0, M68000);
+    INSN(shift_im,  e080, f0f0, M68000);
+    INSN(shift8_reg, e020, f0f0, M68000);
+    INSN(shift16_reg, e060, f0f0, M68000);
+    INSN(shift_reg, e0a0, f0f0, M68000);
+    INSN(shift_mem, e0c0, fcc0, M68000);
     INSN(undef_fpu, f000, f000, CF_ISA_A);
     INSN(undef_fpu, f000, f000, M68000);
     INSN(fpu,       f200, ffc0, CF_FPU);
