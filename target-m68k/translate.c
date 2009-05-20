@@ -2188,6 +2188,204 @@ DISAS_INSN(shift_mem)
     DEST_EA(insn, OS_WORD, dest, &addr);
 }
 
+DISAS_INSN(rotate_im)
+{
+    TCGv reg;
+    TCGv shift;
+    int tmp;
+
+    reg = DREG(insn, 0);
+    tmp = (insn >> 9) & 7;
+    if (tmp == 0)
+       tmp = 8;
+    shift = tcg_const_i32(tmp);
+    if (insn & 8) {
+       if (insn & 0x100) {
+           gen_helper_rol32_cc(reg, cpu_env, reg, shift);
+       } else {
+           gen_helper_ror32_cc(reg, cpu_env, reg, shift);
+       }
+    } else {
+        if (insn & 0x100) {
+            gen_helper_roxl32_cc(reg, cpu_env, reg, shift);
+        } else {
+            gen_helper_roxr32_cc(reg, cpu_env, reg, shift);
+        }
+    }
+    s->cc_op = CC_OP_FLAGS;
+}
+
+DISAS_INSN(rotate8_im)
+{
+    TCGv reg;
+    TCGv dest;
+    TCGv shift;
+    int tmp;
+
+    reg = DREG(insn, 0);
+    tmp = (insn >> 9) & 7;
+    if (tmp == 0)
+       tmp = 8;
+    dest = tcg_temp_new_i32();
+    shift = tcg_const_i32(tmp);
+    if (insn & 8) {
+       if (insn & 0x100) {
+           gen_helper_rol8_cc(dest, cpu_env, reg, shift);
+       } else {
+           gen_helper_ror8_cc(dest, cpu_env, reg, shift);
+       }
+    } else {
+        if (insn & 0x100) {
+            gen_helper_roxl8_cc(dest, cpu_env, reg, shift);
+        } else {
+            gen_helper_roxr8_cc(dest, cpu_env, reg, shift);
+        }
+    }
+    s->cc_op = CC_OP_FLAGS;
+    gen_partset_reg(OS_BYTE, reg, dest);
+}
+
+DISAS_INSN(rotate16_im)
+{
+    TCGv reg;
+    TCGv dest;
+    TCGv shift;
+    int tmp;
+
+    reg = DREG(insn, 0);
+    tmp = (insn >> 9) & 7;
+    if (tmp == 0)
+       tmp = 8;
+    dest = tcg_temp_new_i32();
+    shift = tcg_const_i32(tmp);
+    if (insn & 8) {
+       if (insn & 0x100) {
+           gen_helper_rol16_cc(dest, cpu_env, reg, shift);
+       } else {
+           gen_helper_ror16_cc(dest, cpu_env, reg, shift);
+       }
+    } else {
+        if (insn & 0x100) {
+            gen_helper_roxl16_cc(dest, cpu_env, reg, shift);
+        } else {
+            gen_helper_roxr16_cc(dest, cpu_env, reg, shift);
+        }
+    }
+    s->cc_op = CC_OP_FLAGS;
+    gen_partset_reg(OS_WORD, reg, dest);
+}
+
+DISAS_INSN(rotate_reg)
+{
+    TCGv reg;
+    TCGv src;
+    TCGv tmp;
+
+    reg = DREG(insn, 0);
+    src = DREG(insn, 9);
+    tmp = tcg_temp_new_i32();
+    tcg_gen_andi_i32(tmp, src, 63);
+    if (insn & 8) {
+       if (insn & 0x100) {
+           gen_helper_rol32_cc(reg, cpu_env, reg, tmp);
+       } else {
+           gen_helper_ror32_cc(reg, cpu_env, reg, tmp);
+       }
+    } else {
+        if (insn & 0x100) {
+            gen_helper_roxl32_cc(reg, cpu_env, reg, tmp);
+        } else {
+            gen_helper_roxr32_cc(reg, cpu_env, reg, tmp);
+        }
+    }
+    s->cc_op = CC_OP_FLAGS;
+}
+
+DISAS_INSN(rotate8_reg)
+{
+    TCGv reg;
+    TCGv src;
+    TCGv dest;
+    TCGv tmp;
+
+    reg = DREG(insn, 0);
+    src = DREG(insn, 9);
+    tmp = tcg_temp_new_i32();
+    tcg_gen_andi_i32(tmp, src, 63);
+    dest = tcg_temp_new_i32();
+    if (insn & 8) {
+       if (insn & 0x100) {
+           gen_helper_rol8_cc(dest, cpu_env, reg, tmp);
+       } else {
+           gen_helper_ror8_cc(dest, cpu_env, reg, tmp);
+       }
+    } else {
+        if (insn & 0x100) {
+            gen_helper_roxl8_cc(dest, cpu_env, reg, tmp);
+        } else {
+            gen_helper_roxr8_cc(dest, cpu_env, reg, tmp);
+        }
+    }
+    s->cc_op = CC_OP_FLAGS;
+    gen_partset_reg(OS_BYTE, reg, dest);
+}
+
+DISAS_INSN(rotate16_reg)
+{
+    TCGv reg;
+    TCGv src;
+    TCGv dest;
+    TCGv tmp;
+
+    reg = DREG(insn, 0);
+    src = DREG(insn, 9);
+    tmp = tcg_temp_new_i32();
+    tcg_gen_andi_i32(tmp, src, 63);
+    dest = tcg_temp_new_i32();
+    if (insn & 8) {
+       if (insn & 0x100) {
+           gen_helper_rol16_cc(dest, cpu_env, reg, tmp);
+       } else {
+           gen_helper_ror16_cc(dest, cpu_env, reg, tmp);
+       }
+    } else {
+        if (insn & 0x100) {
+            gen_helper_roxl16_cc(dest, cpu_env, reg, tmp);
+        } else {
+            gen_helper_roxr16_cc(dest, cpu_env, reg, tmp);
+        }
+    }
+    s->cc_op = CC_OP_FLAGS;
+    gen_partset_reg(OS_WORD, reg, dest);
+}
+
+DISAS_INSN(rotate_mem)
+{
+    TCGv src;
+    TCGv dest;
+    TCGv addr;
+    TCGv shift;
+
+    SRC_EA(src, OS_WORD, 0, &addr);
+    dest = tcg_temp_new_i32();
+    shift = tcg_const_i32(1);
+    if (insn & 8) {
+       if (insn & 0x100) {
+           gen_helper_rol16_cc(dest, cpu_env, src, shift);
+       } else {
+           gen_helper_ror16_cc(dest, cpu_env, src, shift);
+       }
+    } else {
+        if (insn & 0x100) {
+            gen_helper_roxl16_cc(dest, cpu_env, src, shift);
+        } else {
+            gen_helper_roxr16_cc(dest, cpu_env, src, shift);
+        }
+    }
+    s->cc_op = CC_OP_FLAGS;
+    DEST_EA(insn, OS_WORD, dest, &addr);
+}
+
 DISAS_INSN(ff1)
 {
     TCGv reg;
@@ -3323,6 +3521,13 @@ void register_m68k_insns (CPUM68KState *env)
     INSN(shift16_reg, e060, f0f0, M68000);
     INSN(shift_reg, e0a0, f0f0, M68000);
     INSN(shift_mem, e0c0, fcc0, M68000);
+    INSN(rotate_im, e090, f0f0, M68000);
+    INSN(rotate8_im, e010, f0f0, M68000);
+    INSN(rotate16_im, e050, f0f0, M68000);
+    INSN(rotate_reg, e0b0, f0f0, M68000);
+    INSN(rotate8_reg, e030, f0f0, M68000);
+    INSN(rotate16_reg,e070, f0f0, M68000);
+    INSN(rotate_mem, e4c0, fcc0, M68000);
     INSN(undef_fpu, f000, f000, CF_ISA_A);
     INSN(undef_fpu, f000, f000, M68000);
     INSN(fpu,       f200, ffc0, CF_FPU);
