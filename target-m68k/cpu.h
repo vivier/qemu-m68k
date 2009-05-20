@@ -147,6 +147,8 @@ enum {
     CC_OP_SUBXB,  /* CC_DEST = result, CC_SRC = source */
     CC_OP_SUBXW,  /* CC_DEST = result, CC_SRC = source */
     CC_OP_SUBX,  /* CC_DEST = result, CC_SRC = source */
+    CC_OP_SHIFTB, /* CC_DEST = result, CC_SRC = carry */
+    CC_OP_SHIFTW, /* CC_DEST = result, CC_SRC = carry */
     CC_OP_SHIFT, /* CC_DEST = result, CC_SRC = carry */
 };
 
