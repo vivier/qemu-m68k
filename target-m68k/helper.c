@@ -287,6 +287,12 @@ void cpu_m68k_flush_flags(CPUM68KState *env, int cc_op)
         flags |= CCF_V; \
     } while (0)
 
+#define SET_FLAGS_SHIFT(type) do { \
+    SET_NZ((type)dest); \
+    if (src) \
+        flags |= CCF_C; \
+    } while(0)
+
     flags = 0;
     src = env->cc_src;
     dest = env->cc_dest;
@@ -333,10 +339,14 @@ void cpu_m68k_flush_flags(CPUM68KState *env, int cc_op)
     case CC_OP_SUBX:
         SET_FLAGS_SUBX(int32_t, uint32_t);
         break;
+    case CC_OP_SHIFTB:
+        SET_FLAGS_SHIFT(int8_t);
+	break;
+    case CC_OP_SHIFTW:
+        SET_FLAGS_SHIFT(int16_t);
+	break;
     case CC_OP_SHIFT:
-        SET_NZ(dest);
-        if (src)
-            flags |= CCF_C;
+        SET_FLAGS_SHIFT(int32_t);
         break;
     default:
         cpu_abort(env, "Bad CC_OP %d", cc_op);
@@ -538,77 +548,89 @@ void HELPER(set_sr)(CPUState *env, uint32_t val)
     m68k_switch_sp(env);
 }
 
-uint32_t HELPER(shl_cc)(CPUState *env, uint32_t val, uint32_t shift)
-{
-    uint32_t result;
-    uint32_t cf;
-
-    shift &= 63;
-    if (shift == 0) {
-        result = val;
-        cf = env->cc_src & CCF_C;
-    } else if (shift < 32) {
-        result = val << shift;
-        cf = (val >> (32 - shift)) & 1;
-    } else if (shift == 32) {
-        result = 0;
-        cf = val & 1;
-    } else /* shift > 32 */ {
-        result = 0;
-        cf = 0;
-    }
-    env->cc_src = cf;
-    env->cc_x = (cf != 0);
-    env->cc_dest = result;
-    return result;
+#define HELPER_SHL(type, bits) \
+uint32_t HELPER(glue(glue(shl, bits),_cc))(CPUState *env, uint32_t val, uint32_t shift) \
+{ \
+    type result; \
+    uint32_t cf; \
+    shift &= 63; \
+    if (shift == 0) { \
+        result = (type)val; \
+        cf = env->cc_src & CCF_C; \
+    } else if (shift < bits) { \
+        result = (type)val << shift; \
+        cf = ((type)val >> (bits - shift)) & 1; \
+    } else if (shift == bits) { \
+        result = 0; \
+        cf = val & 1; \
+    } else /* shift > bits */ { \
+        result = 0; \
+        cf = 0; \
+    } \
+    env->cc_src = cf; \
+    env->cc_x = (cf != 0); \
+    env->cc_dest = result; \
+    return result; \
 }
 
-uint32_t HELPER(shr_cc)(CPUState *env, uint32_t val, uint32_t shift)
-{
-    uint32_t result;
-    uint32_t cf;
+HELPER_SHL(uint8_t, 8)
+HELPER_SHL(uint16_t, 16)
+HELPER_SHL(uint32_t, 32)
 
-    shift &= 63;
-    if (shift == 0) {
-        result = val;
-        cf = env->cc_src & CCF_C;
-    } else if (shift < 32) {
-        result = val >> shift;
-        cf = (val >> (shift - 1)) & 1;
-    } else if (shift == 32) {
-        result = 0;
-        cf = val >> 31;
-    } else /* shift > 32 */ {
-        result = 0;
-        cf = 0;
-    }
-    env->cc_src = cf;
-    env->cc_x = (cf != 0);
-    env->cc_dest = result;
-    return result;
+#define HELPER_SHR(type, bits) \
+uint32_t HELPER(glue(glue(shr, bits), _cc))(CPUState *env, uint32_t val, uint32_t shift) \
+{ \
+    type result; \
+    uint32_t cf; \
+    shift &= 63; \
+    if (shift == 0) { \
+        result = (type)val; \
+        cf = env->cc_src & CCF_C; \
+    } else if (shift < bits) { \
+        result = (type)val >> shift; \
+        cf = ((type)val >> (shift - 1)) & 1; \
+    } else if (shift == bits) { \
+        result = 0; \
+        cf = (type)val >> (bits - 1); \
+    } else /* shift > bits */ { \
+        result = 0; \
+        cf = 0; \
+    } \
+    env->cc_src = cf; \
+    env->cc_x = (cf != 0); \
+    env->cc_dest = result; \
+    return result; \
 }
 
-uint32_t HELPER(sar_cc)(CPUState *env, uint32_t val, uint32_t shift)
-{
-    uint32_t result;
-    uint32_t cf;
+HELPER_SHR(uint8_t, 8)
+HELPER_SHR(uint16_t, 16)
+HELPER_SHR(uint32_t, 32)
 
-    shift &= 63;
-    if (shift == 0) {
-        result = val;
-        cf = (env->cc_src & CCF_C) != 0;
-    } else if (shift < 32) {
-        result = (int32_t)val >> shift;
-        cf = (val >> (shift - 1)) & 1;
-    } else /* shift >= 32 */ {
-        result = (int32_t)val >> 31;
-        cf = val >> 31;
-    }
-    env->cc_src = cf;
-    env->cc_x = cf;
-    env->cc_dest = result;
-    return result;
+#define HELPER_SAR(type, bits) \
+uint32_t HELPER(glue(glue(sar, bits), _cc))(CPUState *env, uint32_t val, uint32_t shift)					\
+{ \
+    type result; \
+    uint32_t cf; \
+    shift &= 63; \
+    if (shift == 0) { \
+        result = (type)val; \
+        cf = (env->cc_src & CCF_C) != 0; \
+    } else if (shift < bits) { \
+        result = (type)val >> shift; \
+        cf = ((type)val >> (shift - 1)) & 1; \
+    } else /* shift >= bits */ { \
+        result = (type)val >> (bits - 1); \
+        cf = (type)val >> (bits - 1); \
+    } \
+    env->cc_src = cf; \
+    env->cc_x = cf; \
+    env->cc_dest = result; \
+    return result; \
 }
+
+HELPER_SAR(int8_t, 8)
+HELPER_SAR(int16_t, 16)
+HELPER_SAR(int32_t, 32)
 
 /* FPU helpers.  */
 uint32_t HELPER(f64_to_i32)(CPUState *env, float64 val)
