@@ -2947,6 +2947,9 @@ static void disas_m68k_insn(CPUState * env, DisasContext *s)
 {
     uint16_t insn;
 
+    if (unlikely(qemu_loglevel_mask(CPU_LOG_TB_OP)))
+        tcg_gen_debug_insn_start(s->pc);
+
     insn = lduw_code(s->pc);
     s->pc += 2;
 
