@@ -78,4 +78,6 @@ DEF_HELPER_3(set_mac_extu, void, env, i32, i32)
 DEF_HELPER_2(flush_flags, void, env, i32)
 DEF_HELPER_1(raise_exception, void, i32)
 
+DEF_HELPER_3(bitfield_load, i64, i32, i32, i32);
+DEF_HELPER_4(bitfield_store, void, i32, i32, i32, i64);
 #include "def-helper.h"
