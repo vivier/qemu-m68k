@@ -535,6 +535,8 @@ uint32_t HELPER(bfffo)(uint32_t arg, uint32_t width)
 uint32_t HELPER(rol32)(uint32_t val, uint32_t shift)
 {
     uint32_t result;
+    if (shift == 0 || shift == 32)
+        return val;
     result = (val << shift) | (val >> (32 - shift));
     return result;
 }
@@ -542,6 +544,8 @@ uint32_t HELPER(rol32)(uint32_t val, uint32_t shift)
 uint32_t HELPER(ror32)(uint32_t val, uint32_t shift)
 {
     uint32_t result;
+    if (shift == 0 || shift == 32)
+        return val;
     result = (val >> shift) | (val << (32 - shift));
     return result;
 }
@@ -1187,4 +1191,50 @@ void HELPER(set_mac_extu)(CPUState *env, uint32_t val, uint32_t acc)
     res = (uint32_t)env->macc[acc + 1];
     res |= (uint64_t)(val & 0xffff0000) << 16;
     env->macc[acc + 1] = res;
+}
+
+/* load from a bitfield */
+
+uint64_t HELPER(bitfield_load)(uint32_t addr, uint32_t offset, uint32_t width)
+{
+    uint8_t data[8];
+    uint64_t bitfield;
+    int size;
+    int i;
+
+    size = (offset + width + 7) >> 3;
+#if defined(CONFIG_USER_ONLY)
+    cpu_memory_rw_debug(NULL, (target_ulong)addr, data, size, 0);
+#else
+    cpu_physical_memory_rw(addr, data, size, 0);
+#endif
+
+    bitfield = data[0];
+    for (i = 1; i < 8; i++)
+        bitfield = (bitfield << 8) | data[i];
+
+    return bitfield;
+}
+
+/* store to a bitfield */
+
+void HELPER(bitfield_store)(uint32_t addr, uint32_t offset, uint32_t width,
+                            uint64_t bitfield)
+{
+    uint8_t data[8];
+    int size;
+    int i;
+
+    size = (offset + width + 7) >> 3;
+
+    for (i = 0; i < 8; i++) {
+        data[7 - i] = bitfield;
+        bitfield >>= 8;
+    }
+
+#if defined(CONFIG_USER_ONLY)
+    cpu_memory_rw_debug(NULL, (target_ulong)addr, data, size, 1);
+#else
+    cpu_physical_memory_rw(addr, data, size, 1);
+#endif
 }
