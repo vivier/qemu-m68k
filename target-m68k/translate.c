@@ -1371,6 +1371,67 @@ DISAS_INSN(arith_im)
     }
 }
 
+DISAS_INSN(cas)
+{
+    int opsize;
+    TCGv dest;
+    TCGv tmp;
+    TCGv cmp;
+    TCGv update;
+    TCGv addr;
+    TCGv res;
+    uint16_t ext;
+    int l1, l2;
+
+    if ((insn & 0x3f) == 0x3c) {
+        /* CAS2: Not yet implemented */
+        gen_exception(s, s->pc - 4, EXCP_UNSUPPORTED);
+    }
+
+    switch((insn >> 9) & 3) {
+    case 1:
+        opsize = OS_BYTE;
+        break;
+    case 2:
+        opsize = OS_WORD;
+        break;
+    case 3:
+        opsize = OS_LONG;
+        break;
+    default:
+        abort();
+    }
+
+    ext = lduw_code(s->pc);
+    s->pc += 2;
+    addr = gen_lea(s, insn, opsize);
+    if (IS_NULL_QREG(addr)) {
+        gen_addr_fault(s);
+        return;
+    }
+
+    cmp = DREG(ext, 0);
+    update = DREG(ext, 6);
+    tmp = gen_load(s, opsize, addr, 0);
+    dest = tcg_temp_local_new();
+    tcg_gen_mov_i32(dest, tmp);
+
+    res = tcg_temp_new();
+    tcg_gen_sub_i32(res, dest, cmp);
+    gen_logic_cc(s, res);
+
+    l1 = gen_new_label();
+    l2 = gen_new_label();
+
+    gen_jmpcc(s, 6 /* !Z */, l1);
+    gen_store(s, opsize, addr, update);
+    tcg_gen_br(l2);
+    gen_set_label(l1);
+    tcg_gen_mov_i32(cmp, dest);
+    gen_set_label(l2);
+    tcg_temp_free(dest);
+}
+
 DISAS_INSN(byterev)
 {
     TCGv reg;
@@ -3660,6 +3721,7 @@ void register_m68k_insns (CPUM68KState *env)
     INSN(bitop_im,  0840, ffc0, M68000);
     INSN(bitop_im,  0880, ffc0, CF_ISA_A);
     INSN(bitop_im,  0880, ffc0, M68000);
+    INSN(cas,       08c0, f9c0, CAS);
     INSN(bitop_im,  08c0, ffc0, CF_ISA_A);
     INSN(bitop_im,  08c0, ffc0, M68000);
     INSN(arith_im,  0a80, fff8, CF_ISA_A);
