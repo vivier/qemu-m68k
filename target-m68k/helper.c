@@ -165,6 +165,7 @@ static int cpu_m68k_set_model(CPUM68KState *env, const char *name)
         m68k_set_feature(env, M68K_FEATURE_SCALED_INDEX);
         m68k_set_feature(env, M68K_FEATURE_LONG_MULDIV);
         m68k_set_feature(env, M68K_FEATURE_FPU);
+        m68k_set_feature(env, M68K_FEATURE_CAS);
     case M68K_CPUID_M68000:
         m68k_set_feature(env, M68K_FEATURE_M68000);
         m68k_set_feature(env, M68K_FEATURE_USP);
@@ -210,6 +211,7 @@ static int cpu_m68k_set_model(CPUM68KState *env, const char *name)
         m68k_set_feature(env, M68K_FEATURE_BITFIELD);
         m68k_set_feature(env, M68K_FEATURE_LONG_MULDIV);
         m68k_set_feature(env, M68K_FEATURE_QUAD_MULDIV);
+        m68k_set_feature(env, M68K_FEATURE_CAS);
         break;
     }
 
