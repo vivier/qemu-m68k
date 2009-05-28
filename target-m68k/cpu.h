@@ -210,7 +210,8 @@ enum m68k_features {
     M68K_FEATURE_QUAD_MULDIV,	/* 64 bit multiply/divide. */
     M68K_FEATURE_BCCL,		/* Long conditional branches.  */
     M68K_FEATURE_BITFIELD,	/* Bit field insns.  */
-    M68K_FEATURE_FPU
+    M68K_FEATURE_FPU,
+    M68K_FEATURE_CAS
 };
 
 static inline int m68k_feature(CPUM68KState *env, int feature)
