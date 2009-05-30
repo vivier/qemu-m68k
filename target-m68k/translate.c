@@ -1378,6 +1378,7 @@ DISAS_INSN(cas)
     TCGv tmp;
     TCGv cmp;
     TCGv update;
+    TCGv taddr;
     TCGv addr;
     TCGv res;
     uint16_t ext;
@@ -1404,17 +1405,19 @@ DISAS_INSN(cas)
 
     ext = lduw_code(s->pc);
     s->pc += 2;
-    addr = gen_lea(s, insn, opsize);
-    if (IS_NULL_QREG(addr)) {
+    taddr = gen_lea(s, insn, opsize);
+    if (IS_NULL_QREG(taddr)) {
         gen_addr_fault(s);
         return;
     }
 
     cmp = DREG(ext, 0);
     update = DREG(ext, 6);
-    tmp = gen_load(s, opsize, addr, 0);
+    tmp = gen_load(s, opsize, taddr, 0);
     dest = tcg_temp_local_new();
     tcg_gen_mov_i32(dest, tmp);
+    addr = tcg_temp_local_new ();
+    tcg_gen_mov_i32(addr, taddr);
 
     res = tcg_temp_new();
     tcg_gen_sub_i32(res, dest, cmp);
@@ -1430,6 +1433,7 @@ DISAS_INSN(cas)
     tcg_gen_mov_i32(cmp, dest);
     gen_set_label(l2);
     tcg_temp_free(dest);
+    tcg_temp_free(addr);
 }
 
 DISAS_INSN(byterev)
