@@ -939,7 +939,7 @@ DISAS_INSN(dbcc)
     tcg_gen_ext16s_i32(tmp, reg);
     tcg_gen_addi_i32(tmp, tmp, -1);
     gen_partset_reg(OS_WORD, reg, tmp);
-    tcg_gen_brcondi_i32(TCG_COND_EQ, tmp, 0, l1);
+    tcg_gen_brcondi_i32(TCG_COND_EQ, tmp, -1, l1);
     gen_jmp_tb(s, 1, base + offset);
     gen_set_label(l1);
     gen_jmp_tb(s, 0, s->pc);
