@@ -2197,7 +2197,7 @@ struct target_statfs64 {
 #define TARGET_O_CLOEXEC     010000000
 #define TARGET___O_SYNC      020000000
 #define TARGET_O_PATH        040000000
-#elif defined(TARGET_ARM) || defined(TARGET_M68K)
+#elif defined(TARGET_ARM)
 #define TARGET_O_DIRECTORY      040000 /* must be a directory */
 #define TARGET_O_NOFOLLOW      0100000 /* don't follow links */
 #define TARGET_O_DIRECT        0200000 /* direct disk access hint */
@@ -2231,6 +2231,14 @@ struct target_statfs64 {
 #define TARGET_O_EXCL           0x0800  /* not fcntl */
 #define TARGET_O_DSYNC          0x2000
 #define TARGET_O_NONBLOCK       0x4000
+#define TARGET_O_RDONLY        0x0000
+#define TARGET_O_WRONLY        0x0001
+#define TARGET_O_RDWR          0x0002
+#define TARGET_O_ACCMODE       0x0003
+#define TARGET_O_NDELAY        (0x0004 | TARGET_O_NONBLOCK)
+#define TARGET_O_NOCTTY        0x8000  /* not fcntl */
+#define TARGET_O_DIRECTORY     0x10000 /* must be a directory */
+#define TARGET_O_NOFOLLOW      0x20000 /* don't follow links */
 # ifdef TARGET_SPARC64
 #  define TARGET_O_NDELAY       0x0004
 # else
@@ -2243,13 +2251,71 @@ struct target_statfs64 {
 #define TARGET_O_CLOEXEC      0x400000
 #define TARGET___O_SYNC       0x800000
 #define TARGET_O_PATH        0x1000000
-#endif
 
-/* <asm-generic/fcntl.h> values follow.  */
+#define TARGET_O_DIRECT        0x100000 /* direct disk access hint */
+#elif defined(TARGET_MIPS)
+#define TARGET_O_ACCMODE	0x0003
+#define TARGET_O_RDONLY	0x0000
+#define TARGET_O_WRONLY	0x0001
+#define TARGET_O_RDWR		0x0002
+#define TARGET_O_APPEND	0x0008
+#define TARGET_O_SYNC		0x0010
+#define TARGET_O_NONBLOCK	0x0080
+#define TARGET_O_CREAT         0x0100	/* not fcntl */
+#define TARGET_O_TRUNC		0x0200	/* not fcntl */
+#define TARGET_O_EXCL		0x0400	/* not fcntl */
+#define TARGET_O_NOCTTY	0x0800	/* not fcntl */
+#define TARGET_FASYNC		0x1000	/* fcntl, for BSD compatibility */
+#define TARGET_O_LARGEFILE	0x2000	/* allow large file opens */
+#define TARGET_O_DIRECT	0x8000	/* direct disk access hint */
+#define TARGET_O_DIRECTORY	0x10000	/* must be a directory */
+#define TARGET_O_NOFOLLOW	0x20000	/* don't follow links */
+#define TARGET_O_NOATIME	0x40000
+#define TARGET_O_NDELAY	TARGET_O_NONBLOCK
+#elif defined(TARGET_ALPHA)
+#define TARGET_O_ACCMODE	0x0003
+#define TARGET_O_RDONLY	0x0000
+#define TARGET_O_WRONLY	0x0001
+#define TARGET_O_RDWR		0x0002
+#define TARGET_O_APPEND	0x0008
+#define TARGET_O_SYNC		0x4000
+#define TARGET_O_NONBLOCK	0x0004
+#define TARGET_O_CREAT         0x0200	/* not fcntl */
+#define TARGET_O_TRUNC		0x0400	/* not fcntl */
+#define TARGET_O_EXCL		0x0800	/* not fcntl */
+#define TARGET_O_NOCTTY	0x1000	/* not fcntl */
+#define TARGET_FASYNC		0x2000	/* fcntl, for BSD compatibility */
+#define TARGET_O_LARGEFILE	0x0000	/* not necessary, always 64-bit */
+#define TARGET_O_DIRECT	0x80000	/* direct disk access hint */
+#define TARGET_O_DIRECTORY	0x8000	/* must be a directory */
+#define TARGET_O_NOFOLLOW	0x10000	/* don't follow links */
+#define TARGET_O_NOATIME	0x100000
+#define TARGET_O_NDELAY	TARGET_O_NONBLOCK
+#elif defined (TARGET_M68K)
 #define TARGET_O_ACCMODE          0003
 #define TARGET_O_RDONLY             00
 #define TARGET_O_WRONLY             01
 #define TARGET_O_RDWR               02
+#define TARGET_O_CREAT            0100 /* not fcntl */
+#define TARGET_O_EXCL             0200 /* not fcntl */
+#define TARGET_O_NOCTTY           0400 /* not fcntl */
+#define TARGET_O_TRUNC           01000 /* not fcntl */
+#define TARGET_O_APPEND          02000
+#define TARGET_O_NONBLOCK        04000
+#define TARGET_O_NDELAY        TARGET_O_NONBLOCK
+#define TARGET_O_SYNC           010000
+#define TARGET_FASYNC           020000 /* fcntl, for BSD compatibility */
+#define TARGET_O_DIRECTORY      040000 /* must be a directory */
+#define TARGET_O_NOFOLLOW      0100000 /* don't follow links */
+#define TARGET_O_DIRECT        0200000 /* direct disk access hint */
+#define TARGET_O_LARGEFILE     0400000
+#else
+#define TARGET_O_ACCMODE          0003
+#define TARGET_O_RDONLY             00
+#define TARGET_O_WRONLY             01
+#define TARGET_O_RDWR               02
+#endif
+
 #ifndef TARGET_O_CREAT
 #define TARGET_O_CREAT            0100 /* not fcntl */
 #endif
