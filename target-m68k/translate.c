@@ -2939,6 +2939,7 @@ DISAS_INSN(fpu)
     TCGv_i64 dest;
     TCGv_i64 res;
     TCGv tmp32;
+    TCGv reg;
     int round;
     int set_dest;
     int opsize;
@@ -3111,40 +3112,21 @@ DISAS_INSN(fpu)
             goto undef;
         }
         if (opsize == OS_DOUBLE) {
-            tmp32 = tcg_temp_new_i32();
-            tcg_gen_mov_i32(tmp32, AREG(insn, 0));
-            switch ((insn >> 3) & 7) {
-            case 2:
-            case 3:
-                break;
-            case 4:
-                tcg_gen_addi_i32(tmp32, tmp32, -8);
-                break;
-            case 5:
-                offset = ldsw_code(s->pc);
-                s->pc += 2;
-                tcg_gen_addi_i32(tmp32, tmp32, offset);
-                break;
-            case 7:
-                offset = ldsw_code(s->pc);
-                offset += s->pc - 2;
-                s->pc += 2;
-                tcg_gen_addi_i32(tmp32, tmp32, offset);
-                break;
-            default:
-                goto undef;
+            if ((insn & 0x3f) == 0x3c) {
+                src = gen_load64(s, tcg_const_i32(s->pc));
+                s->pc += 8;
+            } else {
+                tmp32 = gen_lea(s, insn, opsize);
+                if (IS_NULL_QREG(tmp32)) {
+                    gen_addr_fault(s);
+                    return;
+                }
+                src = gen_load64(s, tmp32);
+                if ( ((insn >> 3) & 7) == 3) { /* post-increment */
+                    reg = AREG(insn, 0);
+                    tcg_gen_addi_i32(reg, reg, opsize_bytes(opsize));
+                }
             }
-            src = gen_load64(s, tmp32);
-            switch ((insn >> 3) & 7) {
-            case 3:
-                tcg_gen_addi_i32(tmp32, tmp32, 8);
-                tcg_gen_mov_i32(AREG(insn, 0), tmp32);
-                break;
-            case 4:
-                tcg_gen_mov_i32(AREG(insn, 0), tmp32);
-                break;
-            }
-            tcg_temp_free_i32(tmp32);
         } else {
             SRC_EA(tmp32, opsize, 1, NULL);
             src = tcg_temp_new_i64();
