@@ -707,6 +707,7 @@ static TCGv gen_ea(CPUM68KState *env, DisasContext *s, uint16_t insn,
                 s->pc += 2;
                 break;
             case OS_LONG:
+            case OS_SINGLE:
                 offset = read_im32(env, s);
                 break;
             default:
