@@ -696,6 +696,7 @@ static TCGv gen_ea(DisasContext *s, uint16_t insn, int opsize, TCGv val,
                 s->pc += 2;
                 break;
             case OS_LONG:
+            case OS_SINGLE:
                 offset = read_im32(s);
                 break;
             default:
