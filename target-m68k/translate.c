@@ -3213,27 +3213,15 @@ undef:
     disas_undef_fpu(s, insn);
 }
 
-DISAS_INSN(fbcc)
+static void gen_fjmpcc(DisasContext *s, int cond, int l1)
 {
-    uint32_t offset;
-    uint32_t addr;
     TCGv flag;
-    int l1;
 
-    addr = s->pc;
-    offset = ldsw_code(s->pc);
-    s->pc += 2;
-    if (insn & (1 << 6)) {
-        offset = (offset << 16) | lduw_code(s->pc);
-        s->pc += 2;
-    }
-
-    l1 = gen_new_label();
     /* TODO: Raise BSUN exception.  */
     flag = tcg_temp_new();
     gen_helper_compare_f64(flag, cpu_env, QREG_FP_RESULT);
     /* Jump to l1 if condition is true.  */
-    switch (insn & 0xf) {
+    switch (cond) {
     case 0: /* f */
         break;
     case 1: /* eq (=0) */
@@ -3284,9 +3272,73 @@ DISAS_INSN(fbcc)
         tcg_gen_br(l1);
         break;
     }
+}
+
+DISAS_INSN(fbcc)
+{
+    uint32_t offset;
+    uint32_t addr;
+    int l1;
+
+    addr = s->pc;
+    offset = ldsw_code(s->pc);
+    s->pc += 2;
+    if (insn & (1 << 6)) {
+        offset = (offset << 16) | lduw_code(s->pc);
+        s->pc += 2;
+    }
+
+    l1 = gen_new_label();
+    gen_fjmpcc(s, insn & 0xf, l1);
     gen_jmp_tb(s, 0, s->pc);
     gen_set_label(l1);
     gen_jmp_tb(s, 1, addr + offset);
+}
+
+DISAS_INSN(fscc_mem)
+{
+    int l1, l2;
+    TCGv taddr;
+    TCGv addr;
+    uint16_t ext;
+
+    ext = lduw_code(s->pc);
+    s->pc += 2;
+
+    taddr = gen_lea(s, insn, OS_BYTE);
+    if (IS_NULL_QREG(taddr)) {
+        gen_addr_fault(s);
+        return;
+    }
+    addr = tcg_temp_local_new ();
+    tcg_gen_mov_i32(addr, taddr);
+    l1 = gen_new_label();
+    l2 = gen_new_label();
+    gen_fjmpcc(s, ext & 0xf, l1);
+    gen_store(s, OS_BYTE, addr, tcg_const_i32(0x00));
+    tcg_gen_br(l2);
+    gen_set_label(l1);
+    gen_store(s, OS_BYTE, addr, tcg_const_i32(0xff));
+    gen_set_label(l2);
+    tcg_temp_free(addr);
+}
+
+DISAS_INSN(fscc_reg)
+{
+    int l1;
+    TCGv reg;
+    uint16_t ext;
+
+    ext = lduw_code(s->pc);
+    s->pc += 2;
+
+    reg = DREG(insn, 0);
+
+    l1 = gen_new_label();
+    tcg_gen_ori_i32(reg, reg, 0x000000ff);
+    gen_fjmpcc(s, ext & 0xf, l1);
+    tcg_gen_andi_i32(reg, reg, 0xffffff00);
+    gen_set_label(l1);
 }
 
 DISAS_INSN(frestore)
@@ -3866,6 +3918,8 @@ void register_m68k_insns (CPUM68KState *env)
     INSN(frestore,  f340, ffc0, CF_FPU);
     INSN(fsave,     f340, ffc0, CF_FPU);
     INSN(fpu,       f200, ffc0, FPU);
+    INSN(fscc_mem,  f240, ffc0, FPU);
+    INSN(fscc_reg,  f240, fff8, FPU);
     INSN(fbcc,      f280, ffc0, FPU);
     INSN(frestore,  f340, ffc0, FPU);
     INSN(fsave,     f340, ffc0, FPU);
