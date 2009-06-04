@@ -1744,8 +1744,23 @@ DISAS_INSN(link)
     TCGv reg;
     TCGv tmp;
 
-    offset = ldsw_code(s->pc);
-    s->pc += 2;
+    offset = read_im16(s);
+    reg = AREG(insn, 0);
+    tmp = tcg_temp_new();
+    tcg_gen_subi_i32(tmp, QREG_SP, 4);
+    gen_store(s, OS_LONG, tmp, reg);
+    if ((insn & 7) != 7)
+        tcg_gen_mov_i32(reg, tmp);
+    tcg_gen_addi_i32(QREG_SP, tmp, offset);
+}
+
+DISAS_INSN(linkl)
+{
+    int32_t offset;
+    TCGv reg;
+    TCGv tmp;
+
+    offset = read_im32(s);
     reg = AREG(insn, 0);
     tmp = tcg_temp_new();
     tcg_gen_subi_i32(tmp, QREG_SP, 4);
@@ -3778,6 +3793,7 @@ void register_m68k_insns (CPUM68KState *env)
     INSN(not,       4600, ff00, M68000);
     INSN(undef,     46c0, ffc0, M68000);
     INSN(move_to_sr, 46c0, ffc0, CF_ISA_A);
+    INSN(linkl,     4808, fff8, M68000);
     INSN(pea,       4840, ffc0, CF_ISA_A);
     INSN(pea,       4840, ffc0, M68000);
     INSN(swap,      4840, fff8, CF_ISA_A);
