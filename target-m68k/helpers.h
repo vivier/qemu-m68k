@@ -42,7 +42,7 @@ DEF_HELPER_2(set_sr, void, env, i32)
 DEF_HELPER_3(movec, void, env, i32, i32)
 
 DEF_HELPER_2(const_f64, f64, env, i32);
-DEF_HELPER_2(f64_to_i32, f32, env, f64)
+DEF_HELPER_2(f64_to_i32, i32, env, f64)
 DEF_HELPER_2(f64_to_f32, f32, env, f64)
 DEF_HELPER_2(i32_to_f64, f64, env, i32)
 DEF_HELPER_2(f32_to_f64, f64, env, f32)
