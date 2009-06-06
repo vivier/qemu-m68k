@@ -2933,7 +2933,6 @@ DISAS_INSN(trap)
 DISAS_INSN(fpu)
 {
     uint16_t ext;
-    int32_t offset;
     int opmode;
     TCGv_i64 src;
     TCGv_i64 dest;
@@ -2944,8 +2943,7 @@ DISAS_INSN(fpu)
     int set_dest;
     int opsize;
 
-    ext = lduw_code(s->pc);
-    s->pc += 2;
+    ext = read_im16(s);
     opmode = ext & 0x7f;
     switch ((ext >> 13) & 7) {
     case 0: case 2:
@@ -2958,55 +2956,38 @@ DISAS_INSN(fpu)
         /* fmove */
         /* ??? TODO: Proper behavior on overflow.  */
         switch ((ext >> 10) & 7) {
-        case 0:
-            opsize = OS_LONG;
-            gen_helper_f64_to_i32(tmp32, cpu_env, src);
-            break;
-        case 1:
-            opsize = OS_SINGLE;
-            gen_helper_f64_to_f32(tmp32, cpu_env, src);
-            break;
-        case 4:
-            opsize = OS_WORD;
-            gen_helper_f64_to_i32(tmp32, cpu_env, src);
-            break;
-        case 5: /* OS_DOUBLE */
-            tcg_gen_mov_i32(tmp32, AREG(insn, 0));
-            switch ((insn >> 3) & 7) {
-            case 2:
-            case 3:
-                break;
-            case 4:
-                tcg_gen_addi_i32(tmp32, tmp32, -8);
-                break;
-            case 5:
-                offset = ldsw_code(s->pc);
-                s->pc += 2;
-                tcg_gen_addi_i32(tmp32, tmp32, offset);
-                break;
-            default:
-                goto undef;
-            }
-            gen_store64(s, tmp32, src);
-            switch ((insn >> 3) & 7) {
-            case 3:
-                tcg_gen_addi_i32(tmp32, tmp32, 8);
-                tcg_gen_mov_i32(AREG(insn, 0), tmp32);
-                break;
-            case 4:
-                tcg_gen_mov_i32(AREG(insn, 0), tmp32);
-                break;
-            }
-            tcg_temp_free_i32(tmp32);
-            return;
-        case 6:
-            opsize = OS_BYTE;
-            gen_helper_f64_to_i32(tmp32, cpu_env, src);
-            break;
+        case 0: opsize = OS_LONG; break;
+        case 1: opsize = OS_SINGLE; break;
+        case 4: opsize = OS_WORD; break;
+        case 5: opsize = OS_DOUBLE; break;
+        case 6: opsize = OS_BYTE; break;
         default:
             goto undef;
         }
-        DEST_EA(insn, opsize, tmp32, NULL);
+        if (opsize == OS_DOUBLE) {
+            tmp32 = gen_lea(s, insn, opsize);
+            if (IS_NULL_QREG(tmp32)) {
+                gen_addr_fault(s);
+                return;
+            }
+            gen_store64(s, tmp32, src);
+            if ( ((insn >> 3) & 7) == 3) { /* post-increment */
+                reg = AREG(insn, 0);
+                tcg_gen_addi_i32(reg, reg, opsize_bytes(opsize));
+            }
+        } else {
+            switch (opsize) {
+            case OS_LONG:
+            case OS_WORD:
+            case OS_BYTE:
+                gen_helper_f64_to_i32(tmp32, cpu_env, src);
+                break;
+            case OS_SINGLE:
+                gen_helper_f64_to_f32(tmp32, cpu_env, src);
+                break;
+            }
+            DEST_EA(insn, opsize, tmp32, NULL);
+        }
         tcg_temp_free_i32(tmp32);
         return;
     case 4: /* fmove to control register.  */
