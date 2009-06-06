@@ -815,6 +815,39 @@ HELPER_ROXL(uint16_t, 16)
 HELPER_ROXL(uint32_t, 32)
 
 /* FPU helpers.  */
+
+static const floatx80 fpu_rom[128] = {
+    [0x00] = { .high = 0x4000, .low = 0xc90fdaa22168c235 },	/* Pi */
+
+    [0x0b] = { .high = 0x3ffd, .low = 0x9a209a84fbcff798 },	/* Log10(2) */
+    [0x0c] = { .high = 0x4000, .low = 0xadf85458a2bb4a9a },	/* e        */
+    [0x0d] = { .high = 0x3fff, .low = 0xb8aa3b295c17f0bc },	/* Log2(e)  */
+    [0x0e] = { .high = 0x3ffd, .low = 0xde5bd8a937287195 },	/* Log10(e) */
+    [0x0f] = { .high = 0x0000, .low = 0x0000000000000000 },	/* Zero     */
+
+    [0x30] = { .high = 0x3ffe, .low = 0xb17217f7d1cf79ac },	/* ln(2)    */
+    [0x31] = { .high = 0x4000, .low = 0x935d8dddaaa8ac17 },	/* ln(10)   */
+    [0x32] = { .high = 0x3fff, .low = 0x8000000000000000 },	/* 10^0     */
+    [0x33] = { .high = 0x4002, .low = 0xa000000000000000 },	/* 10^1     */
+    [0x34] = { .high = 0x4005, .low = 0xc800000000000000 },	/* 10^2     */
+    [0x35] = { .high = 0x400c, .low = 0x9c40000000000000 },	/* 10^4     */
+    [0x36] = { .high = 0x4019, .low = 0xbebc200000000000 },	/* 10^8     */
+    [0x37] = { .high = 0x4034, .low = 0x8e1bc9bf04000000 },	/* 10^16    */
+    [0x38] = { .high = 0x4069, .low = 0x9dc5ada82b70b59e },	/* 10^32    */
+    [0x39] = { .high = 0x40d3, .low = 0xc2781f49ffcfa6d5 },	/* 10^64    */
+    [0x3a] = { .high = 0x41a8, .low = 0x93ba47c980e98ce0 },	/* 10^128   */
+    [0x3b] = { .high = 0x4351, .low = 0xaa7eebfb9df9de8e },	/* 10^256   */
+    [0x3c] = { .high = 0x46a3, .low = 0xe319a0aea60e91c7 },	/* 10^512   */
+    [0x3d] = { .high = 0x4d48, .low = 0xc976758681750c17 },	/* 10^1024  */
+    [0x3e] = { .high = 0x5a92, .low = 0x9e8b3b5dc53d5de5 },	/* 10^2048  */
+    [0x3f] = { .high = 0x7525, .low = 0xc46052028a20979b },	/* 10^4096  */
+};
+
+float64 HELPER(const_f64)(CPUState *env, uint32_t offset)
+{
+    return floatx80_to_float64(fpu_rom[offset], &env->fp_status);
+}
+
 uint32_t HELPER(f64_to_i32)(CPUState *env, float64 val)
 {
     return float64_to_int32(val, &env->fp_status);
