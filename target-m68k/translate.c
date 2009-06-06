@@ -2949,6 +2949,7 @@ DISAS_INSN(trap)
 DISAS_INSN(fpu)
 {
     uint16_t ext;
+    uint8_t rom_offset;
     int opmode;
     TCGv_i64 src;
     TCGv_i64 dest;
@@ -2962,10 +2963,19 @@ DISAS_INSN(fpu)
     ext = read_im16(s);
     opmode = ext & 0x7f;
     switch ((ext >> 13) & 7) {
-    case 0: case 2:
+    case 0:
         break;
     case 1:
         goto undef;
+    case 2:
+        if ( insn == 0xf200 && (ext & 0xfc00) == 0x5c00) {
+            /* fmovecr */
+            rom_offset = ext & 0x7f;
+            dest = FREG(ext, 7);
+            gen_helper_const_f64(dest, cpu_env, tcg_const_i32(rom_offset));
+            return;
+        }
+        break;
     case 3: /* fmove out */
         src = FREG(ext, 7);
         tmp32 = tcg_temp_new_i32();
