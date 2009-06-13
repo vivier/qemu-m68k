@@ -1483,11 +1483,16 @@ DISAS_INSN(move)
 
 DISAS_INSN(negx)
 {
-    TCGv reg;
+    TCGv src;
+    TCGv dest;
+    TCGv addr;
+    int opsize;
 
-    gen_flush_flags(s);
-    reg = DREG(insn, 0);
-    gen_helper_subx_cc(reg, cpu_env, tcg_const_i32(0), reg);
+    opsize = insn_opsize(insn, 6);
+    SRC_EA(src, opsize, -1, &addr);
+    dest = tcg_temp_new();
+    gen_helper_subx_cc(dest, cpu_env, tcg_const_i32(0), src);
+    DEST_EA(insn, opsize, dest, &addr);
 }
 
 DISAS_INSN(lea)
@@ -3780,7 +3785,7 @@ void register_m68k_insns (CPUM68KState *env)
     INSN(move,      3000, f000, M68000);
     INSN(strldsr,   40e7, ffff, CF_ISA_APLUSC);
     INSN(negx,      4080, fff8, CF_ISA_A);
-    INSN(negx,      4080, fff8, M68000);
+    INSN(negx,      4000, ff00, M68000);
     INSN(undef,     40c0, ffc0, M68000);
     INSN(move_from_sr, 40c0, fff8, CF_ISA_A);
     INSN(move_from_sr, 40c0, fff8, M68000);
