@@ -1547,9 +1547,8 @@ DISAS_INSN(neg)
     tcg_gen_neg_i32(dest, src1);
     DEST_EA(insn, opsize, dest, &addr);
     SET_CC_OP(opsize, SUB);
-    gen_update_cc_add(src1, dest);
+    gen_update_cc_add(dest, src1);
     gen_helper_xflag_lt(QREG_CC_X, tcg_const_i32(0), dest);
-    SET_CC_OP(opsize, SUB);
 }
 
 static void gen_set_sr_im(DisasContext *s, uint16_t val, int ccr_only)
