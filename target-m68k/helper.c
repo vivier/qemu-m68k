@@ -282,15 +282,15 @@ void cpu_m68k_flush_flags(CPUM68KState *env, int cc_op)
 
 #define HIGHBIT(type) (1u << (sizeof(type) * 8 - 1))
 
-#define SET_NZ(x) do { \
-    if ((x) == 0) \
+#define SET_NZ(x, type) do { \
+    if ((type)(x) == 0) \
         flags |= CCF_Z; \
-    else if ((int32_t)(x) < 0) \
+    else if ((type)(x) < 0) \
         flags |= CCF_N; \
     } while (0)
 
 #define SET_FLAGS_SUB(type, utype) do { \
-    SET_NZ((type)dest); \
+    SET_NZ(dest, type); \
     tmp = dest + src; \
     if ((utype) tmp < (utype) src) \
         flags |= CCF_C; \
@@ -299,7 +299,7 @@ void cpu_m68k_flush_flags(CPUM68KState *env, int cc_op)
     } while (0)
 
 #define SET_FLAGS_ADD(type, utype) do { \
-    SET_NZ((type)dest); \
+    SET_NZ(dest, type); \
     if ((utype) dest < (utype) src) \
         flags |= CCF_C; \
     tmp = dest - src; \
@@ -308,7 +308,7 @@ void cpu_m68k_flush_flags(CPUM68KState *env, int cc_op)
     } while (0)
 
 #define SET_FLAGS_ADDX(type, utype) do { \
-    SET_NZ((type)dest); \
+    SET_NZ(dest, type); \
     if ((utype) dest <= (utype) src) \
         flags |= CCF_C; \
     tmp = dest - src - 1; \
@@ -317,7 +317,7 @@ void cpu_m68k_flush_flags(CPUM68KState *env, int cc_op)
     } while (0)
 
 #define SET_FLAGS_SUBX(type, utype) do { \
-    SET_NZ((type)dest); \
+    SET_NZ(dest, type); \
     tmp = dest + src + 1; \
     if ((utype) tmp <= (utype) src) \
         flags |= CCF_C; \
@@ -326,7 +326,7 @@ void cpu_m68k_flush_flags(CPUM68KState *env, int cc_op)
     } while (0)
 
 #define SET_FLAGS_SHIFT(type) do { \
-    SET_NZ((type)dest); \
+    SET_NZ(dest, type); \
     if (src) \
         flags |= CCF_C; \
     } while(0)
@@ -338,8 +338,21 @@ void cpu_m68k_flush_flags(CPUM68KState *env, int cc_op)
     case CC_OP_FLAGS:
         flags = dest;
         break;
+    case CC_OP_LOGICB:
+        SET_NZ(dest, int8_t);
+        goto set_x;
+        break;
+    case CC_OP_LOGICW:
+        SET_NZ(dest, int16_t);
+        goto set_x;
+        break;
     case CC_OP_LOGIC:
-        SET_NZ(dest);
+        SET_NZ(dest, int32_t);
+set_x:
+        if (env->cc_x && m68k_feature(env, M68K_FEATURE_M68000)) {
+            /* Unlike m68k, coldfire always clears the overflow bit.  */
+            flags |= CCF_X;
+        }
         break;
     case CC_OP_ADDB:
         SET_FLAGS_ADD(int8_t, uint8_t);
