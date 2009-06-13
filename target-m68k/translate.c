@@ -432,10 +432,19 @@ static inline void gen_flush_flags(DisasContext *s)
     s->cc_op = CC_OP_FLAGS;
 }
 
-static void gen_logic_cc(DisasContext *s, TCGv val)
+#define SET_CC_OP(opsize, op) do { \
+    switch (opsize) { \
+    case OS_BYTE: s->cc_op = CC_OP_##op##B; break; \
+    case OS_WORD: s->cc_op = CC_OP_##op##W; break; \
+    case OS_LONG: s->cc_op = CC_OP_##op; break; \
+    default: abort(); \
+    } \
+} while (0)
+
+static void gen_logic_cc(DisasContext *s, TCGv val, int opsize)
 {
     tcg_gen_mov_i32(QREG_CC_DEST, val);
-    s->cc_op = CC_OP_LOGIC;
+    SET_CC_OP(opsize, LOGIC);
 }
 
 static void gen_update_cc_add(TCGv dest, TCGv src)
@@ -466,15 +475,6 @@ static inline int insn_opsize(int insn, int pos)
     default: abort();
     }
 }
-
-#define SET_CC_OP(opsize, op) do { \
-    switch (opsize) { \
-    case OS_BYTE: s->cc_op = CC_OP_##op##B; break; \
-    case OS_WORD: s->cc_op = CC_OP_##op##W; break; \
-    case OS_LONG: s->cc_op = CC_OP_##op; break; \
-    default: abort(); \
-    } \
-} while (0)
 
 /* Assign value to a register.  If the width is less than the register width
    only the low part of the register is set.  */
@@ -985,8 +985,7 @@ DISAS_INSN(mulw)
     SRC_EA(env, src, OS_WORD, sign, NULL);
     tcg_gen_mul_i32(tmp, tmp, src);
     tcg_gen_mov_i32(reg, tmp);
-    /* Unlike m68k, coldfire always clears the overflow bit.  */
-    gen_logic_cc(s, tmp);
+    gen_logic_cc(s, tmp, OS_WORD);
 }
 
 DISAS_INSN(divw)
@@ -1177,7 +1176,7 @@ DISAS_INSN(sats)
     reg = DREG(insn, 0);
     gen_flush_flags(s);
     gen_helper_sats(reg, reg, QREG_CC_DEST);
-    gen_logic_cc(s, reg);
+    gen_logic_cc(s, reg, OS_LONG);
 }
 
 static void gen_push(DisasContext *s, TCGv val)
@@ -1339,11 +1338,11 @@ DISAS_INSN(arith_im)
     switch (op) {
     case 0: /* ori */
         tcg_gen_ori_i32(dest, src1, im);
-        gen_logic_cc(s, dest);
+        gen_logic_cc(s, dest, opsize);
         break;
     case 1: /* andi */
         tcg_gen_andi_i32(dest, src1, im);
-        gen_logic_cc(s, dest);
+        gen_logic_cc(s, dest, opsize);
         break;
     case 2: /* subi */
         tcg_gen_mov_i32(dest, src1);
@@ -1361,7 +1360,7 @@ DISAS_INSN(arith_im)
         break;
     case 5: /* eori */
         tcg_gen_xori_i32(dest, src1, im);
-        gen_logic_cc(s, dest);
+        gen_logic_cc(s, dest, opsize);
         break;
     case 6: /* cmpi */
         tcg_gen_mov_i32(dest, src1);
@@ -1427,7 +1426,7 @@ DISAS_INSN(cas)
 
     res = tcg_temp_new();
     tcg_gen_sub_i32(res, dest, cmp);
-    gen_logic_cc(s, res);
+    gen_logic_cc(s, res, opsize);
 
     l1 = gen_new_label();
     l2 = gen_new_label();
@@ -1483,7 +1482,7 @@ DISAS_INSN(move)
         dest_ea = ((insn >> 9) & 7) | (op << 3);
         DEST_EA(env, dest_ea, opsize, src, NULL);
         /* This will be correct because loads sign extend.  */
-        gen_logic_cc(s, src);
+        gen_logic_cc(s, src, opsize);
     }
 }
 
@@ -1516,7 +1515,7 @@ DISAS_INSN(clr)
 
     opsize = insn_opsize(insn, 6);
     DEST_EA(env, insn, opsize, tcg_const_i32(0), NULL);
-    gen_logic_cc(s, tcg_const_i32(0));
+    gen_logic_cc(s, tcg_const_i32(0), opsize);
 }
 
 static TCGv gen_get_ccr(DisasContext *s)
@@ -1613,7 +1612,7 @@ DISAS_INSN(not)
     dest = tcg_temp_new();
     tcg_gen_not_i32(dest, src1);
     DEST_EA(env, insn, opsize, dest, &addr);
-    gen_logic_cc(s, dest);
+    gen_logic_cc(s, dest, opsize);
 }
 
 DISAS_INSN(swap)
@@ -1628,7 +1627,7 @@ DISAS_INSN(swap)
     tcg_gen_shli_i32(src1, reg, 16);
     tcg_gen_shri_i32(src2, reg, 16);
     tcg_gen_or_i32(reg, src1, src2);
-    gen_logic_cc(s, reg);
+    gen_logic_cc(s, reg, OS_LONG);
 }
 
 DISAS_INSN(pea)
@@ -1660,7 +1659,7 @@ DISAS_INSN(ext)
         gen_partset_reg(OS_WORD, reg, tmp);
     else
         tcg_gen_mov_i32(reg, tmp);
-    gen_logic_cc(s, tmp);
+    gen_logic_cc(s, tmp, OS_LONG);
 }
 
 DISAS_INSN(tst)
@@ -1670,7 +1669,7 @@ DISAS_INSN(tst)
 
     opsize = insn_opsize(insn, 6);
     SRC_EA(env, tmp, opsize, -1, NULL);
-    gen_logic_cc(s, tmp);
+    gen_logic_cc(s, tmp, opsize);
 }
 
 DISAS_INSN(pulse)
@@ -1692,7 +1691,7 @@ DISAS_INSN(tas)
 
     dest = tcg_temp_new();
     SRC_EA(env, src1, OS_BYTE, 1, &addr);
-    gen_logic_cc(s, src1);
+    gen_logic_cc(s, src1, OS_BYTE);
     tcg_gen_ori_i32(dest, src1, 0x80);
     DEST_EA(env, insn, OS_BYTE, dest, &addr);
 }
@@ -1738,9 +1737,8 @@ DISAS_INSN(mull)
        s->cc_op = CC_OP_FLAGS;
     } else {
        tcg_gen_mul_i32(dest, src1, reg);
-       /* Unlike m68k, coldfire always clears the overflow bit.  */
-       gen_logic_cc(s, dest);
     }
+    gen_logic_cc(s, dest, OS_LONG);
     tcg_gen_mov_i32(reg, dest);
 }
 
@@ -1921,7 +1919,7 @@ DISAS_INSN(moveq)
 
     val = (int8_t)insn;
     tcg_gen_movi_i32(DREG(insn, 9), val);
-    gen_logic_cc(s, tcg_const_i32(val));
+    gen_logic_cc(s, tcg_const_i32(val), OS_LONG);
 }
 
 DISAS_INSN(mvzs)
@@ -1937,7 +1935,7 @@ DISAS_INSN(mvzs)
     SRC_EA(env, src, opsize, (insn & 0x80) == 0, NULL);
     reg = DREG(insn, 9);
     tcg_gen_mov_i32(reg, src);
-    gen_logic_cc(s, src);
+    gen_logic_cc(s, src, opsize);
 }
 
 DISAS_INSN(or)
@@ -1960,7 +1958,7 @@ DISAS_INSN(or)
         tcg_gen_or_i32(dest, src, reg);
         gen_partset_reg(opsize, reg, dest);
     }
-    gen_logic_cc(s, dest);
+    gen_logic_cc(s, dest, opsize);
 }
 
 DISAS_INSN(suba)
@@ -1993,7 +1991,7 @@ DISAS_INSN(mov3q)
     if (val == 0)
         val = -1;
     src = tcg_const_i32(val);
-    gen_logic_cc(s, src);
+    gen_logic_cc(s, src, OS_LONG);
     DEST_EA(env, insn, OS_LONG, src, NULL);
 }
 
@@ -2046,7 +2044,7 @@ DISAS_INSN(eor)
     reg = DREG(insn, 9);
     dest = tcg_temp_new();
     tcg_gen_xor_i32(dest, src, reg);
-    gen_logic_cc(s, dest);
+    gen_logic_cc(s, dest, opsize);
     DEST_EA(env, insn, opsize, dest, &addr);
 }
 
@@ -2070,7 +2068,7 @@ DISAS_INSN(and)
         tcg_gen_and_i32(dest, src, reg);
         gen_partset_reg(opsize, reg, dest);
     }
-    gen_logic_cc(s, dest);
+    gen_logic_cc(s, dest, opsize);
 }
 
 DISAS_INSN(adda)
@@ -2536,7 +2534,7 @@ DISAS_INSN(bitfield_reg)
 
     tmp1 = tcg_temp_new_i32();
     gen_helper_rol32(tmp1, tmp, offset);
-    gen_logic_cc(s, tmp1);
+    gen_logic_cc(s, tmp1, OS_LONG);
 
     reg2 = DREG(ext, 12);
     switch (op) {
@@ -2605,7 +2603,7 @@ static TCGv gen_bitfield_cc(DisasContext *s,
     /* compute cc */
 
     tcg_gen_and_i32(dest, dest, mask_cc);
-    gen_logic_cc(s, dest);
+    gen_logic_cc(s, dest, OS_LONG);
 
     return dest;
 }
@@ -2777,7 +2775,7 @@ DISAS_INSN(ff1)
 {
     TCGv reg;
     reg = DREG(insn, 0);
-    gen_logic_cc(s, reg);
+    gen_logic_cc(s, reg, OS_LONG);
     gen_helper_ff1(reg, reg);
 }
 
