@@ -1125,6 +1125,18 @@ DISAS_INSN(sbcd_mem)
     gen_store(s, OS_BYTE, addr_dest, dest);
 }
 
+DISAS_INSN(nbcd)
+{
+    TCGv dest;
+    TCGv addr;
+
+    SRC_EA(dest, OS_BYTE, -1, &addr);
+
+    gen_helper_sbcd_cc(dest, cpu_env, dest, tcg_const_i32(0));
+
+    DEST_EA(insn, OS_BYTE, dest, &addr);
+}
+
 DISAS_INSN(addsub)
 {
     TCGv reg;
@@ -3865,6 +3877,7 @@ void register_m68k_insns (CPUM68KState *env)
     INSN(not,       4600, ff00, M68000);
     INSN(undef,     46c0, ffc0, M68000);
     INSN(move_to_sr, 46c0, ffc0, CF_ISA_A);
+    INSN(nbcd,      4800, ffc0, M68000);
     INSN(linkl,     4808, fff8, M68000);
     INSN(pea,       4840, ffc0, CF_ISA_A);
     INSN(pea,       4840, ffc0, M68000);
