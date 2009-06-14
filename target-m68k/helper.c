@@ -1324,3 +1324,48 @@ uint32_t HELPER(abcd_cc)(CPUState *env, uint32_t src, uint32_t dest)
 
     return dest;
 }
+
+uint32_t HELPER(sbcd_cc)(CPUState *env, uint32_t src, uint32_t dest)
+{
+    uint16_t hi, lo;
+    uint16_t res;
+    uint32_t flags;
+    int bcd = 0, carry = 0;
+
+    flags = env->cc_dest;
+    flags &= ~(CCF_C|CCF_X);
+
+    if (env->cc_x)
+        carry = 1;
+
+    lo = (dest & 0x0f) - (src & 0x0f) - carry;
+    hi = (dest & 0xf0) - (src & 0xf0);
+
+    res = hi + lo;
+    if (lo & 0xf0) {
+        res -= 0x06;
+        bcd = 0x06;
+    }
+
+    if ((((dest & 0xff) - (src & 0xff) - carry) & 0x100) > 0xff) {
+        res -= 0x60;
+    }
+
+    /* C and X flags: set if decimal carry, cleared otherwise */
+
+    if ((((dest & 0xff) - (src & 0xff) - (bcd + carry)) & 0x300) > 0xff) {
+        flags |= CCF_C|CCF_X;
+    }
+
+    /* Z flag: cleared if nonzero */
+
+    if (res & 0xff)
+        flags &= ~CCF_Z;
+
+    dest = (dest & 0xffffff00) | (res & 0xff);
+
+    env->cc_x = (flags & CCF_X) != 0;
+    env->cc_dest = flags;
+
+    return dest;
+}
