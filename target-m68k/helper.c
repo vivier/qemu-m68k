@@ -573,7 +573,7 @@ uint32_t HELPER(glue(glue(shl, bits),_cc))(CPUM68KState *env, uint32_t val, uint
         cf = 0; \
     } \
     env->cc_src = cf; \
-    env->cc_x = (cf != 0); \
+    if (shift) env->cc_x = (cf != 0); \
     env->cc_dest = result; \
     return result; \
 }
@@ -602,7 +602,7 @@ uint32_t HELPER(glue(glue(shr, bits), _cc))(CPUM68KState *env, uint32_t val, uin
         cf = 0; \
     } \
     env->cc_src = cf; \
-    env->cc_x = (cf != 0); \
+    if (shift) env->cc_x = (cf != 0); \
     env->cc_dest = result; \
     return result; \
 }
@@ -628,7 +628,7 @@ uint32_t HELPER(glue(glue(sar, bits), _cc))(CPUM68KState *env, uint32_t val, uin
         cf = (type)val >> (bits - 1); \
     } \
     env->cc_src = cf; \
-    env->cc_x = cf; \
+    if (shift) env->cc_x = (cf != 0); \
     env->cc_dest = result; \
     return result; \
 }
