@@ -81,4 +81,6 @@ DEF_HELPER_1(raise_exception, void, i32)
 
 DEF_HELPER_3(bitfield_load, i64, i32, i32, i32);
 DEF_HELPER_4(bitfield_store, void, i32, i32, i32, i64);
+
+DEF_HELPER_3(abcd_cc, i32, env, i32, i32);
 #include "def-helper.h"
