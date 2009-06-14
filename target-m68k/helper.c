@@ -660,7 +660,7 @@ uint32_t HELPER(glue(glue(shl, bits),_cc))(CPUState *env, uint32_t val, uint32_t
         cf = 0; \
     } \
     env->cc_src = cf; \
-    env->cc_x = (cf != 0); \
+    if (shift) env->cc_x = (cf != 0); \
     env->cc_dest = result; \
     return result; \
 }
@@ -689,7 +689,7 @@ uint32_t HELPER(glue(glue(shr, bits), _cc))(CPUState *env, uint32_t val, uint32_
         cf = 0; \
     } \
     env->cc_src = cf; \
-    env->cc_x = (cf != 0); \
+    if (shift) env->cc_x = (cf != 0); \
     env->cc_dest = result; \
     return result; \
 }
@@ -715,7 +715,7 @@ uint32_t HELPER(glue(glue(sar, bits), _cc))(CPUState *env, uint32_t val, uint32_
         cf = (type)val >> (bits - 1); \
     } \
     env->cc_src = cf; \
-    env->cc_x = cf; \
+    if (shift) env->cc_x = (cf != 0); \
     env->cc_dest = result; \
     return result; \
 }
