@@ -1286,3 +1286,41 @@ void HELPER(bitfield_store)(uint32_t addr, uint32_t offset, uint32_t width,
     cpu_physical_memory_rw(addr, data, size, 1);
 #endif
 }
+
+uint32_t HELPER(abcd_cc)(CPUState *env, uint32_t src, uint32_t dest)
+{
+    uint16_t hi, lo;
+    uint16_t res;
+    uint32_t flags;
+
+    flags = env->cc_dest;
+    flags &= ~(CCF_C|CCF_X);
+
+    lo = (src & 0x0f) + (dest & 0x0f);
+    if (env->cc_x)
+        lo ++;
+    hi = (src & 0xf0) + (dest & 0xf0);
+
+    res = hi + lo;
+    if (lo > 9)
+        res += 0x06;
+
+    /* C and X flags: set if decimal carry, cleared otherwise */
+
+    if ((res & 0x3F0) > 0x90) {
+        res += 0x60;
+        flags |= CCF_C|CCF_X;
+    }
+
+    /* Z flag: cleared if nonzero */
+
+    if (res & 0xff)
+        flags &= ~CCF_Z;
+
+    dest = (dest & 0xffffff00) | (res & 0xff);
+
+    env->cc_x = (flags & CCF_X) != 0;
+    env->cc_dest = flags;
+
+    return dest;
+}

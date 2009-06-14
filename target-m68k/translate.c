@@ -1065,6 +1065,36 @@ DISAS_INSN(divl)
     s->cc_op = CC_OP_FLAGS;
 }
 
+DISAS_INSN(abcd_reg)
+{
+    TCGv src;
+    TCGv dest;
+
+    src = DREG(insn, 0);
+    dest = DREG(insn, 9);
+    gen_helper_abcd_cc(dest, cpu_env, src, dest);
+}
+
+DISAS_INSN(abcd_mem)
+{
+    TCGv src;
+    TCGv addr_src;
+    TCGv dest;
+    TCGv addr_dest;
+
+    addr_src = AREG(insn, 0);
+    tcg_gen_subi_i32(addr_src, addr_src, OS_BYTE);
+    src = gen_load(s, OS_BYTE, addr_src, 0);
+
+    addr_dest = AREG(insn, 9);
+    tcg_gen_subi_i32(addr_dest, addr_dest, OS_BYTE);
+    dest = gen_load(s, OS_BYTE, addr_dest, 0);
+
+    gen_helper_abcd_cc(dest, cpu_env, src, dest);
+
+    gen_store(s, OS_BYTE, addr_dest, dest);
+}
+
 DISAS_INSN(addsub)
 {
     TCGv reg;
@@ -3915,6 +3945,8 @@ void register_m68k_insns (CPUM68KState *env)
     INSN(and,       c000, f000, M68000);
     INSN(mulw,      c0c0, f0c0, CF_ISA_A);
     INSN(mulw,      c0c0, f0c0, M68000);
+    INSN(abcd_reg,  c100, f1f8, M68000);
+    INSN(abcd_mem,  c108, f1f8, M68000);
     INSN(addsub,    d000, f000, CF_ISA_A);
     INSN(addsub,    d000, f000, M68000);
     INSN(undef,     d0c0, f0c0, CF_ISA_A);
