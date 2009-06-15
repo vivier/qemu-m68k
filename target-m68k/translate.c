@@ -2160,16 +2160,65 @@ DISAS_INSN(adda)
     tcg_gen_add_i32(reg, reg, src);
 }
 
-DISAS_INSN(addx)
+DISAS_INSN(addx_reg)
 {
     TCGv reg;
     TCGv src;
+    int opsize;
+
+    opsize = insn_opsize(insn, 6);
 
     gen_flush_flags(s);
     reg = DREG(insn, 9);
     src = DREG(insn, 0);
-    gen_helper_addx_cc(reg, cpu_env, reg, src);
+    switch(opsize) {
+    case OS_BYTE:
+        gen_helper_addx8_cc(reg, cpu_env, reg, src);
+        break;
+    case OS_WORD:
+        gen_helper_addx16_cc(reg, cpu_env, reg, src);
+        break;
+    case OS_LONG:
+        gen_helper_addx32_cc(reg, cpu_env, reg, src);
+        break;
+    }
     s->cc_op = CC_OP_FLAGS;
+}
+
+DISAS_INSN(addx_mem)
+{
+    TCGv src;
+    TCGv addr_src;
+    TCGv reg;
+    TCGv addr_reg;
+    int opsize;
+
+    opsize = insn_opsize(insn, 6);
+
+    gen_flush_flags(s);
+
+    addr_src = AREG(insn, 0);
+    tcg_gen_subi_i32(addr_src, addr_src, opsize);
+    src = gen_load(s, opsize, addr_src, 0);
+
+    addr_reg = AREG(insn, 9);
+    tcg_gen_subi_i32(addr_reg, addr_reg, opsize);
+    reg = gen_load(s, opsize, addr_reg, 0);
+
+    switch(opsize) {
+    case OS_BYTE:
+        gen_helper_addx8_cc(reg, cpu_env, reg, src);
+        break;
+    case OS_WORD:
+        gen_helper_addx16_cc(reg, cpu_env, reg, src);
+        break;
+    case OS_LONG:
+        gen_helper_addx32_cc(reg, cpu_env, reg, src);
+        break;
+    }
+    s->cc_op = CC_OP_FLAGS;
+
+    gen_store(s, opsize, addr_reg, reg);
 }
 
 /* TODO: This could be implemented without helper functions.  */
@@ -4004,8 +4053,9 @@ void register_m68k_insns (CPUM68KState *env)
     INSN(addsub,    d000, f000, CF_ISA_A);
     INSN(addsub,    d000, f000, M68000);
     INSN(undef,     d0c0, f0c0, CF_ISA_A);
-    INSN(addx,      d180, f1f8, CF_ISA_A);
-    INSN(addx,      d100, f138, M68000);
+    INSN(addx_reg,      d180, f1f8, CF_ISA_A);
+    INSN(addx_reg,  d100, f138, M68000);
+    INSN(addx_mem,  d108, f138, M68000);
     INSN(adda,      d1c0, f1c0, CF_ISA_A);
     INSN(adda,      d0c0, f0c0, M68000);
     INSN(shift_im,  e080, f0f0, CF_ISA_A);
