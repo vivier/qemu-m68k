@@ -573,7 +573,53 @@ uint32_t HELPER(sats)(uint32_t val, uint32_t ccr)
     return val;
 }
 
-uint32_t HELPER(subx_cc)(CPUState *env, uint32_t op1, uint32_t op2)
+uint32_t HELPER(subx8_cc)(CPUState *env, uint32_t op1, uint32_t op2)
+{
+    uint8_t res;
+    uint32_t old_flags;
+
+    old_flags = env->cc_dest;
+    if (env->cc_x) {
+        env->cc_x = ((uint8_t)op1 <= (uint8_t)op2);
+        env->cc_op = CC_OP_SUBXB;
+        res = (uint8_t)op1 - ((uint8_t)op2 + 1);
+    } else {
+        env->cc_x = ((uint8_t)op1 < (uint8_t)op2);
+        env->cc_op = CC_OP_SUBB;
+        res = (uint8_t)op1 - (uint8_t)op2;
+    }
+    env->cc_dest = res;
+    env->cc_src = (uint8_t)op2;
+    cpu_m68k_flush_flags(env, env->cc_op);
+    /* !Z is sticky.  */
+    env->cc_dest &= (old_flags | ~CCF_Z);
+    return (op1 & 0xffffff00) | res;
+}
+
+uint32_t HELPER(subx16_cc)(CPUState *env, uint32_t op1, uint32_t op2)
+{
+    uint16_t res;
+    uint32_t old_flags;
+
+    old_flags = env->cc_dest;
+    if (env->cc_x) {
+        env->cc_x = ((uint16_t)op1 <= (uint16_t)op2);
+        env->cc_op = CC_OP_SUBXW;
+        res = (uint16_t)op1 - ((uint16_t)op2 + 1);
+    } else {
+        env->cc_x = ((uint16_t)op1 < (uint16_t)op2);
+        env->cc_op = CC_OP_SUBW;
+        res = (uint16_t)op1 - (uint16_t)op2;
+    }
+    env->cc_dest = res;
+    env->cc_src = (uint16_t)op2;
+    cpu_m68k_flush_flags(env, env->cc_op);
+    /* !Z is sticky.  */
+    env->cc_dest &= (old_flags | ~CCF_Z);
+    return (op1 & 0xffff0000) | res;
+}
+
+uint32_t HELPER(subx32_cc)(CPUState *env, uint32_t op1, uint32_t op2)
 {
     uint32_t res;
     uint32_t old_flags;
