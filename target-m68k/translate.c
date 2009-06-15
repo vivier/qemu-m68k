@@ -1572,7 +1572,18 @@ DISAS_INSN(negx)
     opsize = insn_opsize(insn, 6);
     SRC_EA(src, opsize, -1, &addr);
     dest = tcg_temp_new();
-    gen_helper_subx_cc(dest, cpu_env, tcg_const_i32(0), src);
+    switch(opsize) {
+    case OS_BYTE:
+        gen_helper_subx8_cc(dest, cpu_env, tcg_const_i32(0), src);
+        break;
+    case OS_WORD:
+        gen_helper_subx16_cc(dest, cpu_env, tcg_const_i32(0), src);
+        break;
+    case OS_LONG:
+        gen_helper_subx32_cc(dest, cpu_env, tcg_const_i32(0), src);
+        break;
+    }
+    s->cc_op = CC_OP_FLAGS;
     DEST_EA(insn, opsize, dest, &addr);
 }
 
@@ -2050,15 +2061,65 @@ DISAS_INSN(suba)
     tcg_gen_sub_i32(reg, reg, src);
 }
 
-DISAS_INSN(subx)
+DISAS_INSN(subx_reg)
 {
     TCGv reg;
     TCGv src;
+    int opsize;
+
+    opsize = insn_opsize(insn, 6);
 
     gen_flush_flags(s);
     reg = DREG(insn, 9);
     src = DREG(insn, 0);
-    gen_helper_subx_cc(reg, cpu_env, reg, src);
+    switch(opsize) {
+    case OS_BYTE:
+        gen_helper_subx8_cc(reg, cpu_env, reg, src);
+        break;
+    case OS_WORD:
+        gen_helper_subx16_cc(reg, cpu_env, reg, src);
+        break;
+    case OS_LONG:
+        gen_helper_subx32_cc(reg, cpu_env, reg, src);
+        break;
+    }
+    s->cc_op = CC_OP_FLAGS;
+}
+
+DISAS_INSN(subx_mem)
+{
+    TCGv src;
+    TCGv addr_src;
+    TCGv reg;
+    TCGv addr_reg;
+    int opsize;
+
+    opsize = insn_opsize(insn, 6);
+
+    gen_flush_flags(s);
+
+    addr_src = AREG(insn, 0);
+    tcg_gen_subi_i32(addr_src, addr_src, opsize);
+    src = gen_load(s, opsize, addr_src, 0);
+
+    addr_reg = AREG(insn, 9);
+    tcg_gen_subi_i32(addr_reg, addr_reg, opsize);
+    reg = gen_load(s, opsize, addr_reg, 0);
+
+    switch(opsize) {
+    case OS_BYTE:
+        gen_helper_subx8_cc(reg, cpu_env, reg, src);
+        break;
+    case OS_WORD:
+        gen_helper_subx16_cc(reg, cpu_env, reg, src);
+        break;
+    case OS_LONG:
+        gen_helper_subx32_cc(reg, cpu_env, reg, src);
+        break;
+    }
+    s->cc_op = CC_OP_FLAGS;
+
+    gen_store(s, opsize, addr_reg, reg);
 }
 
 DISAS_INSN(mov3q)
@@ -4015,8 +4076,9 @@ void register_m68k_insns (CPUM68KState *env)
     INSN(addsub,    9000, f000, CF_ISA_A);
     INSN(addsub,    9000, f000, M68000);
     INSN(undef,     90c0, f0c0, CF_ISA_A);
-    INSN(subx,      9180, f1f8, CF_ISA_A);
-    INSN(subx,      9100, f138, M68000);
+    INSN(subx_reg,  9180, f1f8, CF_ISA_A);
+    INSN(subx_reg,  9100, f138, M68000);
+    INSN(subx_mem,  9108, f138, M68000);
     INSN(suba,      91c0, f1c0, CF_ISA_A);
     INSN(suba,      90c0, f0c0, M68000);
 
