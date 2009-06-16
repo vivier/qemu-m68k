@@ -2309,7 +2309,11 @@ DISAS_INSN(shift8_im)
     dest = tcg_temp_new_i32();
     /* No need to flush flags becuse we know we will set C flag.  */
     if (insn & 0x100) {
-        gen_helper_shl8_cc(dest, cpu_env, reg, shift);
+        if (insn & 8) {
+            gen_helper_shl8_cc(dest, cpu_env, reg, shift);
+        } else {
+            gen_helper_sal8_cc(dest, cpu_env, reg, shift);
+        }
     } else {
         if (insn & 8) {
             gen_helper_shr8_cc(dest, cpu_env, reg, shift);
@@ -2337,7 +2341,11 @@ DISAS_INSN(shift16_im)
     dest = tcg_temp_new_i32();
     /* No need to flush flags becuse we know we will set C flag.  */
     if (insn & 0x100) {
-        gen_helper_shl16_cc(dest, cpu_env, reg, shift);
+        if (insn & 8) {
+            gen_helper_shl16_cc(dest, cpu_env, reg, shift);
+        } else {
+            gen_helper_sal16_cc(dest, cpu_env, reg, shift);
+        }
     } else {
         if (insn & 8) {
             gen_helper_shr16_cc(dest, cpu_env, reg, shift);
@@ -2364,7 +2372,11 @@ DISAS_INSN(shift_im)
     shift = tcg_const_i32(tmp);
     /* No need to flush flags becuse we know we will set C flag.  */
     if (insn & 0x100) {
-        gen_helper_shl32_cc(reg, cpu_env, reg, shift);
+        if (insn & 8) {
+            gen_helper_shl32_cc(reg, cpu_env, reg, shift);
+        } else {
+            gen_helper_sal32_cc(reg, cpu_env, reg, shift);
+        }
     } else {
         if (insn & 8) {
             gen_helper_shr32_cc(reg, cpu_env, reg, shift);
@@ -2390,7 +2402,11 @@ DISAS_INSN(shift8_reg)
     /* Shift by zero leaves C flag unmodified.   */
     gen_flush_flags(s);
     if (insn & 0x100) {
-        gen_helper_shl8_cc(dest, cpu_env, reg, tmp);
+        if (insn & 8) {
+            gen_helper_shl8_cc(dest, cpu_env, reg, tmp);
+        } else {
+            gen_helper_sal8_cc(dest, cpu_env, reg, tmp);
+        }
     } else {
         if (insn & 8) {
             gen_helper_shr8_cc(dest, cpu_env, reg, tmp);
@@ -2417,7 +2433,11 @@ DISAS_INSN(shift16_reg)
     /* Shift by zero leaves C flag unmodified.   */
     gen_flush_flags(s);
     if (insn & 0x100) {
-        gen_helper_shl16_cc(dest, cpu_env, reg, tmp);
+        if (insn & 8) {
+            gen_helper_shl16_cc(dest, cpu_env, reg, tmp);
+        } else {
+            gen_helper_sal16_cc(dest, cpu_env, reg, tmp);
+        }
     } else {
         if (insn & 8) {
             gen_helper_shr16_cc(dest, cpu_env, reg, tmp);
@@ -2439,7 +2459,11 @@ DISAS_INSN(shift_reg)
     /* Shift by zero leaves C flag unmodified.   */
     gen_flush_flags(s);
     if (insn & 0x100) {
-        gen_helper_shl32_cc(reg, cpu_env, reg, shift);
+        if (insn & 8) {
+            gen_helper_shl32_cc(reg, cpu_env, reg, shift);
+        } else {
+            gen_helper_sal32_cc(reg, cpu_env, reg, shift);
+        }
     } else {
         if (insn & 8) {
             gen_helper_shr32_cc(reg, cpu_env, reg, shift);
