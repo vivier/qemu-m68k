@@ -915,7 +915,10 @@ uint32_t HELPER(glue(glue(roxr,bits),_cc))(CPUState *env, uint32_t val, uint32_t
     if (bits == 16) count = rox16_table[count]; \
     if (bits == 32) count = rox32_table[count]; \
     if (count) { \
-       result = ((type)val >> count) | ((type)env->cc_x << (bits - count)); \
+       if (count == bits)\
+           result = ((type)env->cc_x << (bits - count));\
+       else \
+           result = ((type)val >> count) | ((type)env->cc_x << (bits - count));\
        if (count > 1) \
            result |= (type)val << (bits + 1 - count); \
        env->cc_x = ((type)val >> (count - 1)) & 1; \
@@ -947,7 +950,10 @@ uint32_t HELPER(glue(glue(roxl,bits),_cc))(CPUState *env, uint32_t val, uint32_t
     if (bits == 16) count = rox16_table[count]; \
     if (bits == 32) count = rox32_table[count]; \
     if (count) { \
-       result = ((type)val << count) | ((type)env->cc_x << (count - 1)); \
+       if (count == bits) \
+           result = ((type)env->cc_x << (count - 1)); \
+       else \
+           result = ((type)val << count) | ((type)env->cc_x << (count - 1)); \
        if (count > 1) \
            result |= (type)val >> (bits + 1 - count); \
        env->cc_x = ((type)val >> (bits - count)) & 1; \
