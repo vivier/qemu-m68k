@@ -993,32 +993,40 @@ DISAS_INSN(mulw)
 
 DISAS_INSN(divw)
 {
-    TCGv reg;
+    TCGv dest;
     TCGv tmp;
     TCGv src;
     int sign;
+    int l1;
 
     sign = (insn & 0x100) != 0;
-    reg = DREG(insn, 9);
-    if (sign) {
-        tcg_gen_ext16s_i32(QREG_DIV1, reg);
-    } else {
-        tcg_gen_ext16u_i32(QREG_DIV1, reg);
-    }
+
+    /* dest.l / src.w */
+
+    dest = DREG(insn, 9);
+    tcg_gen_mov_i32(QREG_DIV1, dest);
+
     SRC_EA(src, OS_WORD, sign, NULL);
     tcg_gen_mov_i32(QREG_DIV2, src);
+
+    /* div1 / div2 */
+
     if (sign) {
         gen_helper_divs(cpu_env, tcg_const_i32(1));
     } else {
         gen_helper_divu(cpu_env, tcg_const_i32(1));
     }
 
+    s->cc_op = CC_OP_FLAGS;
+
+    l1 = gen_new_label();
+    gen_jmpcc(s, 9 /* V */, l1);
     tmp = tcg_temp_new();
     src = tcg_temp_new();
     tcg_gen_ext16u_i32(tmp, QREG_DIV1);
     tcg_gen_shli_i32(src, QREG_DIV2, 16);
-    tcg_gen_or_i32(reg, tmp, src);
-    s->cc_op = CC_OP_FLAGS;
+    tcg_gen_or_i32(dest, tmp, src);
+    gen_set_label(l1);
 }
 
 DISAS_INSN(divl)
