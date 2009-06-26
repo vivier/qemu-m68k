@@ -213,17 +213,20 @@ void HELPER(divu)(CPUState *env, uint32_t word)
     /* Avoid using a PARAM1 of zero.  This breaks dyngen because it uses
        the address of a symbol, and gcc knows symbols can't have address
        zero.  */
-    if (word && quot > 0xffff)
-        flags |= CCF_V;
-    if (quot == 0)
-        flags |= CCF_Z;
-    else if ((int32_t)quot < 0)
-        flags |= CCF_N;
-    /* Don't modify destination if overflow occured.  */
-    if ((flags & CCF_V) == 0) {
-        env->div1 = quot;
-        env->div2 = rem;
+    if (word && quot > 0xffff) {
+	/* real 68040 keep Z and N on overflow,
+         * whereas documentation says "undefined"
+         */
+        flags |= CCF_V | (env->cc_dest & (CCF_Z|CCF_N));
+    } else {
+        if (quot == 0)
+            flags |= CCF_Z;
+        else if ((int16_t)quot < 0)
+            flags |= CCF_N;
     }
+
+    env->div1 = quot;
+    env->div2 = rem;
     env->cc_dest = flags;
 }
 
@@ -242,17 +245,20 @@ void HELPER(divs)(CPUState *env, uint32_t word)
     quot = num / den;
     rem = num % den;
     flags = 0;
-    if (word && quot != (int16_t)quot)
-        flags |= CCF_V;
-    if (quot == 0)
-        flags |= CCF_Z;
-    else if (quot < 0)
-        flags |= CCF_N;
-    /* Don't modify destination if overflow occured.  */
-    if ((flags & CCF_V) == 0) {
-        env->div1 = quot;
-        env->div2 = rem;
+    if (word && quot != (int16_t)quot) {
+	/* real 68040 keep Z and N on overflow,
+         * whereas documentation says "undefined"
+         */
+        flags |= CCF_V | (env->cc_dest & (CCF_Z|CCF_N));
+    } else {
+        if (quot == 0)
+            flags |= CCF_Z;
+        else if ((int16_t)quot < 0)
+            flags |= CCF_N;
     }
+
+    env->div1 = quot;
+    env->div2 = rem;
     env->cc_dest = flags;
 }
 
