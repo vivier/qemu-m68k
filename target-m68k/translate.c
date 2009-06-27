@@ -2693,7 +2693,8 @@ static void bitfield_param(uint16_t ext, TCGv *offset, TCGv *width, TCGv *mask)
     /* offset */
 
     if (ext & 0x0800) {
-        *offset = DREG(ext, 6);
+        *offset = tcg_temp_new_i32();
+        tcg_gen_mov_i32(*offset, DREG(ext, 6));
     } else {
         *offset = tcg_temp_new_i32();
         tcg_gen_movi_i32(*offset, (ext >> 6) & 31);
@@ -2702,8 +2703,8 @@ static void bitfield_param(uint16_t ext, TCGv *offset, TCGv *width, TCGv *mask)
     /* width */
 
     if (ext & 0x0020) {
-        *width = DREG(ext, 0);
-        tcg_gen_subi_i32(*width, *width, 1);
+        *width = tcg_temp_new_i32();
+        tcg_gen_subi_i32(*width, DREG(ext, 0), 1);
         tcg_gen_andi_i32(*width, *width, 31);
         tcg_gen_addi_i32(*width, *width, 1);
     } else {
