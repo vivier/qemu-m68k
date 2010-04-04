@@ -2769,6 +2769,7 @@ DISAS_INSN(bitfield_reg)
         tcg_gen_sar_i32(reg2, reg2, width);
         break;
     case 4: /* bfclr */
+        tcg_gen_not_i32(mask, mask);
         tcg_gen_and_i32(reg, reg, mask);
         break;
     case 5: /* bfffo */
