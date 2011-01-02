@@ -27,6 +27,7 @@ QEMU_CFLAGS+=-I$(SRC_PATH)/include
 ifdef CONFIG_USER_ONLY
 # user emulator name
 QEMU_PROG=qemu-$(TARGET_ARCH2)
+USER_TOOLS=$(TARGET_TOOLS)
 else
 # system emulator name
 ifneq (,$(findstring -mwindows,$(LIBS)))
@@ -34,9 +35,10 @@ ifneq (,$(findstring -mwindows,$(LIBS)))
 QEMU_PROGW=qemu-system-$(TARGET_ARCH2)w$(EXESUF)
 endif # windows executable
 QEMU_PROG=qemu-system-$(TARGET_ARCH2)$(EXESUF)
+USER_TOOLS=
 endif
 
-PROGS=$(QEMU_PROG)
+PROGS=$(QEMU_PROG) $(USER_TOOLS)
 ifdef QEMU_PROGW
 PROGS+=$(QEMU_PROGW)
 endif
@@ -69,6 +71,10 @@ $(QEMU_PROG).stp: $(SRC_PATH)/trace-events
 else
 stap:
 endif
+
+qemu-wrapper.o: $(SRC_PATH)/linux-user/qemu-wrapper.c
+qemu-wrapper$(EXESUF): qemu-wrapper.o
+
 
 all: $(PROGS) stap
 
