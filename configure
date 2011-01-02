@@ -2746,6 +2746,14 @@ if test "$softmmu" = yes ; then
     fi
   fi
 fi
+target_tools=
+if test "$linux_user" = yes ; then
+  for target in $target_list ; do
+    case $target in
+      *-linux-user) target_tools="qemu-wrapper\$(EXESUF) $target_tools" ;;
+    esac
+  done
+fi
 
 # Mac OS X ships with a broken assembler
 roms=
@@ -3233,6 +3241,7 @@ fi
 
 echo "TOOLS=$tools" >> $config_host_mak
 echo "CHECKS=$checks" >> $config_host_mak
+echo "TARGET_TOOLS=$target_tools" >> $config_host_mak
 echo "ROMS=$roms" >> $config_host_mak
 echo "MAKE=$make" >> $config_host_mak
 echo "INSTALL=$install" >> $config_host_mak
