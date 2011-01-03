@@ -135,6 +135,7 @@ kvm="no"
 gprof="no"
 debug_tcg="no"
 debug_mon="no"
+emulop="no"
 debug="no"
 strip_opt="yes"
 bigendian="no"
@@ -581,6 +582,10 @@ for opt do
   --enable-debug-tcg) debug_tcg="yes"
   ;;
   --disable-debug-tcg) debug_tcg="no"
+  ;;
+  --enable-emulop) emulop="yes"
+  ;;
+  --disable-emulop) emulop="no"
   ;;
   --enable-debug-mon) debug_mon="yes"
   ;;
@@ -1046,6 +1051,8 @@ echo "  --disable-usb-redir      disable usb network redirection support"
 echo "  --enable-usb-redir       enable usb network redirection support"
 echo "  --disable-guest-agent    disable building of the QEMU Guest Agent"
 echo "  --enable-guest-agent     enable building of the QEMU Guest Agent"
+echo "  --enable-emulop          enable emulation tester helper"
+echo "  --disable-emulop         disable emulation tester helper"
 echo ""
 echo "NOTE: The object files are built at the place where configure is launched"
 exit 1
@@ -2684,6 +2691,7 @@ echo "host CPU          $cpu"
 echo "host big endian   $bigendian"
 echo "target list       $target_list"
 echo "tcg debug enabled $debug_tcg"
+echo "emulop enabled    $emulop"
 echo "Mon debug enabled $debug_mon"
 echo "gprof enabled     $gprof"
 echo "sparse enabled    $sparse"
@@ -3449,6 +3457,9 @@ if test ! -z "$gdb_xml_files" ; then
   echo "TARGET_XML_FILES=$list" >> $config_target_mak
 fi
 
+if test "$target_user_only" = "yes" -a  "$target_arch2" = "m68k" -a "$emulop" = "yes" ; then
+  echo "CONFIG_EMULOP=y" >> $config_target_mak
+fi
 if test "$target_user_only" = "yes" -a "$bflt" = "yes"; then
   echo "TARGET_HAS_BFLT=y" >> $config_target_mak
 fi
