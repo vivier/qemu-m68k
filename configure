@@ -171,6 +171,7 @@ vhost_net="no"
 kvm="no"
 gprof="no"
 debug_tcg="no"
+emulop="no"
 debug="no"
 strip_opt="yes"
 tcg_interpreter="no"
@@ -679,6 +680,10 @@ for opt do
   ;;
   --disable-debug-tcg) debug_tcg="no"
   ;;
+  --enable-emulop) emulop="yes"
+  ;;
+  --disable-emulop) emulop="no"
+  ;;
   --enable-debug)
       # Enable debugging options that aren't excessively noisy
       debug_tcg="yes"
@@ -1124,6 +1129,8 @@ echo "  --with-coroutine=BACKEND coroutine backend. Supported options:"
 echo "                           gthread, ucontext, sigaltstack, windows"
 echo "  --enable-glusterfs       enable GlusterFS backend"
 echo "  --disable-glusterfs      disable GlusterFS backend"
+echo "  --enable-emulop          enable emulation tester helper"
+echo "  --disable-emulop         disable emulation tester helper"
 echo ""
 echo "NOTE: The object files are built at the place where configure is launched"
 exit 1
@@ -3189,6 +3196,7 @@ echo "host CPU          $cpu"
 echo "host big endian   $bigendian"
 echo "target list       $target_list"
 echo "tcg debug enabled $debug_tcg"
+echo "emulop enabled    $emulop"
 echo "gprof enabled     $gprof"
 echo "sparse enabled    $sparse"
 echo "strip binaries    $strip_opt"
@@ -4019,6 +4027,9 @@ if test ! -z "$gdb_xml_files" ; then
   echo "TARGET_XML_FILES=$list" >> $config_target_mak
 fi
 
+if test "$target_user_only" = "yes" -a  "$target_arch2" = "m68k" -a "$emulop" = "yes" ; then
+  echo "CONFIG_EMULOP=y" >> $config_target_mak
+fi
 if test "$target_user_only" = "yes" -a "$bflt" = "yes"; then
   echo "TARGET_HAS_BFLT=y" >> $config_target_mak
 fi
