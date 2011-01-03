@@ -3904,6 +3904,13 @@ DISAS_INSN(to_mext)
         gen_helper_set_mac_extu(cpu_env, val, acc);
 }
 
+#ifdef CONFIG_EMULOP
+DISAS_INSN(emulop_exec_return)
+{
+    gen_exception(s, s->pc - 2, EXCP_EXEC_RETURN);
+}
+#endif
+
 static disas_proc opcode_table[65536];
 
 static void
@@ -4173,6 +4180,9 @@ void register_m68k_insns (CPUM68KState *env)
     INSN(cpushl,    f428, ff38, CF_ISA_A);
     INSN(wddata,    fb00, ff00, CF_ISA_A);
     INSN(wdebug,    fbc0, ffc0, CF_ISA_A);
+#ifdef CONFIG_EMULOP
+    INSN(emulop_exec_return, 7100, ffff, M68000);
+#endif
 #undef INSN
 }
 
