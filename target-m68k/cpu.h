@@ -54,6 +54,9 @@
 
 #define EXCP_RTE            0x100
 #define EXCP_HALT_INSN      0x101
+#ifdef CONFIG_EMULOP
+#define EXCP_EXEC_RETURN    0x20000
+#endif
 
 #define NB_MMU_MODES 2
 
