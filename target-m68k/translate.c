@@ -1055,7 +1055,7 @@ DISAS_INSN(divl)
         }
         tcg_gen_mov_i32(num, QREG_DIV1);
         if (!TCGV_EQUAL(num, reg))
-            tcg_gen_mov_i32(reg, QREG_DIV2);
+            tcg_gen_mov_i32(reg, QREG_QUADH);
         s->cc_op = CC_OP_FLAGS;
         return;
     }
