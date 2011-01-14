@@ -266,29 +266,27 @@ void HELPER(divu64)(CPUState *env)
 {
     uint32_t num;
     uint32_t den;
-    uint32_t quot;
+    uint64_t quot;
     uint32_t rem;
     uint32_t flags;
+    uint64_t quad;
 
     num = env->div1;
     den = env->div2;
     /* ??? This needs to make sure the throwing location is accurate.  */
     if (den == 0)
         raise_exception(EXCP_DIV0);
-    quot = (num | ((uint64_t)env->quadh << 32)) / den;
-    rem = (num | ((uint64_t)env->quadh << 32)) % den;
-    flags = 0;
-    /* Avoid using a PARAM1 of zero.  This breaks dyngen because it uses
-       the address of a symbol, and gcc knows symbols can't have address
-       zero.  */
-    if (quot > 0xffffffff)
-        flags |= CCF_V;
-    if (quot == 0)
-        flags |= CCF_Z;
-    else if ((int32_t)quot < 0)
-        flags |= CCF_N;
-    /* Don't modify destination if overflow occured.  */
-    if ((flags & CCF_V) == 0) {
+    quad = num | ((uint64_t)env->quadh << 32);
+    quot = quad / den;
+    rem = quad % den;
+    if (quot > 0xffffffffULL) {
+        flags = (env->cc_dest & ~ CCF_C) | CCF_V;
+    } else {
+        flags = 0;
+        if (quot == 0)
+            flags |= CCF_Z;
+        else if ((int32_t)quot < 0)
+            flags |= CCF_N;
         env->div1 = quot;
         env->quadh = rem;
     }
