@@ -290,37 +290,39 @@ void HELPER(divu64)(CPUState *env)
     /* Don't modify destination if overflow occured.  */
     if ((flags & CCF_V) == 0) {
         env->div1 = quot;
-        env->div2 = rem;
+        env->quadh = rem;
     }
     env->cc_dest = flags;
 }
 
 void HELPER(divs64)(CPUState *env)
 {
-    int32_t num;
+    uint32_t num;
     int32_t den;
-    int32_t quot;
+    int64_t quot;
     int32_t rem;
     int32_t flags;
+    int64_t quad;
 
     num = env->div1;
     den = env->div2;
     if (den == 0)
         raise_exception(EXCP_DIV0);
-    quot = (num | ((int64_t)env->quadh << 32)) / den;
-    rem = (num | ((int64_t)env->quadh << 32)) % den;
-    rem = num % den;
-    flags = 0;
-    if (quot != (int32_t)quot)
-        flags |= CCF_V;
-    if (quot == 0)
-        flags |= CCF_Z;
-    else if (quot < 0)
-        flags |= CCF_N;
-    /* Don't modify destination if overflow occured.  */
-    if ((flags & CCF_V) == 0) {
+    quad = num | ((int64_t)env->quadh << 32);
+    quot = quad / (int64_t)den;
+    rem = quad % (int64_t)den;
+
+    if ((quot & 0xffffffff80000000ULL) &&
+        (quot & 0xffffffff80000000ULL) != 0xffffffff80000000ULL) {
+	flags = (env->cc_dest & ~ CCF_C) | CCF_V;
+    } else {
+        flags = 0;
+        if (quot == 0)
+	    flags |= CCF_Z;
+        else if ((int32_t)quot < 0)
+	    flags |= CCF_N;
         env->div1 = quot;
-        env->div2 = rem;
+        env->quadh = rem;
     }
     env->cc_dest = flags;
 }
