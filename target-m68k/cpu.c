@@ -113,6 +113,7 @@ static void m68020_cpu_initfn(Object *obj)
     m68k_set_feature(env, M68K_FEATURE_FPU);
     m68k_set_feature(env, M68K_FEATURE_CAS);
 }
+#define m68030_cpu_initfn m68020_cpu_initfn
 #define m68040_cpu_initfn m68020_cpu_initfn
 
 static void m68060_cpu_initfn(Object *obj)
@@ -185,6 +186,7 @@ typedef struct M68kCPUInfo {
 static const M68kCPUInfo m68k_cpus[] = {
     { .name = "m68000", .instance_init = m68000_cpu_initfn },
     { .name = "m68020", .instance_init = m68020_cpu_initfn },
+    { .name = "m68030", .instance_init = m68030_cpu_initfn },
     { .name = "m68040", .instance_init = m68040_cpu_initfn },
     { .name = "m68060", .instance_init = m68060_cpu_initfn },
     { .name = "m5206", .instance_init = m5206_cpu_initfn },
