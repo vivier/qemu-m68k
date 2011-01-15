@@ -4320,9 +4320,6 @@ gen_intermediate_code_internal(CPUState *env, TranslationBlock *tb,
         tb->size = dc->pc - pc_start;
         tb->icount = num_insns;
     }
-
-    //optimize_flags();
-    //expand_target_qops();
 }
 
 void gen_intermediate_code(CPUState *env, TranslationBlock *tb)
