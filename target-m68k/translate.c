@@ -4314,9 +4314,6 @@ gen_intermediate_code_internal(CPUM68KState *env, TranslationBlock *tb,
         tb->size = dc->pc - pc_start;
         tb->icount = num_insns;
     }
-
-    //optimize_flags();
-    //expand_target_qops();
 }
 
 void gen_intermediate_code(CPUM68KState *env, TranslationBlock *tb)
