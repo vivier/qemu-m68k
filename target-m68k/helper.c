@@ -33,6 +33,7 @@
 enum m68k_cpuid {
     M68K_CPUID_M68000,
     M68K_CPUID_M68020,
+    M68K_CPUID_M68030,
     M68K_CPUID_M68040,
     M68K_CPUID_M68060,
     M68K_CPUID_M5206,
@@ -51,6 +52,7 @@ struct m68k_def_t {
 static m68k_def_t m68k_cpu_defs[] = {
     {"m68000", M68K_CPUID_M68000},
     {"m68020", M68K_CPUID_M68020},
+    {"m68030", M68K_CPUID_M68030},
     {"m68040", M68K_CPUID_M68040},
     {"m68060", M68K_CPUID_M68060},
     {"m5206", M68K_CPUID_M5206},
@@ -155,6 +157,7 @@ static int cpu_m68k_set_model(CPUM68KState *env, const char *name)
 
     switch (def->id) {
     case M68K_CPUID_M68020:
+    case M68K_CPUID_M68030:
     case M68K_CPUID_M68040:
         m68k_set_feature(env, M68K_FEATURE_QUAD_MULDIV);
     case M68K_CPUID_M68060:
