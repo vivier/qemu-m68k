@@ -23,6 +23,7 @@
 
 #include "config.h"
 #include "cpu.h"
+#include "exec.h"
 #include "qemu-common.h"
 #include "gdbstub.h"
 
@@ -115,7 +116,8 @@ void m68k_cpu_list(FILE *f, fprintf_function cpu_fprintf)
 static int fpu_gdb_get_reg(CPUState *env, uint8_t *mem_buf, int n)
 {
     if (n < 8) {
-        stfq_p(mem_buf, env->fregs[n]);
+        float_status s;
+        stfq_p(mem_buf, floatx80_to_float64(env->fregs[n].d, &s));
         return 8;
     }
     if (n < 11) {
@@ -129,7 +131,8 @@ static int fpu_gdb_get_reg(CPUState *env, uint8_t *mem_buf, int n)
 static int fpu_gdb_set_reg(CPUState *env, uint8_t *mem_buf, int n)
 {
     if (n < 8) {
-        env->fregs[n] = ldfq_p(mem_buf);
+        float_status s;
+        env->fregs[n].d = float64_to_floatx80(ldfq_p(mem_buf), &s);
         return 8;
     }
     if (n < 11) {
@@ -980,125 +983,335 @@ HELPER_ROXL(uint32_t, 32)
 /* FPU helpers.  */
 
 static const floatx80 fpu_rom[128] = {
-    [0x00] = { .high = 0x4000, .low = 0xc90fdaa22168c235ULL },	/* Pi */
+    [0x00] = floatx80_pi,                                       /* Pi */
 
-    [0x0b] = { .high = 0x3ffd, .low = 0x9a209a84fbcff798ULL },	/* Log10(2) */
-    [0x0c] = { .high = 0x4000, .low = 0xadf85458a2bb4a9aULL },	/* e        */
-    [0x0d] = { .high = 0x3fff, .low = 0xb8aa3b295c17f0bcULL },	/* Log2(e)  */
-    [0x0e] = { .high = 0x3ffd, .low = 0xde5bd8a937287195ULL },	/* Log10(e) */
-    [0x0f] = { .high = 0x0000, .low = 0x0000000000000000ULL },	/* Zero     */
+    [0x0b] = { .high = 0x3ffd, .low = 0x9a209a84fbcff798ULL },  /* Log10(2) */
+    [0x0c] = { .high = 0x4000, .low = 0xadf85458a2bb4a9aULL },  /* e        */
+    [0x0d] = { .high = 0x3fff, .low = 0xb8aa3b295c17f0bcULL },  /* Log2(e)  */
+    [0x0e] = { .high = 0x3ffd, .low = 0xde5bd8a937287195ULL },  /* Log10(e) */
+    [0x0f] = floatx80_zero,                                     /* Zero     */
 
-    [0x30] = { .high = 0x3ffe, .low = 0xb17217f7d1cf79acULL },	/* ln(2)    */
-    [0x31] = { .high = 0x4000, .low = 0x935d8dddaaa8ac17ULL },	/* ln(10)   */
-    [0x32] = { .high = 0x3fff, .low = 0x8000000000000000ULL },	/* 10^0     */
-    [0x33] = { .high = 0x4002, .low = 0xa000000000000000ULL },	/* 10^1     */
-    [0x34] = { .high = 0x4005, .low = 0xc800000000000000ULL },	/* 10^2     */
-    [0x35] = { .high = 0x400c, .low = 0x9c40000000000000ULL },	/* 10^4     */
-    [0x36] = { .high = 0x4019, .low = 0xbebc200000000000ULL },	/* 10^8     */
-    [0x37] = { .high = 0x4034, .low = 0x8e1bc9bf04000000ULL },	/* 10^16    */
-    [0x38] = { .high = 0x4069, .low = 0x9dc5ada82b70b59eULL },	/* 10^32    */
-    [0x39] = { .high = 0x40d3, .low = 0xc2781f49ffcfa6d5ULL },	/* 10^64    */
-    [0x3a] = { .high = 0x41a8, .low = 0x93ba47c980e98ce0ULL },	/* 10^128   */
-    [0x3b] = { .high = 0x4351, .low = 0xaa7eebfb9df9de8eULL },	/* 10^256   */
-    [0x3c] = { .high = 0x46a3, .low = 0xe319a0aea60e91c7ULL },	/* 10^512   */
-    [0x3d] = { .high = 0x4d48, .low = 0xc976758681750c17ULL },	/* 10^1024  */
-    [0x3e] = { .high = 0x5a92, .low = 0x9e8b3b5dc53d5de5ULL },	/* 10^2048  */
-    [0x3f] = { .high = 0x7525, .low = 0xc46052028a20979bULL },	/* 10^4096  */
+    [0x30] = floatx80_ln2,                                      /* ln(2)    */
+    [0x31] = { .high = 0x4000, .low = 0x935d8dddaaa8ac17ULL },  /* ln(10)   */
+    [0x32] = floatx80_one,                                      /* 10^0     */
+    [0x33] = { .high = 0x4002, .low = 0xa000000000000000ULL },  /* 10^1     */
+    [0x34] = { .high = 0x4005, .low = 0xc800000000000000ULL },  /* 10^2     */
+    [0x35] = { .high = 0x400c, .low = 0x9c40000000000000ULL },  /* 10^4     */
+    [0x36] = { .high = 0x4019, .low = 0xbebc200000000000ULL },  /* 10^8     */
+    [0x37] = { .high = 0x4034, .low = 0x8e1bc9bf04000000ULL },  /* 10^16    */
+    [0x38] = { .high = 0x4069, .low = 0x9dc5ada82b70b59eULL },  /* 10^32    */
+    [0x39] = { .high = 0x40d3, .low = 0xc2781f49ffcfa6d5ULL },  /* 10^64    */
+    [0x3a] = { .high = 0x41a8, .low = 0x93ba47c980e98ce0ULL },  /* 10^128   */
+    [0x3b] = { .high = 0x4351, .low = 0xaa7eebfb9df9de8eULL },  /* 10^256   */
+    [0x3c] = { .high = 0x46a3, .low = 0xe319a0aea60e91c7ULL },  /* 10^512   */
+    [0x3d] = { .high = 0x4d48, .low = 0xc976758681750c17ULL },  /* 10^1024  */
+    [0x3e] = { .high = 0x5a92, .low = 0x9e8b3b5dc53d5de5ULL },  /* 10^2048  */
+    [0x3f] = { .high = 0x7525, .low = 0xc46052028a20979bULL },  /* 10^4096  */
 };
 
-float64 HELPER(const_f64)(CPUState *env, uint32_t offset)
+void HELPER(const_FP0)(CPUState *env, uint32_t offset)
 {
-    return floatx80_to_float64(fpu_rom[offset], &env->fp_status);
+    env->fp0h = fpu_rom[offset].high;
+    env->fp0l = fpu_rom[offset].low;
 }
 
-uint32_t HELPER(f64_to_i32)(CPUState *env, float64 val)
+static inline floatx80 FP0_to_floatx80(CPUState *env)
 {
-    return float64_to_int32(val, &env->fp_status);
-}
+    floatx80 res;
 
-float32 HELPER(f64_to_f32)(CPUState *env, float64 val)
-{
-    return float64_to_float32(val, &env->fp_status);
-}
+    res.high = env->fp0h;
+    res.low = env->fp0l;
 
-float64 HELPER(i32_to_f64)(CPUState *env, uint32_t val)
-{
-    return int32_to_float64(val, &env->fp_status);
-}
-
-float64 HELPER(f32_to_f64)(CPUState *env, float32 val)
-{
-    return float32_to_float64(val, &env->fp_status);
-}
-
-float64 HELPER(iround_f64)(CPUState *env, float64 val)
-{
-    return float64_round_to_int(val, &env->fp_status);
-}
-
-float64 HELPER(itrunc_f64)(CPUState *env, float64 val)
-{
-    return float64_trunc_to_int(val, &env->fp_status);
-}
-
-float64 HELPER(sqrt_f64)(CPUState *env, float64 val)
-{
-    return float64_sqrt(val, &env->fp_status);
-}
-
-float64 HELPER(abs_f64)(float64 val)
-{
-    return float64_abs(val);
-}
-
-float64 HELPER(chs_f64)(float64 val)
-{
-    return float64_chs(val);
-}
-
-float64 HELPER(add_f64)(CPUState *env, float64 a, float64 b)
-{
-    return float64_add(a, b, &env->fp_status);
-}
-
-float64 HELPER(sub_f64)(CPUState *env, float64 a, float64 b)
-{
-    return float64_sub(a, b, &env->fp_status);
-}
-
-float64 HELPER(mul_f64)(CPUState *env, float64 a, float64 b)
-{
-    return float64_mul(a, b, &env->fp_status);
-}
-
-float64 HELPER(div_f64)(CPUState *env, float64 a, float64 b)
-{
-    return float64_div(a, b, &env->fp_status);
-}
-
-float64 HELPER(sub_cmp_f64)(CPUState *env, float64 a, float64 b)
-{
-    /* ??? This may incorrectly raise exceptions.  */
-    /* ??? Should flush denormals to zero.  */
-    float64 res;
-    res = float64_sub(a, b, &env->fp_status);
-    if (float64_is_quiet_nan(res)) {
-        /* +/-inf compares equal against itself, but sub returns nan.  */
-        if (!float64_is_quiet_nan(a)
-            && !float64_is_quiet_nan(b)) {
-            res = float64_zero;
-            if (float64_lt_quiet(a, res, &env->fp_status))
-                res = float64_chs(res);
-        }
-    }
     return res;
 }
 
-uint32_t HELPER(compare_f64)(CPUState *env, float64 val)
+static inline void floatx80_to_FP0(CPUState *env, floatx80 res)
 {
-    return float64_compare_quiet(val, float64_zero, &env->fp_status);
+    env->fp0h = res.high;
+    env->fp0l = res.low;
 }
 
+static inline int32_t FP0_to_int32(CPUState *env)
+{
+    return env->fp0h;
+}
+
+static inline void int32_to_FP0(CPUState *env, int32_t val)
+{
+    env->fp0h = val;
+}
+
+static inline float32 FP0_to_float32(CPUState *env)
+{
+    return *(float32*)&env->fp0h;
+}
+
+static inline void float32_to_FP0(CPUState *env, float32 val)
+{
+
+    env->fp0h = *(uint32_t*)&val;
+}
+
+static inline float64 FP0_to_float64(CPUState *env)
+{
+    return *(float64*)&env->fp0l;
+}
+
+static inline void float64_to_FP0(CPUState *env, float64 val)
+{
+    env->fp0l = *(uint64_t*)&val;
+}
+
+static inline floatx80 FP1_to_floatx80(CPUState *env)
+{
+    floatx80 res;
+
+    res.high = env->fp1h;
+    res.low = env->fp1l;
+
+    return res;
+}
+
+static inline void restore_precision_mode(CPUState *env)
+{
+    int rounding_precision;
+
+    rounding_precision = (env->fpcr >> 6) & 0x03;
+
+    switch (rounding_precision) {
+    case 0: /* extended */
+        set_floatx80_rounding_precision(80, &env->fp_status);
+        break;
+    case 1: /* single */
+        set_floatx80_rounding_precision(32, &env->fp_status);
+        break;
+    case 2: /* double */
+        set_floatx80_rounding_precision(64, &env->fp_status);
+        break;
+    case 3: /* reserved */
+    default:
+        break;
+    }
+}
+
+static inline void restore_rounding_mode(CPUState *env)
+{
+    int rounding_mode;
+
+    rounding_mode = (env->fpcr >> 4) & 0x03;
+
+    switch (rounding_mode) {
+    case 0: /* round to nearest */
+        set_float_rounding_mode(float_round_nearest_even, &env->fp_status);
+        break;
+    case 1: /* round to zero */
+        set_float_rounding_mode(float_round_to_zero, &env->fp_status);
+        break;
+    case 2: /* round toward minus infinity */
+        set_float_rounding_mode(float_round_down, &env->fp_status);
+        break;
+    case 3: /* round toward positive infinity */
+        set_float_rounding_mode(float_round_up, &env->fp_status);
+        break;
+    }
+}
+
+void HELPER(set_fpcr)(CPUState *env, uint32_t val)
+{
+    env->fpcr = val & 0xffff;
+
+    restore_precision_mode(env);
+    restore_rounding_mode(env);
+}
+
+void HELPER(exts32_FP0)(CPUState *env)
+{
+    floatx80 res;
+
+    res = int32_to_floatx80(FP0_to_int32(env), &env->fp_status);
+
+    floatx80_to_FP0(env, res);
+}
+
+void HELPER(extf32_FP0)(CPUState *env)
+{
+    floatx80 res;
+
+    res = float32_to_floatx80(FP0_to_float32(env), &env->fp_status);
+
+    floatx80_to_FP0(env, res);
+}
+
+void HELPER(extf64_FP0)(CPUState *env)
+{
+    floatx80 res;
+
+    res = float64_to_floatx80(FP0_to_float64(env), &env->fp_status);
+
+    floatx80_to_FP0(env, res);
+}
+
+void HELPER(extp96_FP0)(CPUState *env)
+{
+}
+
+void HELPER(reds32_FP0)(CPUState *env)
+{
+    floatx80 val;
+    int32_t res;
+
+    val = FP0_to_floatx80(env);
+    res = floatx80_to_int32(val, &env->fp_status);
+
+    int32_to_FP0(env, res);
+}
+
+void HELPER(redf32_FP0)(CPUState *env)
+{
+    floatx80 val;
+    float32 res;
+
+    val = FP0_to_floatx80(env);
+    res = floatx80_to_float32(val, &env->fp_status);
+
+    float32_to_FP0(env, res);
+}
+
+void HELPER(redf64_FP0)(CPUState *env)
+{
+    floatx80 val;
+    float64 res;
+
+    val = FP0_to_floatx80(env);
+    res = floatx80_to_float64(val, &env->fp_status);
+
+    float64_to_FP0(env, res);
+}
+
+void HELPER(redp96_FP0)(CPUState *env)
+{
+}
+
+void HELPER(iround_FP0)(CPUState *env)
+{
+    floatx80 res;
+
+    res = floatx80_round_to_int(FP0_to_floatx80(env), &env->fp_status);
+
+    floatx80_to_FP0(env, res);
+}
+
+void HELPER(itrunc_FP0)(CPUState *env)
+{
+    floatx80 res;
+
+    set_float_rounding_mode(float_round_to_zero, &env->fp_status);
+    res = floatx80_round_to_int(FP0_to_floatx80(env), &env->fp_status);
+    restore_rounding_mode(env);
+
+    floatx80_to_FP0(env, res);
+}
+
+void HELPER(sqrt_FP0)(CPUState *env)
+{
+    floatx80 res;
+
+    res = floatx80_sqrt(FP0_to_floatx80(env), &env->fp_status);
+
+    floatx80_to_FP0(env, res);
+}
+
+void HELPER(abs_FP0)(CPUState *env)
+{
+    floatx80 res;
+
+    res = floatx80_abs(FP0_to_floatx80(env));
+
+    floatx80_to_FP0(env, res);
+}
+
+void HELPER(chs_FP0)(CPUState *env)
+{
+    floatx80 res;
+
+    res = floatx80_chs(FP0_to_floatx80(env));
+
+    floatx80_to_FP0(env, res);
+}
+
+void HELPER(add_FP0_FP1)(CPUState *env)
+{
+    floatx80 res;
+
+    res = floatx80_add(FP0_to_floatx80(env), FP1_to_floatx80(env),
+                      &env->fp_status);
+
+    floatx80_to_FP0(env, res);
+}
+
+void HELPER(sub_FP0_FP1)(CPUState *env)
+{
+    floatx80 res;
+
+    res = floatx80_sub(FP0_to_floatx80(env), FP1_to_floatx80(env),
+                       &env->fp_status);
+
+    floatx80_to_FP0(env, res);
+}
+
+void HELPER(mul_FP0_FP1)(CPUState *env)
+{
+    floatx80 res;
+
+    res = floatx80_mul(FP0_to_floatx80(env), FP1_to_floatx80(env),
+                       &env->fp_status);
+
+    floatx80_to_FP0(env, res);
+}
+
+void HELPER(div_FP0_FP1)(CPUState *env)
+{
+    floatx80 res;
+
+    res = floatx80_div(FP0_to_floatx80(env), FP1_to_floatx80(env),
+                       &env->fp_status);
+
+    floatx80_to_FP0(env, res);
+}
+
+void HELPER(fcmp_FP0_FP1)(CPUState *env)
+{
+    /* ??? This may incorrectly raise exceptions.  */
+    /* ??? Should flush denormals to zero.  */
+    floatx80 res;
+    res = floatx80_sub(FP1_to_floatx80(env), FP0_to_floatx80(env),
+                       &env->fp_status);
+    if (floatx80_is_any_nan(res)) {
+        /* +/-inf compares equal against itself, but sub returns nan.  */
+        if (!floatx80_is_any_nan(FP0_to_floatx80(env))
+            && !floatx80_is_any_nan(FP1_to_floatx80(env))) {
+            if (floatx80_lt_quiet(FP1_to_floatx80(env), floatx80_zero,
+		&env->fp_status))
+                res = floatx80_chs(res);
+        }
+    }
+    floatx80_to_FP0(env, res);
+}
+
+uint32_t HELPER(compare_FP0)(CPUState *env)
+{
+    uint32_t res;
+
+    res = float64_compare_quiet(floatx80_to_float64(FP0_to_floatx80(env),
+                                                    &env->fp_status),
+				float64_zero, &env->fp_status);
+    return res;
+}
+
+void HELPER(fmovem)(CPUState *env, uint32_t opsize, uint32_t mode, uint32_t mask)
+{
+    fprintf(stderr, "MISSING HELPER fmovem\n");
+}
 /* MAC unit.  */
 /* FIXME: The MAC unit implementation is a bit of a mess.  Some helpers
    take values,  others take register numbers and manipulate the contents
