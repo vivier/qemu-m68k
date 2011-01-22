@@ -60,6 +60,36 @@
 
 #define NB_MMU_MODES 2
 
+#define TARGET_PHYS_ADDR_SPACE_BITS 32
+#define TARGET_VIRT_ADDR_SPACE_BITS 32
+
+#ifdef CONFIG_USER_ONLY
+/* Linux uses 4k pages.  */
+#define TARGET_PAGE_BITS 12
+#else
+/* Smallest TLB entry size is 1k.  */
+#define TARGET_PAGE_BITS 10
+#endif
+
+#include "cpu-all.h"
+
+typedef uint32_t CPUM68K_SingleU;
+typedef uint64_t CPUM68K_DoubleU;
+
+typedef struct {
+    uint32_t high;
+    uint64_t low;
+} __attribute__((packed)) CPUM68K_XDoubleU;
+
+typedef struct {
+   uint8_t high[2];
+   uint8_t low[10];
+} __attribute__((packed)) CPUM68K_PDoubleU;
+
+typedef CPU_LDoubleU FPReg;
+#define PRIxFPH PRIx16
+#define PRIxFPL PRIx64
+
 typedef struct CPUM68KState {
     uint32_t dregs[8];
     uint32_t aregs[8];
@@ -76,8 +106,7 @@ typedef struct CPUM68KState {
     uint32_t cc_src;
     uint32_t cc_x;
 
-    float64 fregs[8];
-    float64 fp_result;
+    FPReg fregs[8];
     uint32_t fpcr;
     uint32_t fpsr;
     float_status fp_status;
@@ -89,6 +118,13 @@ typedef struct CPUM68KState {
     uint64_t macc[4];
     uint32_t macsr;
     uint32_t mac_mask;
+
+    /* Temporary storage for FPU */
+
+    uint32_t fp0h;
+    uint64_t fp0l;
+    uint32_t fp1h;
+    uint64_t fp1l;
 
     /* Temporary storage for DIV helpers.  */
     uint32_t div1;
@@ -228,17 +264,6 @@ void m68k_cpu_list(FILE *f, fprintf_function cpu_fprintf);
 
 void register_m68k_insns (CPUM68KState *env);
 
-#ifdef CONFIG_USER_ONLY
-/* Linux uses 4k pages.  */
-#define TARGET_PAGE_BITS 12
-#else
-/* Smallest TLB entry size is 1k.  */
-#define TARGET_PAGE_BITS 10
-#endif
-
-#define TARGET_PHYS_ADDR_SPACE_BITS 32
-#define TARGET_VIRT_ADDR_SPACE_BITS 32
-
 #define cpu_init cpu_m68k_init
 #define cpu_exec cpu_m68k_exec
 #define cpu_gen_code cpu_m68k_gen_code
@@ -266,8 +291,6 @@ static inline void cpu_clone_regs(CPUState *env, target_ulong newsp)
     env->dregs[0] = 0;
 }
 #endif
-
-#include "cpu-all.h"
 
 static inline void cpu_get_tb_cpu_state(CPUState *env, target_ulong *pc,
                                         target_ulong *cs_base, int *flags)
