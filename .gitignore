@@ -76,3 +76,10 @@ cscope.*
 tags
 TAGS
 *~
+tests/m68k/fabs
+tests/m68k/fdiv
+tests/m68k/fmove
+tests/m68k/fmovecr
+tests/m68k/fmovem
+tests/m68k/fmul
+tests/m68k/fsub
