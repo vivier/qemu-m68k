@@ -2,9 +2,8 @@
 
 	.data
 tmp:	.long 0x88776655
-pi:	.long 0x40000000
-	.long 0xc90fdaa2
-	.long 0x2168C235
+pi:	.long 0x40000000, 0xc90fdaa2, 0x2168C235
+store:   .long 0, 0, 0
 
 	.text
 	.globl _start
@@ -12,6 +11,12 @@ _start:
 	lea pi,%a0
 	move.l (%a0), %d0
 	fmove.x (%a0), %fp4
+	fmove.b %fp4, store
+	fmove.w %fp4, store
+	fmove.l %fp4, store
+	fmove.s %fp4, store
+	fmove.d %fp4, store
+	fmove.x %fp4, store
 	# Dn
 
 	move.l #-1, %d3
@@ -48,7 +53,7 @@ _start:
 	fmove.w #0xFABC,%fp1
 	fmove.l #0xFABCDEFA,%fp2
 	fmove.s #0xDEADBEAF,%fp3
-	fmove.d #0xFABCDEFADEADBEAF,%fp4
+	fmove.d #0f4.29497E+09,%fp4
 	fmove.x #0xFABCDEFADEADBEAF12345678,%fp5
 	fmove.p #0xFABCDEFADEADBEAF12345678,%fp6
 
