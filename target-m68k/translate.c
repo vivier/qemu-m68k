@@ -3133,7 +3133,7 @@ static TCGv gen_bitfield_cc(DisasContext *s,
 
     /* tmp = (bitfield << offset) >> 32 */
 
-    tcg_gen_shri_i64(tmp64, bitfield, 32ULL);
+    tcg_gen_shri_i64(tmp64, tmp64, 32ULL);
     dest = tcg_temp_new_i32();
     tcg_gen_trunc_i64_i32(dest, tmp64);
 
