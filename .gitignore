@@ -78,3 +78,4 @@ tests/m68k/fmovecr
 tests/m68k/fmovem
 tests/m68k/fmul
 tests/m68k/fsub
+tests/m68k/fgetexp

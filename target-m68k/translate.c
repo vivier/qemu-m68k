@@ -3647,6 +3647,9 @@ DISAS_INSN(fpu)
     case 0x1a: case 0x5a: case 0x5e: /* fneg */
         gen_helper_chs_FP0(cpu_env);
         break;
+    case 0x1e:                       /* fgetexp */
+        gen_helper_getexp_FP0(cpu_env);
+        break;
     case 0x20: case 0x60: case 0x64: /* fdiv */
         gen_op_load_fpr_FP1(REG(ext, 7));
         gen_helper_div_FP0_FP1(cpu_env);
