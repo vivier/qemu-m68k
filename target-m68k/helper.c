@@ -1274,6 +1274,23 @@ void HELPER(chs_FP0)(CPUState *env)
     floatx80_to_FP0(env, res);
 }
 
+void HELPER(getexp_FP0)(CPUState *env)
+{
+    int32_t exp;
+    floatx80 res;
+
+    DBG_FPU("getexp_FP0(%Lg)\n", LDOUBLE(FP0_to_floatx80(env)));
+
+    DBG_FPU("    fp0h 0x%08x fp0l 0x%016" PRIx64 "\n", env->fp0h, env->fp0l);
+
+    exp = (env->fp0h & 0x7fff) - 0x3fff;
+
+    res = int32_to_floatx80(exp, &env->fp_status);
+
+    DBG_FPU("    = %Lg\n", LDOUBLE(res));
+    floatx80_to_FP0(env, res);
+}
+
 void HELPER(add_FP0_FP1)(CPUState *env)
 {
     floatx80 res;
