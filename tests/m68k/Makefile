@@ -1,4 +1,4 @@
-TESTS=fmovecr fmove fmovem fsub fdiv fmul fabs
+TESTS=fmovecr fmove fmovem fsub fdiv fmul fabs fgetexp
 
 all: $(TESTS)
 
