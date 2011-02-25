@@ -2289,7 +2289,7 @@ DISAS_INSN(addsubq)
         }
         gen_update_cc_add(dest, src2);
     }
-    DEST_EA(env, insn, OS_LONG, dest, &addr);
+    DEST_EA(env, insn, opsize, dest, &addr);
 }
 
 DISAS_INSN(tpf)
