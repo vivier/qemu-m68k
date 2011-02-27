@@ -996,8 +996,8 @@ static const floatx80 fpu_rom[128] = {
     [0x00] = floatx80_pi,                                       /* Pi */
 
     [0x0b] = { .high = 0x3ffd, .low = 0x9a209a84fbcff798ULL },  /* Log10(2) */
-    [0x0c] = { .high = 0x4000, .low = 0xadf85458a2bb4a9aULL },  /* e        */
-    [0x0d] = { .high = 0x3fff, .low = 0xb8aa3b295c17f0bcULL },  /* Log2(e)  */
+    [0x0c] = floatx80_e,                                        /* e        */
+    [0x0d] = floatx80_log2e,                                    /* Log2(e)  */
     [0x0e] = { .high = 0x3ffd, .low = 0xde5bd8a937287195ULL },  /* Log10(e) */
     [0x0f] = floatx80_zero,                                     /* Zero     */
 
@@ -1252,6 +1252,40 @@ void HELPER(sqrt_FP0)(CPUState *env)
     res = floatx80_sqrt(FP0_to_floatx80(env), &env->fp_status);
 
     floatx80_to_FP0(env, res);
+}
+
+void HELPER(ln_FP0)(CPUState *env)
+{
+    float64 f, log2;
+    floatx80 res;
+
+    /* ln(x) = log2(x) / log2(e) */
+
+    DBG_FPU("ln_FP0\n");
+
+    f = floatx80_to_float64(FP0_to_floatx80(env), &env->fp_status);
+
+    log2 = float64_log2(f, &env->fp_status);
+    res = floatx80_div(float64_to_floatx80(log2, &env->fp_status),
+                       floatx80_log2e, &env->fp_status);
+
+    floatx80_to_FP0(env, res);
+}
+
+void HELPER(exp_FP0)(CPUState *env)
+{
+    floatx80 f;
+    float32 res;
+
+    /* exp(x) = exp2(x * log2(e)) */
+
+    DBG_FPU("exp_FP0\n");
+
+    f = floatx80_mul(FP0_to_floatx80(env), floatx80_log2e, &env->fp_status);
+    res = float32_exp2(floatx80_to_float32(f, &env->fp_status),
+                       &env->fp_status);
+
+    floatx80_to_FP0(env, float32_to_floatx80(res, &env->fp_status));
 }
 
 void HELPER(abs_FP0)(CPUState *env)
