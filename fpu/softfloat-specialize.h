@@ -387,6 +387,26 @@ static int pickNaN(flag aIsQNaN, flag aIsSNaN, flag bIsQNaN, flag bIsSNaN,
         return 1;
     }
 }
+#elif defined(TARGET_M68K)
+static int pickNaN(flag aIsQNaN, flag aIsSNaN, flag bIsQNaN, flag bIsSNaN,
+                   flag aIsLargerSignificand)
+{
+    /* If either operand, but not both operands, of an operation is a
+     * nonsignaling NAN, then that NAN is returned as the result. If both
+     * operands are nonsignaling NANs, then the destination operand
+     * nonsignaling NAN is returned as the result.
+     */
+
+    if (aIsSNaN) {
+        return 0;
+    } else if (bIsSNaN) {
+        return 1;
+    } else if (bIsQNaN) {
+        return 1;
+    } else {
+        return 0;
+    }
+}
 #else
 static int pickNaN(flag aIsQNaN, flag aIsSNaN, flag bIsQNaN, flag bIsSNaN,
                     flag aIsLargerSignificand)
