@@ -46,6 +46,7 @@ static void m68k_cpu_reset(CPUState *s)
     M68kCPU *cpu = M68K_CPU(s);
     M68kCPUClass *mcc = M68K_CPU_GET_CLASS(cpu);
     CPUM68KState *env = &cpu->env;
+    int i;
 
     mcc->parent_reset(s);
 
@@ -54,7 +55,15 @@ static void m68k_cpu_reset(CPUState *s)
     env->sr = 0x2700;
 #endif
     m68k_switch_sp(env);
-    /* ??? FP regs should be initialized to NaN.  */
+
+    for (i = 0; i < 8; i++) {
+        env->fregs[i].d = floatx80_default_nan;
+    }
+    env->fp0h = floatx80_default_nan.high;
+    env->fp0l = floatx80_default_nan.low;
+    env->fp1h = floatx80_default_nan.high;
+    env->fp1l = floatx80_default_nan.low;
+
     env->cc_op = CC_OP_FLAGS;
     /* TODO: We should set PC from the interrupt vector.  */
     env->pc = 0;
