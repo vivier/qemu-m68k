@@ -2492,7 +2492,7 @@ DISAS_INSN(cmpa)
     dest = tcg_temp_new();
     tcg_gen_sub_i32(dest, reg, src);
     gen_update_cc_add(dest, src);
-    SET_CC_OP(opsize, SUB);
+    SET_CC_OP(OS_LONG, SUB);
 }
 
 DISAS_INSN(eor)
