@@ -1016,7 +1016,7 @@ static const floatx80 fpu_rom[128] = {
     [0x30] = floatx80_ln2,                                      /* ln(2)    */
     [0x31] = { .high = 0x4000, .low = 0x935d8dddaaa8ac17ULL },  /* ln(10)   */
     [0x32] = floatx80_one,                                      /* 10^0     */
-    [0x33] = { .high = 0x4002, .low = 0xa000000000000000ULL },  /* 10^1     */
+    [0x33] = floatx80_10,                                       /* 10^1     */
     [0x34] = { .high = 0x4005, .low = 0xc800000000000000ULL },  /* 10^2     */
     [0x35] = { .high = 0x400c, .low = 0x9c40000000000000ULL },  /* 10^4     */
     [0x36] = { .high = 0x4019, .low = 0xbebc200000000000ULL },  /* 10^8     */
@@ -1280,6 +1280,27 @@ void HELPER(ln_FP0)(CPUState *env)
     log2 = float64_log2(f, &env->fp_status);
     res = floatx80_div(float64_to_floatx80(log2, &env->fp_status),
                        floatx80_log2e, &env->fp_status);
+
+    floatx80_to_FP0(env, res);
+}
+
+void HELPER(log10_FP0)(CPUState *env)
+{
+    float64 f, log2, log210;
+    floatx80 res;
+
+    /* log10(x) = log2(x) / log2(10) */
+
+    DBG_FPU("log10_FP0(%Lg)\n", LDOUBLE(FP0_to_floatx80(env)));
+    f = floatx80_to_float64(FP0_to_floatx80(env), &env->fp_status);
+
+    log2 = float64_log2(f, &env->fp_status);
+    log210 = float64_log2(floatx80_to_float64(floatx80_10, &env->fp_status),
+                          &env->fp_status);
+    res = floatx80_div(float64_to_floatx80(log2, &env->fp_status),
+                       float64_to_floatx80(log210, &env->fp_status),
+                       &env->fp_status);
+    DBG_FPU("    = %Lg\n", LDOUBLE(res));
 
     floatx80_to_FP0(env, res);
 }

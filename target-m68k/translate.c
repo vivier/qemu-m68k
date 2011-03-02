@@ -3647,6 +3647,9 @@ DISAS_INSN(fpu)
     case 0x14:                       /* flogn */
         gen_helper_ln_FP0(cpu_env);
         break;
+    case 0x15:                       /* flog10 */
+        gen_helper_log10_FP0(cpu_env);
+        break;
     case 0x18: case 0x58: case 0x5c: /* fabs */
         gen_helper_abs_FP0(cpu_env);
         break;
