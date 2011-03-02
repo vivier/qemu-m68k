@@ -548,6 +548,7 @@ INLINE int floatx80_is_any_nan(floatx80 a)
 #define floatx80_infinity make_floatx80(0x7fff, 0x8000000000000000LL)
 #define floatx80_e make_floatx80(0x4000, 0xadf85458a2bb4a9aULL)
 #define floatx80_log2e make_floatx80(0x3fff, 0xb8aa3b295c17f0bcULL)
+#define floatx80_10 make_floatx80(0x4002, 0xa000000000000000ULL)
 
 /*----------------------------------------------------------------------------
 | The pattern for a default generated extended double-precision NaN.
