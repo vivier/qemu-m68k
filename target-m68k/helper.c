@@ -1321,6 +1321,18 @@ void HELPER(exp_FP0)(CPUState *env)
     floatx80_to_FP0(env, float32_to_floatx80(res, &env->fp_status));
 }
 
+void HELPER(exp2_FP0)(CPUState *env)
+{
+    float32 res;
+
+    DBG_FPU("exp_FP0\n");
+
+    res = float32_exp2(floatx80_to_float32(FP0_to_floatx80(env),
+                                           &env->fp_status), &env->fp_status);
+
+    floatx80_to_FP0(env, float32_to_floatx80(res, &env->fp_status));
+}
+
 void HELPER(abs_FP0)(CPUState *env)
 {
     floatx80 res;
