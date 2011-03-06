@@ -24,12 +24,22 @@
 #include "helper.h"
 
 #if 0
-#define DBG_FPU(...) do { fprintf(stderr, "0x%08x: ", env->pc); fprintf(stderr, __VA_ARGS__); } while(0)
+#define DBG_FPUH(...) do { fprintf(stderr, "0x%08x: ", env->pc); fprintf(stderr, __VA_ARGS__); } while(0)
+#define DBG_FPU(...) do { fprintf(stderr, __VA_ARGS__); } while(0)
+static inline float FLOAT(float32 x)
+{
+    return *(float *)&x;
+}
+static inline double DOUBLE(float64 x)
+{
+    return *(double *)&x;
+}
 static inline long double LDOUBLE(floatx80 x)
 {
     return *(long double *)&x;
 }
 #else
+#define DBG_FPUH(...)
 #define DBG_FPU(...)
 #define LDOUBLE(x)
 #endif
@@ -988,7 +998,7 @@ void HELPER(const_FP0)(CPUM68KState *env, uint32_t offset)
 {
     env->fp0h = fpu_rom[offset].high;
     env->fp0l = fpu_rom[offset].low;
-    DBG_FPU("ROM[0x%02x] %"PRIxFPH" %"PRIxFPL" %.17Lg\n",
+    DBG_FPUH("ROM[0x%02x] %"PRIxFPH" %"PRIxFPL" %.17Lg\n",
             offset, env->fp0h, env->fp0l, LDOUBLE(FP0_to_floatx80(env)));
 }
 
@@ -1038,7 +1048,7 @@ static inline void restore_rounding_mode(CPUM68KState *env)
 
 void HELPER(set_fpcr)(CPUM68KState *env, uint32_t val)
 {
-    DBG_FPU("set_fpcr %04x\n", val);
+    DBG_FPUH("set_fpcr %04x\n", val);
 
     env->fpcr = val & 0xffff;
 
@@ -1050,11 +1060,11 @@ void HELPER(exts32_FP0)(CPUM68KState *env)
 {
     floatx80 res;
 
-    DBG_FPU("exts32_FP0 %d\n", FP0_to_int32(env));
+    DBG_FPUH("exts32_FP0 %d", FP0_to_int32(env));
 
     res = int32_to_floatx80(FP0_to_int32(env), &env->fp_status);
 
-    DBG_FPU("    = %Lg\n", LDOUBLE(res));
+    DBG_FPU(" = %Lg\n", LDOUBLE(res));
     floatx80_to_FP0(env, res);
 }
 
@@ -1062,8 +1072,9 @@ void HELPER(extf32_FP0)(CPUM68KState *env)
 {
     floatx80 res;
 
-    DBG_FPU("extf32_FP0\n");
+    DBG_FPUH("extf32_FP0 %f", FLOAT(FP0_to_float32(env)));
     res = float32_to_floatx80(FP0_to_float32(env), &env->fp_status);
+    DBG_FPU(" = %Lg\n", LDOUBLE(res));
 
     floatx80_to_FP0(env, res);
 }
@@ -1074,9 +1085,9 @@ void HELPER(extf64_FP0)(CPUM68KState *env)
     uint64_t val;
 
     val = FP0_to_float64(env);
-    DBG_FPU("extf64_FP0 0x%016"PRIx64", %g\n", val, *(double*)&val);
+    DBG_FPUH("extf64_FP0 0x%016"PRIx64", %g", val, *(double*)&val);
     res = float64_to_floatx80(val, &env->fp_status);
-    DBG_FPU("    = %Lg\n", LDOUBLE(res));
+    DBG_FPU(" = %Lg\n", LDOUBLE(res));
 
     floatx80_to_FP0(env, res);
 }
@@ -1091,9 +1102,9 @@ void HELPER(reds32_FP0)(CPUM68KState *env)
     int32_t res;
 
     val = FP0_to_floatx80(env);
-    DBG_FPU("reds32_FP0 %Lg\n", LDOUBLE(val));
+    DBG_FPUH("reds32_FP0 %Lg", LDOUBLE(val));
     res = floatx80_to_int32(val, &env->fp_status);
-    DBG_FPU("    = %d\n", res);
+    DBG_FPU(" = %d\n", res);
 
     int32_to_FP0(env, res);
 }
@@ -1103,9 +1114,10 @@ void HELPER(redf32_FP0)(CPUM68KState *env)
     floatx80 val;
     float32 res;
 
-    DBG_FPU("redf32_FP0\n");
     val = FP0_to_floatx80(env);
+    DBG_FPUH("redf32_FP0 %Lg", LDOUBLE(val));
     res = floatx80_to_float32(val, &env->fp_status);
+    DBG_FPU(" = %f\n", FLOAT(res));
 
     float32_to_FP0(env, res);
 }
@@ -1116,25 +1128,29 @@ void HELPER(redf64_FP0)(CPUM68KState *env)
     float64 res;
 
     val = FP0_to_floatx80(env);
-    DBG_FPU("redf64_FP0 %Lg\n", LDOUBLE(val));
+    DBG_FPUH("redf64_FP0 %Lg", LDOUBLE(val));
     res = floatx80_to_float64(val, &env->fp_status);
-    DBG_FPU("    = %g\n", *(double*)&res);
+    DBG_FPU(" = %g\n", *(double*)&res);
 
     float64_to_FP0(env, res);
 }
 
 void HELPER(redp96_FP0)(CPUM68KState *env)
 {
-    DBG_FPU("redp96_FP0\n");
+    DBG_FPUH("redp96_FP0\n");
 }
 
 void HELPER(iround_FP0)(CPUM68KState *env)
 {
     floatx80 res;
 
-    DBG_FPU("iround_FP0\n");
+    res = FP0_to_floatx80(env);
 
-    res = floatx80_round_to_int(FP0_to_floatx80(env), &env->fp_status);
+    DBG_FPUH("iround_FP0 %Lg", LDOUBLE(res));
+
+    res = floatx80_round_to_int(res, &env->fp_status);
+
+    DBG_FPU(" = %Lg\n", LDOUBLE(res));
 
     floatx80_to_FP0(env, res);
 }
@@ -1143,11 +1159,14 @@ void HELPER(itrunc_FP0)(CPUM68KState *env)
 {
     floatx80 res;
 
-    DBG_FPU("itrunc_FP0\n");
+    res = FP0_to_floatx80(env);
+    DBG_FPUH("itrunc_FP0 %Lg", LDOUBLE(res));
 
     set_float_rounding_mode(float_round_to_zero, &env->fp_status);
-    res = floatx80_round_to_int(FP0_to_floatx80(env), &env->fp_status);
+    res = floatx80_round_to_int(res, &env->fp_status);
     restore_rounding_mode(env);
+
+    DBG_FPU(" = %Lg\n", LDOUBLE(res));
 
     floatx80_to_FP0(env, res);
 }
@@ -1156,8 +1175,10 @@ void HELPER(sqrt_FP0)(CPUM68KState *env)
 {
     floatx80 res;
 
-    DBG_FPU("sqrt_FP0\n");
-    res = floatx80_sqrt(FP0_to_floatx80(env), &env->fp_status);
+    res = FP0_to_floatx80(env);
+    DBG_FPUH("sqrt_FP0 %Lg", LDOUBLE(res));
+    res = floatx80_sqrt(res, &env->fp_status);
+    DBG_FPU("  = %Lg\n", LDOUBLE(res));
 
     floatx80_to_FP0(env, res);
 }
@@ -1169,13 +1190,15 @@ void HELPER(ln_FP0)(CPUM68KState *env)
 
     /* ln(x) = log2(x) / log2(e) */
 
-    DBG_FPU("ln_FP0\n");
+    res = FP0_to_floatx80(env);
+    DBG_FPUH("ln_FP0 %Lg", LDOUBLE(res));
 
-    f = floatx80_to_float64(FP0_to_floatx80(env), &env->fp_status);
+    f = floatx80_to_float64(res, &env->fp_status);
 
     log2 = float64_log2(f, &env->fp_status);
     res = floatx80_div(float64_to_floatx80(log2, &env->fp_status),
                        floatx80_log2e, &env->fp_status);
+    DBG_FPU(" = %Lg\n", LDOUBLE(res));
 
     floatx80_to_FP0(env, res);
 }
@@ -1187,7 +1210,7 @@ void HELPER(log10_FP0)(CPUM68KState *env)
 
     /* log10(x) = log2(x) / log2(10) */
 
-    DBG_FPU("log10_FP0(%Lg)\n", LDOUBLE(FP0_to_floatx80(env)));
+    DBG_FPUH("log10_FP0 %Lg", LDOUBLE(FP0_to_floatx80(env)));
     f = floatx80_to_float64(FP0_to_floatx80(env), &env->fp_status);
 
     log2 = float64_log2(f, &env->fp_status);
@@ -1196,7 +1219,7 @@ void HELPER(log10_FP0)(CPUM68KState *env)
     res = floatx80_div(float64_to_floatx80(log2, &env->fp_status),
                        float64_to_floatx80(log210, &env->fp_status),
                        &env->fp_status);
-    DBG_FPU("    = %Lg\n", LDOUBLE(res));
+    DBG_FPU(" = %Lg\n", LDOUBLE(res));
 
     floatx80_to_FP0(env, res);
 }
@@ -1208,23 +1231,29 @@ void HELPER(exp_FP0)(CPUM68KState *env)
 
     /* exp(x) = exp2(x * log2(e)) */
 
-    DBG_FPU("exp_FP0\n");
+    f = FP0_to_floatx80(env);
 
-    f = floatx80_mul(FP0_to_floatx80(env), floatx80_log2e, &env->fp_status);
+    DBG_FPUH("exp_FP0 %Lg", LDOUBLE(f));
+
+    f = floatx80_mul(f, floatx80_log2e, &env->fp_status);
     res = float32_exp2(floatx80_to_float32(f, &env->fp_status),
                        &env->fp_status);
 
+    DBG_FPU(" = %f\n", FLOAT(res));
     floatx80_to_FP0(env, float32_to_floatx80(res, &env->fp_status));
 }
 
 void HELPER(exp2_FP0)(CPUM68KState *env)
 {
     float32 res;
+    floatx80 f;
 
-    DBG_FPU("exp_FP0\n");
+    f = FP0_to_floatx80(env);
+    DBG_FPUH("exp2_FP0 %Lg", LDOUBLE(f));
 
-    res = float32_exp2(floatx80_to_float32(FP0_to_floatx80(env),
-                                           &env->fp_status), &env->fp_status);
+    res = float32_exp2(floatx80_to_float32(f, &env->fp_status),
+                       &env->fp_status);
+    DBG_FPU(" = %f\n", FLOAT(res));
 
     floatx80_to_FP0(env, float32_to_floatx80(res, &env->fp_status));
 }
@@ -1233,8 +1262,10 @@ void HELPER(abs_FP0)(CPUM68KState *env)
 {
     floatx80 res;
 
-    DBG_FPU("abs_FP0\n");
-    res = floatx80_abs(FP0_to_floatx80(env));
+    res = FP0_to_floatx80(env);
+    DBG_FPUH("abs_FP0 %Lg", LDOUBLE(res));
+    res = floatx80_abs(res);
+    DBG_FPU(" = %Lg\n", LDOUBLE(res));
 
     floatx80_to_FP0(env, res);
 }
@@ -1243,8 +1274,10 @@ void HELPER(chs_FP0)(CPUM68KState *env)
 {
     floatx80 res;
 
-    DBG_FPU("chs_FP0\n");
-    res = floatx80_chs(FP0_to_floatx80(env));
+    res = FP0_to_floatx80(env);
+    DBG_FPUH("chs_FP0 %Lg", LDOUBLE(res));
+    res = floatx80_chs(res);
+    DBG_FPU(" = %Lg\n", LDOUBLE(res));
 
     floatx80_to_FP0(env, res);
 }
@@ -1254,15 +1287,15 @@ void HELPER(getexp_FP0)(CPUM68KState *env)
     int32_t exp;
     floatx80 res;
 
-    DBG_FPU("getexp_FP0(%Lg)\n", LDOUBLE(FP0_to_floatx80(env)));
+    DBG_FPUH("getexp_FP0 %Lg", LDOUBLE(FP0_to_floatx80(env)));
 
-    DBG_FPU("    fp0h 0x%08x fp0l 0x%016" PRIx64 "\n", env->fp0h, env->fp0l);
+    DBG_FPU(" fp0h 0x%08x fp0l 0x%016" PRIx64, env->fp0h, env->fp0l);
 
     exp = (env->fp0h & 0x7fff) - 0x3fff;
 
     res = int32_to_floatx80(exp, &env->fp_status);
 
-    DBG_FPU("    = %Lg\n", LDOUBLE(res));
+    DBG_FPU(" = %Lg", LDOUBLE(res));
     floatx80_to_FP0(env, res);
 }
 
@@ -1271,9 +1304,9 @@ void HELPER(scale_FP0_FP1)(CPUM68KState *env)
     int32_t scale;
     int32_t exp;
 
-    DBG_FPU("getexp_FP0(%Lg)\n", LDOUBLE(FP0_to_floatx80(env)));
+    DBG_FPUH("scale_FP0 %Lg", LDOUBLE(FP0_to_floatx80(env)));
 
-    DBG_FPU("    fp0h 0x%08x fp0l 0x%016" PRIx64 "\n", env->fp0h, env->fp0l);
+    DBG_FPU(" fp0h 0x%08x fp0l 0x%016" PRIx64, env->fp0h, env->fp0l);
 
     scale = floatx80_to_int32(FP0_to_floatx80(env), &env->fp_status);
 
@@ -1281,17 +1314,18 @@ void HELPER(scale_FP0_FP1)(CPUM68KState *env)
 
     env->fp0h = (env->fp1h & 0x8000) | (exp & 0x7fff);
     env->fp0l = env->fp1l;
+    DBG_FPU(" = %Lg", LDOUBLE(FP0_to_floatx80(env)));
 }
 
 void HELPER(add_FP0_FP1)(CPUM68KState *env)
 {
     floatx80 res;
 
-    DBG_FPU("add_FP0_FP1(%Lg,%Lg)\n", LDOUBLE(FP0_to_floatx80(env)),
+    DBG_FPUH("add_FP0_FP1 %Lg %Lg", LDOUBLE(FP0_to_floatx80(env)),
             LDOUBLE(FP1_to_floatx80(env)));
     res = floatx80_add(FP0_to_floatx80(env), FP1_to_floatx80(env),
                       &env->fp_status);
-    DBG_FPU("    = %Lg\n", LDOUBLE(res));
+    DBG_FPU(" = %Lg\n", LDOUBLE(res));
 
     floatx80_to_FP0(env, res);
 }
@@ -1300,11 +1334,11 @@ void HELPER(sub_FP0_FP1)(CPUM68KState *env)
 {
     floatx80 res;
 
-    DBG_FPU("sub_FP0 %Lg %Lg\n", LDOUBLE(FP0_to_floatx80(env)),
+    DBG_FPUH("sub_FP0 %Lg %Lg", LDOUBLE(FP0_to_floatx80(env)),
             LDOUBLE(FP1_to_floatx80(env)));
     res = floatx80_sub(FP1_to_floatx80(env), FP0_to_floatx80(env),
                        &env->fp_status);
-    DBG_FPU("    = %Lg\n", LDOUBLE(res));
+    DBG_FPU(" = %Lg\n", LDOUBLE(res));
 
     floatx80_to_FP0(env, res);
 }
@@ -1313,11 +1347,11 @@ void HELPER(mul_FP0_FP1)(CPUM68KState *env)
 {
     floatx80 res;
 
-    DBG_FPU("mul_FP0_FP1 %Lg %Lg\n",
+    DBG_FPUH("mul_FP0_FP1 %Lg %Lg",
             LDOUBLE(FP0_to_floatx80(env)), LDOUBLE(FP1_to_floatx80(env)));
     res = floatx80_mul(FP0_to_floatx80(env), FP1_to_floatx80(env),
                        &env->fp_status);
-    DBG_FPU("    = %Lg\n", LDOUBLE(res));
+    DBG_FPU(" = %Lg\n", LDOUBLE(res));
 
     floatx80_to_FP0(env, res);
 }
@@ -1326,9 +1360,11 @@ void HELPER(div_FP0_FP1)(CPUM68KState *env)
 {
     floatx80 res;
 
-    DBG_FPU("div\n");
+    DBG_FPUH("div_FP0_FP1 %Lg %Lg",
+            LDOUBLE(FP0_to_floatx80(env)), LDOUBLE(FP1_to_floatx80(env)));
     res = floatx80_div(FP1_to_floatx80(env), FP0_to_floatx80(env),
                        &env->fp_status);
+    DBG_FPU(" = %Lg\n", LDOUBLE(res));
 
     floatx80_to_FP0(env, res);
 }
@@ -1338,8 +1374,8 @@ void HELPER(fcmp_FP0_FP1)(CPUM68KState *env)
     /* ??? This may incorrectly raise exceptions.  */
     /* ??? Should flush denormals to zero.  */
     floatx80 res;
-    DBG_FPU("cmp_FP0_FP1 %Lg %Lg\n", LDOUBLE(FP1_to_floatx80(env)),
-            LDOUBLE(FP0_to_floatx80(env)));
+    DBG_FPUH("cmp_FP0_FP1 %Lg %Lg", LDOUBLE(FP0_to_floatx80(env)),
+            LDOUBLE(FP1_to_floatx80(env)));
     res = floatx80_sub(FP1_to_floatx80(env), FP0_to_floatx80(env),
                        &env->fp_status);
     if (floatx80_is_any_nan(res)) {
@@ -1351,7 +1387,7 @@ void HELPER(fcmp_FP0_FP1)(CPUM68KState *env)
                 res = floatx80_chs(res);
         }
     }
-    DBG_FPU("    : %Lg\n", LDOUBLE(res));
+    DBG_FPU(" = %Lg\n", LDOUBLE(res));
     floatx80_to_FP0(env, res);
 }
 
@@ -1359,11 +1395,11 @@ uint32_t HELPER(compare_FP0)(CPUM68KState *env)
 {
     uint32_t res;
 
-    DBG_FPU("compare_FP0 %Lg\n", LDOUBLE(FP0_to_floatx80(env)));
+    DBG_FPUH("compare_FP0 %Lg", LDOUBLE(FP0_to_floatx80(env)));
     res = float64_compare_quiet(floatx80_to_float64(FP0_to_floatx80(env),
                                                     &env->fp_status),
 				float64_zero, &env->fp_status);
-    DBG_FPU("    = %d\n", res);
+    DBG_FPU(" = %d\n", res);
     return res;
 }
 
