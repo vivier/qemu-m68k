@@ -3647,11 +3647,12 @@ DISAS_INSN(fpu)
         gen_op_fmovem(env, s, insn, ext);
         return;
     }
-    opsize = ext_opsize(ext, 10);
     if (ext & (1 << 14)) {
+        opsize = ext_opsize(ext, 10);
         gen_op_load_ea_FP0(env, s, insn, opsize);
     } else {
         /* Source register.  */
+        opsize = OS_EXTENDED;
         gen_op_load_fpr_FP0(REG(ext, 10));
     }
     round = 1;
