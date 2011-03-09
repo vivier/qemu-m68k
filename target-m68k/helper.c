@@ -1435,6 +1435,21 @@ void HELPER(acos_FP0)(CPUState *env)
     floatx80_to_FP0(env, res);
 }
 
+void HELPER(cos_FP0)(CPUState *env)
+{
+    floatx80 res;
+    long double val;
+
+    res = FP0_to_floatx80(env);
+    val = LDOUBLE(res);
+
+    DBG_FPUH("cos_FP0 %Lg", val);
+    val = cosl(val);
+    DBG_FPU(" = %Lg", val);
+    res = FLOATx80(val);
+    floatx80_to_FP0(env, res);
+}
+
 void HELPER(getexp_FP0)(CPUState *env)
 {
     int32_t exp;
