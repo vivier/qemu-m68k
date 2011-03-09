@@ -28,10 +28,15 @@
 #include "gdbstub.h"
 
 #include "helpers.h"
+#include <math.h>
 
 #if 0
 #define DBG_FPUH(...) do { fprintf(stderr, "0x%08x: ", env->pc); fprintf(stderr, __VA_ARGS__); } while(0)
 #define DBG_FPU(...) do { fprintf(stderr, __VA_ARGS__); } while(0)
+#else
+#define DBG_FPUH(...)
+#define DBG_FPU(...)
+#endif
 static inline float FLOAT(float32 x)
 {
     return *(float *)&x;
@@ -44,11 +49,10 @@ static inline long double LDOUBLE(floatx80 x)
 {
     return *(long double *)&x;
 }
-#else
-#define DBG_FPUH(...)
-#define DBG_FPU(...)
-#define LDOUBLE(x)
-#endif
+static inline floatx80 FLOATx80(long double x)
+{
+    return *(floatx80 *)&x;
+}
 
 #define SIGNBIT (1u << 31)
 
@@ -1383,6 +1387,21 @@ void HELPER(chs_FP0)(CPUState *env)
     res = floatx80_chs(res);
     DBG_FPU(" = %Lg\n", LDOUBLE(res));
 
+    floatx80_to_FP0(env, res);
+}
+
+void HELPER(acos_FP0)(CPUState *env)
+{
+    floatx80 res;
+    long double val;
+
+    res = FP0_to_floatx80(env);
+    val = LDOUBLE(res);
+
+    DBG_FPUH("acos_FP0 %Lg", val);
+    val = acosl(val);
+    DBG_FPU(" = %Lg", val);
+    res = FLOATx80(val);
     floatx80_to_FP0(env, res);
 }
 
