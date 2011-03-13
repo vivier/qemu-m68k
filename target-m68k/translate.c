@@ -3696,6 +3696,10 @@ DISAS_INSN(fpu)
         gen_op_load_fpr_FP1(REG(ext, 7));
         gen_helper_div_FP0_FP1(cpu_env);
         break;
+    case 0x21:                       /* fmod */
+        gen_op_load_fpr_FP1(REG(ext, 7));
+        gen_helper_mod_FP0_FP1(cpu_env);
+        break;
     case 0x22: case 0x62: case 0x66: /* fadd */
         gen_op_load_fpr_FP1(REG(ext, 7));
         gen_helper_add_FP0_FP1(cpu_env);
