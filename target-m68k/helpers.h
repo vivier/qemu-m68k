@@ -81,6 +81,7 @@ DEF_HELPER_1(add_FP0_FP1, void, env)
 DEF_HELPER_1(sub_FP0_FP1, void, env)
 DEF_HELPER_1(mul_FP0_FP1, void, env)
 DEF_HELPER_1(div_FP0_FP1, void, env)
+DEF_HELPER_1(mod_FP0_FP1, void, env)
 DEF_HELPER_1(fcmp_FP0_FP1, void, env)
 DEF_HELPER_1(compare_FP0, i32, env)
 
