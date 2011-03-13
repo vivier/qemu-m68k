@@ -3615,7 +3615,7 @@ DISAS_INSN(fpu)
         case 4: /* FPCR */
             SRC_EA(env, val, OS_LONG, 0, NULL);
             gen_helper_set_fpcr(cpu_env, val);
-            break;
+            return;
         case 1: /* FPIAR */
         case 2: /* FPSR */
         default:
@@ -3626,7 +3626,6 @@ DISAS_INSN(fpu)
     case 5: /* fmove from control register.  */
         switch ((ext >> 10) & 7) {
         case 4: /* FPCR */
-            /* Not implemented.  Always return zero.  */
             DEST_EA(env, insn, OS_LONG, QEMU_FPCR, NULL);
             return;
         case 1: /* FPIAR */
