@@ -1537,6 +1537,22 @@ void HELPER(div_FP0_FP1)(CPUState *env)
     floatx80_to_FP0(env, res);
 }
 
+void HELPER(mod_FP0_FP1)(CPUState *env)
+{
+    floatx80 res;
+    long double src, dst;
+
+    src = LDOUBLE(FP0_to_floatx80(env));
+    dst = LDOUBLE(FP1_to_floatx80(env));
+
+    DBG_FPUH("mod_FP0_FP1 %Lg %Lg", src, dst);
+    dst = fmodl(dst, src);
+    DBG_FPU(" = %Lg\n", dst);
+
+    res = FLOATx80(dst);
+    floatx80_to_FP0(env, res);
+}
+
 void HELPER(fcmp_FP0_FP1)(CPUState *env)
 {
     /* ??? This may incorrectly raise exceptions.  */
