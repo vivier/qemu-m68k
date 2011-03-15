@@ -3535,18 +3535,18 @@ static void gen_op_fmovem(DisasContext *s, uint32_t insn, uint32_t ext)
     mask = ext & 0x00FF;
 
     if (!is_load && (mode & 2) == 0) {
-        for (i = 7; i >= 0; i--, mask >>= 1) {
-            if (mask & 1) {
+        for (i = 7; i >= 0; i--, mask <<= 1) {
+            if (mask & 0x80) {
                 gen_op_load_fpr_FP0(i);
                 gen_store_FP0(s, opsize, addr);
-                if (mask != 1)
+                if ((mask & 0xff) != 0x80)
                     tcg_gen_subi_i32(addr, addr, incr);
             }
         }
         tcg_gen_mov_i32(AREG(insn, 0), addr);
     } else{
-        for (i = 0; i < 8; i++, mask >>=1) {
-            if (mask & 1) {
+        for (i = 0; i < 8; i++, mask <<=1) {
+            if (mask & 0x80) {
                 if (is_load) {
                     gen_load_FP0(s, opsize, addr);
                     gen_op_store_fpr_FP0(i);
@@ -3554,7 +3554,7 @@ static void gen_op_fmovem(DisasContext *s, uint32_t insn, uint32_t ext)
                     gen_op_load_fpr_FP0(i);
                     gen_store_FP0(s, opsize, addr);
                 }
-               if (mask != 1 || (insn & 070) == 030)
+               if ((mask & 0xff) != 0x80 || (insn & 070) == 030)
                    tcg_gen_addi_i32(addr, addr, incr);
             }
         }
