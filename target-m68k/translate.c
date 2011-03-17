@@ -3214,7 +3214,11 @@ static void gen_bitfield_ins(TCGv offset, TCGv width, TCGv src,
 
     /* tmp = (1u << width) - 1; */
 
-    tcg_gen_shl_i32(tmp, tcg_const_i32(1), width);
+    /* width is between 1 and 32
+     * tcg_gen_shl_i32() cannot manage value 32
+     */
+    tcg_gen_subi_i32(tmp, width, 1);
+    tcg_gen_shl_i32(tmp, tcg_const_i32(2), tmp);
     tcg_gen_subi_i32(tmp, tmp, 1);
 
     /* tmp = tmp & src; */
