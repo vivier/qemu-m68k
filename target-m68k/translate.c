@@ -3704,6 +3704,9 @@ DISAS_INSN(fpu)
     case 0x11:                       /* ftwotox */
         gen_helper_exp2_FP0(cpu_env);
         break;
+    case 0x12:                       /* ftentox */
+        gen_helper_exp10_FP0(cpu_env);
+        break;
     case 0x14:                       /* flogn */
         gen_helper_ln_FP0(cpu_env);
         break;
