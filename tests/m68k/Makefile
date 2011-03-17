@@ -1,4 +1,5 @@
-TESTS=fmovecr fmove fmovem fsub fdiv fmul fabs fgetexp fscale flogn fetox
+TESTS=fmovecr fmove fmovem fsub fdiv fmul fabs fgetexp fscale flogn fetox \
+      bfins
 
 all: $(TESTS)
 
