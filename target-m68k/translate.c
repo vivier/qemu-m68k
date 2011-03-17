@@ -3090,9 +3090,22 @@ DISAS_INSN(bitfield_reg)
 
     tmp1 = tcg_temp_new_i32();
     gen_helper_rol32(tmp1, tmp, offset);
-    gen_logic_cc(s, tmp1, OS_LONG);
 
     reg2 = DREG(ext, 12);
+    if (op == 7) {
+        TCGv tmp2;
+
+        tmp2 = tcg_temp_new_i32();
+        tcg_gen_sub_i32(tmp2, tcg_const_i32(32), width);
+        tcg_gen_shl_i32(tmp2, reg2, tmp2);
+        tcg_gen_and_i32(tmp2, tmp2, mask);
+        gen_logic_cc(s, tmp2, OS_LONG);
+
+        tcg_temp_free_i32(tmp1);
+    } else {
+        gen_logic_cc(s, tmp1, OS_LONG);
+    }
+
     switch (op) {
     case 0: /* bftst */
         break;
@@ -3156,11 +3169,7 @@ static TCGv gen_bitfield_cc(DisasContext *s,
     tcg_gen_shri_i64(tmp64, tmp64, 32ULL);
     dest = tcg_temp_new_i32();
     tcg_gen_trunc_i64_i32(dest, tmp64);
-
-    /* compute cc */
-
     tcg_gen_and_i32(dest, dest, mask_cc);
-    gen_logic_cc(s, dest, OS_LONG);
 
     return dest;
 }
@@ -3282,6 +3291,21 @@ DISAS_INSN(bitfield_mem)
     /* execute operation */
 
     reg = DREG(ext, 12);
+
+    if (op == 7) {
+        TCGv tmp1;
+
+        tmp1 = tcg_temp_new_i32();
+        tcg_gen_sub_i32(tmp1, tcg_const_i32(32), width);
+        tcg_gen_shl_i32(tmp1, reg, tmp1);
+        tcg_gen_and_i32(tmp1, tmp1, mask_cc);
+        gen_logic_cc(s, tmp1, OS_LONG);
+
+        tcg_temp_free_i32(tmp1);
+    } else {
+        gen_logic_cc(s, val, OS_LONG);
+    }
+
     switch (op) {
     case 0: /* bftst */
         break;
