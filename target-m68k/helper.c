@@ -1581,8 +1581,8 @@ void HELPER(fcmp_FP0_FP1)(CPUState *env)
         /* +/-inf compares equal against itself, but sub returns nan.  */
         if (!floatx80_is_any_nan(FP0_to_floatx80(env))
             && !floatx80_is_any_nan(FP1_to_floatx80(env))) {
-            if (floatx80_lt_quiet(FP1_to_floatx80(env), floatx80_zero,
-		&env->fp_status))
+            res = floatx80_zero;
+            if (floatx80_lt_quiet(FP1_to_floatx80(env), res, &env->fp_status))
                 res = floatx80_chs(res);
         }
     }
