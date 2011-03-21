@@ -178,7 +178,6 @@ CPUM68KState *cpu_m68k_init(const char *cpu_model)
     env = &cpu->env;
 
     if (!inited) {
-        inited = 1;
         m68k_tcg_init();
     }
 
@@ -192,7 +191,13 @@ CPUM68KState *cpu_m68k_init(const char *cpu_model)
     /* TODO: Add [E]MAC registers.  */
 
     cpu_reset(ENV_GET_CPU(env));
+    if (!inited && (m68k_feature (env, M68K_FEATURE_CF_FPU) ||
+                    m68k_feature (env, M68K_FEATURE_FPU))) {
+        gdb_register_coprocessor(env, fpu_gdb_get_reg, fpu_gdb_set_reg,
+                                 11, "cf-fp.xml", 18);
+    }
     qemu_init_vcpu(env);
+    inited = 1;
     return env;
 }
 
