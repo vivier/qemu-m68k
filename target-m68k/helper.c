@@ -195,7 +195,8 @@ void m68k_cpu_init_gdb(M68kCPU *cpu)
     CPUState *cs = CPU(cpu);
     CPUM68KState *env = &cpu->env;
 
-    if (m68k_feature(env, M68K_FEATURE_CF_FPU)) {
+    if (m68k_feature(env, M68K_FEATURE_CF_FPU) ||
+        m68k_feature (env, M68K_FEATURE_FPU)) {
         gdb_register_coprocessor(cs, fpu_gdb_get_reg, fpu_gdb_set_reg,
                                  11, "cf-fp.xml", 18);
     }
