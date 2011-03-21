@@ -562,6 +562,7 @@ int queue_signal(CPUArchState *env, int sig, target_siginfo_t *info)
         *pq = q;
         q->info = *info;
         q->next = NULL;
+        q->pid = getpid();
         k->pending = 1;
         /* signal that a new signal is pending */
         ts->signal_pending = 1;
@@ -5740,21 +5741,34 @@ void process_pending_signals(CPUArchState *cpu_env)
     target_sigset_t target_old_set;
     struct emulated_sigtable *k;
     struct target_sigaction *sa;
-    struct sigqueue *q;
+    struct sigqueue *q, *q_prev;
     TaskState *ts = cpu->opaque;
 
     if (!ts->signal_pending)
         return;
 
-    /* FIXME: This is not threadsafe.  */
     k = ts->sigtab;
+    int signal_pending = 0;
     for(sig = 1; sig <= TARGET_NSIG; sig++) {
         if (k->pending)
-            goto handle_signal;
+        {
+            q = k->first;
+            q_prev = NULL;
+            while (q)
+            {
+                if (q->pid == getpid())
+                    goto handle_signal;
+                else
+                    signal_pending = 1;
+                q_prev = q;
+                q = q->next;
+            }
+        }
         k++;
     }
+
     /* if no signal is pending, just return */
-    ts->signal_pending = 0;
+    ts->signal_pending = signal_pending;
     return;
 
  handle_signal:
@@ -5762,9 +5776,18 @@ void process_pending_signals(CPUArchState *cpu_env)
     fprintf(stderr, "qemu: process signal %d\n", sig);
 #endif
     /* dequeue signal */
-    q = k->first;
-    k->first = q->next;
-    if (!k->first)
+    if (q_prev == k->first)
+    {
+        q = k->first;
+        k->first = q->next;
+        if (!k->first)
+        {
+            k->pending = 0;
+        }
+    }
+    else if (q_prev)
+        q_prev->next = q->next;
+    else
         k->pending = 0;
 
     sig = gdb_handlesig(cpu, sig);
