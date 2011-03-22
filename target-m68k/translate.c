@@ -2538,10 +2538,41 @@ DISAS_INSN(and)
     TCGv dest;
     TCGv addr;
     int opsize;
+    int exg_mode;
 
+    dest = tcg_temp_new();
+
+    /* exg */
+
+    exg_mode = insn & 0x1f8;
+    if (exg_mode == 0x140) {
+        /* exchange Dx and Dy */
+        src = DREG(insn, 9);
+        reg = DREG(insn, 0);
+        tcg_gen_mov_i32(dest, src);
+        tcg_gen_mov_i32(src, reg);
+        tcg_gen_mov_i32(reg, dest);
+        return;
+    } else if (exg_mode == 0x148) {
+        /* exchange Ax and Ay */
+        src = AREG(insn, 9);
+        reg = AREG(insn, 0);
+        tcg_gen_mov_i32(dest, src);
+        tcg_gen_mov_i32(src, reg);
+        tcg_gen_mov_i32(reg, dest);
+        return;
+    } else if (exg_mode == 0x188) {
+        /* exchange Dx and Ay */
+        src = DREG(insn, 9);
+        reg = AREG(insn, 0);
+        tcg_gen_mov_i32(dest, src);
+        tcg_gen_mov_i32(src, reg);
+        tcg_gen_mov_i32(reg, dest);
+        return;
+    }
+    /* and */
     opsize = insn_opsize(insn, 6);
     reg = DREG(insn, 9);
-    dest = tcg_temp_new();
     if (insn & 0x100) {
         SRC_EA(src, opsize, -1, &addr);
         tcg_gen_and_i32(dest, src, reg);
