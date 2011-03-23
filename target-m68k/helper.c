@@ -141,7 +141,7 @@ void m68k_cpu_list(FILE *f, fprintf_function cpu_fprintf)
     g_slist_free(list);
 }
 
-static int fpu_gdb_get_reg(CPUM68KState *env, uint8_t *mem_buf, int n)
+static int cf_fpu_gdb_get_reg(CPUM68KState *env, uint8_t *mem_buf, int n)
 {
     if (n < 8) {
         float_status s;
@@ -156,12 +156,42 @@ static int fpu_gdb_get_reg(CPUM68KState *env, uint8_t *mem_buf, int n)
     return 0;
 }
 
-static int fpu_gdb_set_reg(CPUM68KState *env, uint8_t *mem_buf, int n)
+static int cf_fpu_gdb_set_reg(CPUM68KState *env, uint8_t *mem_buf, int n)
 {
     if (n < 8) {
         float_status s;
         env->fregs[n].d = float64_to_floatx80(ldfq_p(mem_buf), &s);
         return 8;
+    }
+    if (n < 11) {
+        /* FP control registers (not implemented)  */
+        return 4;
+    }
+    return 0;
+}
+
+static int m68k_fpu_gdb_get_reg(CPUM68KState *env, uint8_t *mem_buf, int n)
+{
+    if (n < 8) {
+        stw_be_p(mem_buf, env->fregs[n].l.upper);
+        memset(mem_buf + 2, 0, 2);
+        stq_be_p(mem_buf + 4, env->fregs[n].l.lower);
+        return 12;
+    }
+    if (n < 11) {
+        /* FP control registers (not implemented)  */
+        memset(mem_buf, 0, 4);
+        return 4;
+    }
+    return 0;
+}
+
+static int m68k_fpu_gdb_set_reg(CPUM68KState *env, uint8_t *mem_buf, int n)
+{
+    if (n < 8) {
+        env->fregs[n].l.upper = lduw_be_p(mem_buf);
+        env->fregs[n].l.lower = ldq_be_p(mem_buf + 4);
+        return 12;
     }
     if (n < 11) {
         /* FP control registers (not implemented)  */
@@ -195,10 +225,12 @@ void m68k_cpu_init_gdb(M68kCPU *cpu)
     CPUState *cs = CPU(cpu);
     CPUM68KState *env = &cpu->env;
 
-    if (m68k_feature(env, M68K_FEATURE_CF_FPU) ||
-        m68k_feature (env, M68K_FEATURE_FPU)) {
-        gdb_register_coprocessor(cs, fpu_gdb_get_reg, fpu_gdb_set_reg,
+    if (m68k_feature(env, M68K_FEATURE_CF_FPU)) {
+        gdb_register_coprocessor(cs, cf_fpu_gdb_get_reg, cf_fpu_gdb_set_reg,
                                  11, "cf-fp.xml", 18);
+    } else if ( m68k_feature (env, M68K_FEATURE_FPU)) {
+        gdb_register_coprocessor(cs, m68k_fpu_gdb_get_reg,
+                                 m68k_fpu_gdb_set_reg, 11, "m68k-fp.xml", 18);
     }
     /* TODO: Add [E]MAC registers.  */
 }
