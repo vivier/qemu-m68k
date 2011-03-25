@@ -25,7 +25,6 @@
 
 #include "config.h"
 #include "cpu.h"
-#include "exec.h"
 #include "disas.h"
 #include "tcg-op.h"
 #include "qemu-log.h"

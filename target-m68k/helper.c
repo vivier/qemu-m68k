@@ -23,7 +23,6 @@
 
 #include "config.h"
 #include "cpu.h"
-#include "exec.h"
 #include "qemu-common.h"
 #include "gdbstub.h"
 
@@ -272,13 +271,12 @@ void cpu_reset(CPUM68KState *env)
     m68k_switch_sp(env);
 
     for (i = 0; i < 8; i++) {
-        env->fregs[i].l.upper = floatx80_default_nan_high;
-        env->fregs[i].l.lower = 0xffffffffffffffffULL;
+        env->fregs[i].d = floatx80_default_nan;
     }
-    env->fp0h = floatx80_default_nan_high;
-    env->fp0l = 0xffffffffffffffffULL;
-    env->fp1h = floatx80_default_nan_high;
-    env->fp1l = 0xffffffffffffffffULL;
+    env->fp0h = floatx80_default_nan.high;
+    env->fp0l = floatx80_default_nan.low;
+    env->fp1h = floatx80_default_nan.high;
+    env->fp1l = floatx80_default_nan.low;
 
     env->cc_op = CC_OP_FLAGS;
     /* TODO: We should set PC from the interrupt vector.  */
