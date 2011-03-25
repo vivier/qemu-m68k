@@ -85,8 +85,13 @@ const float64 float64_default_nan = const_float64(LIT64( 0xFFF8000000000000 ));
 #define floatx80_default_nan_high 0x7FFF
 #define floatx80_default_nan_low  LIT64( 0xBFFFFFFFFFFFFFFF )
 #else
+#if defined(TARGET_M68K)
+#define floatx80_default_nan_high 0x7FFF
+#define floatx80_default_nan_low  LIT64( 0xFFFFFFFFFFFFFFFF )
+#else
 #define floatx80_default_nan_high 0xFFFF
 #define floatx80_default_nan_low  LIT64( 0xC000000000000000 )
+#endif
 #endif
 
 const floatx80 floatx80_default_nan = make_floatx80(floatx80_default_nan_high,
