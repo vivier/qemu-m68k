@@ -158,13 +158,17 @@ float64 float64_default_nan(float_status *status)
 floatx80 floatx80_default_nan(float_status *status)
 {
     floatx80 r;
-
     if (status->snan_bit_is_one) {
         r.low = LIT64(0xBFFFFFFFFFFFFFFF);
         r.high = 0x7FFF;
     } else {
+#if defined(TARGET_M68K)
+        r.low = LIT64(0xFFFFFFFFFFFFFFFF);
+        r.high = 0x7FFF;
+#else
         r.low = LIT64(0xC000000000000000);
         r.high = 0xFFFF;
+#endif
     }
     return r;
 }
