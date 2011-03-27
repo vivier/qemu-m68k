@@ -541,6 +541,14 @@ INLINE int floatx80_is_any_nan(floatx80 a)
 *----------------------------------------------------------------------------*/
 extern const floatx80 floatx80_default_nan;
 
+#if defined(TARGET_M68K)
+#define floatx80_default_inf_high 0x7FFF
+#define floatx80_default_inf_low  LIT64( 0x0000000000000000 )
+#else
+#define floatx80_default_inf_high 0x7FFF
+#define floatx80_default_inf_low  LIT64( 0x8000000000000000 )
+#endif
+
 /*----------------------------------------------------------------------------
 | Software IEC/IEEE quadruple-precision conversion routines.
 *----------------------------------------------------------------------------*/
