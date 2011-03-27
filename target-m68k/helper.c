@@ -219,6 +219,7 @@ CPUM68KState *cpu_m68k_init(const char *cpu_model)
 
     env->cpu_model_str = cpu_model;
 
+    register_m68k_insns(env);
     /* TODO: Add [E]MAC registers.  */
 
     cpu_reset(ENV_GET_CPU(env));
