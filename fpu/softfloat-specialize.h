@@ -109,8 +109,13 @@ const floatx80 floatx80_default_nan
 | The pattern for a default generated extended double-precision inf.
 *----------------------------------------------------------------------------*/
 
+#if defined(TARGET_M68K)
+#define floatx80_default_inf_high 0x7FFF
+#define floatx80_default_inf_low  LIT64( 0x0000000000000000 )
+#else
 #define floatx80_default_inf_high 0x7FFF
 #define floatx80_default_inf_low  LIT64( 0x8000000000000000 )
+#endif
 
 const floatx80 floatx80_default_inf
     = make_floatx80_init(floatx80_default_inf_high, floatx80_default_inf_low);
