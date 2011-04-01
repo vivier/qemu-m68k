@@ -1442,20 +1442,16 @@ void HELPER(tan_FP0)(CPUState *env)
 void HELPER(exp_FP0)(CPUState *env)
 {
     floatx80 f;
-    float32 res;
-
-    /* exp(x) = exp2(x * log2(e)) */
+    long double res;
 
     f = FP0_to_floatx80(env);
 
     DBG_FPUH("exp_FP0 %Lg", floatx80_to_ldouble(f));
 
-    f = floatx80_mul(f, floatx80_log2e, &env->fp_status);
-    res = float32_exp2(floatx80_to_float32(f, &env->fp_status),
-                       &env->fp_status);
+    res = expl(floatx80_to_ldouble(f));
 
-    DBG_FPU(" = %f\n", FLOAT(res));
-    floatx80_to_FP0(env, float32_to_floatx80(res, &env->fp_status));
+    DBG_FPU(" = %Lg\n", res);
+    floatx80_to_FP0(env, ldouble_to_floatx80(res));
 }
 
 void HELPER(exp2_FP0)(CPUState *env)
