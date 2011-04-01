@@ -1456,17 +1456,17 @@ void HELPER(exp_FP0)(CPUState *env)
 
 void HELPER(exp2_FP0)(CPUState *env)
 {
-    float32 res;
     floatx80 f;
+    long double res;
 
     f = FP0_to_floatx80(env);
+
     DBG_FPUH("exp2_FP0 %Lg", floatx80_to_ldouble(f));
 
-    res = float32_exp2(floatx80_to_float32(f, &env->fp_status),
-                       &env->fp_status);
-    DBG_FPU(" = %f\n", FLOAT(res));
+    res = exp2l(floatx80_to_ldouble(f));
 
-    floatx80_to_FP0(env, float32_to_floatx80(res, &env->fp_status));
+    DBG_FPU(" = %Lg\n", res);
+    floatx80_to_FP0(env, ldouble_to_floatx80(res));
 }
 
 void HELPER(exp10_FP0)(CPUState *env)
