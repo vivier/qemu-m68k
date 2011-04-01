@@ -1355,22 +1355,15 @@ void HELPER(sqrt_FP0)(CPUState *env)
 
 void HELPER(ln_FP0)(CPUState *env)
 {
-    float64 f, log2;
-    floatx80 res;
+    floatx80 val;
+    long double res;
 
-    /* ln(x) = log2(x) / log2(e) */
+    val = FP0_to_floatx80(env);
+    DBG_FPUH("ln_FP0 %Lg", floatx80_to_ldouble(val));
+    res = logl(floatx80_to_ldouble(val));
+    DBG_FPU(" = %Lg\n", res);
 
-    res = FP0_to_floatx80(env);
-    DBG_FPUH("ln_FP0 %Lg", floatx80_to_ldouble(res));
-
-    f = floatx80_to_float64(res, &env->fp_status);
-
-    log2 = float64_log2(f, &env->fp_status);
-    res = floatx80_div(float64_to_floatx80(log2, &env->fp_status),
-                       floatx80_log2e, &env->fp_status);
-    DBG_FPU(" = %Lg\n", floatx80_to_ldouble(res));
-
-    floatx80_to_FP0(env, res);
+    floatx80_to_FP0(env, ldouble_to_floatx80(res));
 }
 
 void HELPER(log10_FP0)(CPUState *env)
