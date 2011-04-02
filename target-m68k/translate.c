@@ -839,7 +839,7 @@ static inline void gen_load_FP0(DisasContext * s, int opsize, TCGv addr)
         gen_helper_exts32_FP0(cpu_env);
         break;
     case OS_WORD:
-        tcg_gen_qemu_ld16u(QREG_FP0H, addr, index);
+        tcg_gen_qemu_ld16s(QREG_FP0H, addr, index);
         gen_helper_exts32_FP0(cpu_env);
         break;
     case OS_LONG:
