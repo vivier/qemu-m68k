@@ -1265,6 +1265,19 @@ void HELPER(sqrt_FP0)(CPUM68KState *env)
     floatx80_to_FP0(env, res);
 }
 
+void HELPER(lognp1_FP0)(CPUM68KState *env)
+{
+    floatx80 val;
+    long double res;
+
+    val = FP0_to_floatx80(env);
+    DBG_FPUH("lognp1_FP0 %Lg", floatx80_to_ldouble(val));
+    res = logl(floatx80_to_ldouble(val) + 1.0);
+    DBG_FPU(" = %Lg\n", res);
+
+    floatx80_to_FP0(env, ldouble_to_floatx80(res));
+}
+
 void HELPER(ln_FP0)(CPUM68KState *env)
 {
     floatx80 val;
