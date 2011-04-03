@@ -982,6 +982,12 @@ static inline void floatx80_to_FP0(CPUM68KState *env, floatx80 res)
     env->fp0l = res.low;
 }
 
+static inline void floatx80_to_FP1(CPUM68KState *env, floatx80 res)
+{
+    env->fp1h = res.high;
+    env->fp1l = res.low;
+}
+
 static inline int32_t FP0_to_int32(CPUM68KState *env)
 {
     return env->fp0h;
@@ -1550,6 +1556,23 @@ void HELPER(mod_FP0_FP1)(CPUM68KState *env)
 
     res = ldouble_to_floatx80(dst);
     floatx80_to_FP0(env, res);
+}
+
+void HELPER(sincos_FP0_FP1)(CPUM68KState *env)
+{
+    floatx80 res;
+    long double val, valsin, valcos;
+
+    res = FP0_to_floatx80(env);
+    val = floatx80_to_ldouble(res);
+
+    DBG_FPUH("sincos_FP0 %Lg", val);
+    sincosl(val, &valsin, &valcos);
+    DBG_FPU(" = %Lg, %Lg", valsin, valcos);
+    res = ldouble_to_floatx80(valsin);
+    floatx80_to_FP0(env, res);
+    res = ldouble_to_floatx80(valcos);
+    floatx80_to_FP1(env, res);
 }
 
 void HELPER(fcmp_FP0_FP1)(CPUM68KState *env)
