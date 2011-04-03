@@ -3751,6 +3751,9 @@ DISAS_INSN(fpu)
     case 0x18: case 0x58: case 0x5c: /* fabs */
         gen_helper_abs_FP0(cpu_env);
         break;
+    case 0x19:
+        gen_helper_cosh_FP0(cpu_env);
+        break;
     case 0x1a: case 0x5a: case 0x5e: /* fneg */
         gen_helper_chs_FP0(cpu_env);
         break;
