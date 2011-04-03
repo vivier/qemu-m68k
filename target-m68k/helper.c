@@ -1445,6 +1445,21 @@ void HELPER(sin_FP0)(CPUState *env)
     floatx80_to_FP0(env, res);
 }
 
+void HELPER(tanh_FP0)(CPUState *env)
+{
+    floatx80 res;
+    long double val;
+
+    res = FP0_to_floatx80(env);
+    val = floatx80_to_ldouble(res);
+
+    DBG_FPUH("tanh_FP0 %Lg", val);
+    val = tanhl(val);
+    DBG_FPU(" = %Lg", val);
+    res = ldouble_to_floatx80(val);
+    floatx80_to_FP0(env, res);
+}
+
 void HELPER(tan_FP0)(CPUState *env)
 {
     floatx80 res;
