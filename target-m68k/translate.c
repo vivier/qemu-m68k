@@ -3727,6 +3727,9 @@ DISAS_INSN(fpu)
         gen_helper_iround_FP0(cpu_env);
         round = 0;
         break;
+    case 2: /* fsinh */
+        gen_helper_sinh_FP0(cpu_env);
+        break;
     case 3: /* fintrz */
         gen_helper_itrunc_FP0(cpu_env);
         round = 0;
