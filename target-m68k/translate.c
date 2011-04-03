@@ -220,6 +220,16 @@ static void gen_op_store_fpr_FP0(int freg)
                    offsetof(FPReg, d.low));
 }
 
+static void gen_op_store_fpr_FP1(int freg)
+{
+    tcg_gen_st16_i32(QREG_FP1H, cpu_env,
+                     offsetof(CPUM68KState, fregs[freg]) +
+                     offsetof(FPReg, d.high));
+    tcg_gen_st_i64(QREG_FP1L, cpu_env,
+                   offsetof(CPUM68KState, fregs[freg]) +
+                   offsetof(FPReg, d.low));
+}
+
 static void gen_op_load_fpr_FP1(int freg)
 {
     tcg_gen_ld16u_i32(QREG_FP1H, cpu_env,
@@ -3800,6 +3810,13 @@ DISAS_INSN(fpu)
     case 0x28: case 0x68: case 0x6c: /* fsub */
         gen_op_load_fpr_FP1(REG(ext, 7));
         gen_helper_sub_FP0_FP1(cpu_env);
+        break;
+    case 0x30: case 0x31: case 0x32:
+    case 0x33: case 0x34: case 0x35:
+    case 0x36: case 0x37:
+        gen_helper_sincos_FP0_FP1(cpu_env);
+        gen_op_store_fpr_FP0(REG(ext, 7));	/* sin */
+        gen_op_store_fpr_FP1(REG(ext, 0));	/* cos */
         break;
     case 0x38: /* fcmp */
         gen_op_load_fpr_FP1(REG(ext, 7));
