@@ -3727,6 +3727,9 @@ DISAS_INSN(fpu)
     case 0x0a:                       /* fatan */
         gen_helper_atan_FP0(cpu_env);
         break;
+    case 0x0c:
+        gen_helper_asin_FP0(cpu_env);
+        break;
     case 0x0e:                       /* fsin */
         gen_helper_sin_FP0(cpu_env);
         break;
