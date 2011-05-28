@@ -46,10 +46,16 @@ static void m68k_cpu_reset(CPUState *s)
     mcc->parent_reset(s);
 
     memset(env, 0, offsetof(CPUM68KState, breakpoints));
-#if !defined(CONFIG_USER_ONLY)
-    env->sr = 0x2700;
-#endif
+#if defined(CONFIG_USER_ONLY)
+    env->pc = 0;
     m68k_switch_sp(env);
+#else
+    env->sr = 0x2700;
+    env->vbr = 0;
+    env->current_sp = M68K_ISP;
+    env->aregs[7] = ldl_phys(0);
+    env->pc = ldl_phys(4);
+#endif
 
     for (i = 0; i < 8; i++) {
         env->fregs[i].d = floatx80_default_nan;
@@ -60,8 +66,6 @@ static void m68k_cpu_reset(CPUState *s)
     env->fp1l = floatx80_default_nan.low;
 
     env->cc_op = CC_OP_FLAGS;
-    /* TODO: We should set PC from the interrupt vector.  */
-    env->pc = 0;
     tlb_flush(env, 1);
 }
 

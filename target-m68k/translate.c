@@ -1332,7 +1332,6 @@ DISAS_INSN(undef_fpu)
 DISAS_INSN(undef)
 {
     gen_exception(s, s->pc - 2, EXCP_UNSUPPORTED);
-    cpu_abort(env, "Illegal instruction: %04x @ %08x", insn, s->pc - 2);
 }
 
 DISAS_INSN(mulw)
@@ -3567,7 +3566,7 @@ DISAS_INSN(movec)
     } else {
         reg = DREG(ext, 12);
     }
-    gen_helper_movec(cpu_env, tcg_const_i32(ext & 0xfff), reg);
+    gen_helper_movec_to(cpu_env, tcg_const_i32(ext & 0xfff), reg);
     gen_lookup_tb(s);
 }
 

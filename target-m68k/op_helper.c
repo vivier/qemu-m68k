@@ -102,6 +102,10 @@ static void do_interrupt_all(CPUM68KState *env, int is_hw)
             /* Return from an exception.  */
             do_rte(env);
             return;
+        case EXCP_UNSUPPORTED:
+            cpu_abort(env, "Illegal instruction: %04x @ %08x",
+                      cpu_lduw_code(env, env->pc), env->pc);
+            break;
         case EXCP_HALT_INSN:
             if (semihosting_enabled
                     && (env->sr & SR_S) != 0
