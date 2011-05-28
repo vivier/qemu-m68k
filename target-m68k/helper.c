@@ -358,7 +358,7 @@ set_x:
     return flags;
 }
 
-void HELPER(movec)(CPUM68KState *env, uint32_t reg, uint32_t val)
+void HELPER(movec_to)(CPUM68KState * env, uint32_t reg, uint32_t val)
 {
     M68kCPU *cpu = m68k_env_get_cpu(env);
 
@@ -377,6 +377,26 @@ void HELPER(movec)(CPUM68KState *env, uint32_t reg, uint32_t val)
     default:
         cpu_abort(CPU(cpu), "Unimplemented control register write 0x%x = 0x%x\n",
                   reg, val);
+    }
+}
+
+uint32_t HELPER(movec_from)(CPUM68KState * env, uint32_t reg)
+{
+    M68kCPU *cpu = m68k_env_get_cpu(env);
+
+    switch (reg) {
+    case 0x02: /* CACR */
+        return env->cacr;
+    case 0x04: case 0x05: case 0x06: case 0x07: /* ACR[0-3] */
+        /* TODO: Implement Access Control Registers.  */
+        return 0;
+    case 0x801: /* VBR */
+        return env->vbr;
+        break;
+    /* TODO: Implement control registers.  */
+    default:
+        cpu_abort(CPU(cpu), "Unimplemented control register read 0x%x\n",
+                  reg);
     }
 }
 
@@ -419,8 +439,13 @@ void m68k_switch_sp(CPUM68KState *env)
     int new_sp;
 
     env->sp[env->current_sp] = env->aregs[7];
-    new_sp = (env->sr & SR_S && env->cacr & M68K_CACR_EUSP)
-             ? M68K_SSP : M68K_USP;
+    if (env->sr & SR_S && env->sr & SR_M) {
+        new_sp = M68K_SSP;
+    } else if (env->sr & SR_S && !(env->sr & SR_M)) {
+        new_sp = M68K_ISP;
+    } else {
+        new_sp = M68K_USP;
+    }
     env->aregs[7] = env->sp[new_sp];
     env->current_sp = new_sp;
 }
