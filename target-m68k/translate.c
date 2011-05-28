@@ -3532,7 +3532,11 @@ DISAS_INSN(movec)
     } else {
         reg = DREG(ext, 12);
     }
-    gen_helper_movec(cpu_env, tcg_const_i32(ext & 0xfff), reg);
+    if (insn & 1) {
+        gen_helper_movec_to(cpu_env, tcg_const_i32(ext & 0xfff), reg);
+    } else {
+        gen_helper_movec_from(reg, cpu_env, tcg_const_i32(ext & 0xfff));
+    }
     gen_lookup_tb(s);
 }
 
@@ -4435,7 +4439,7 @@ void register_m68k_insns (CPUM68KState *env)
     INSN(move_to_ccr, 44c0, ffc0, M68000);
     INSN(not,       4680, fff8, CF_ISA_A);
     INSN(not,       4600, ff00, M68000);
-    INSN(undef,     46c0, ffc0, M68000);
+    INSN(move_to_sr, 46c0, ffc0, M68000);
     INSN(move_to_sr, 46c0, ffc0, CF_ISA_A);
     INSN(nbcd,      4800, ffc0, M68000);
     INSN(linkl,     4808, fff8, M68000);
@@ -4481,7 +4485,8 @@ void register_m68k_insns (CPUM68KState *env)
     INSN(rte,       4e73, ffff, M68000);
     INSN(rts,       4e75, ffff, CF_ISA_A);
     INSN(rts,       4e75, ffff, M68000);
-    INSN(movec,     4e7b, ffff, CF_ISA_A);
+    INSN(movec,     4e7a, fffe, CF_ISA_A);
+    INSN(movec,     4e7a, fffe, M68000);
     INSN(jump,      4e80, ffc0, CF_ISA_A);
     INSN(jump,      4e80, ffc0, M68000);
     INSN(jump,      4ec0, ffc0, CF_ISA_A);
