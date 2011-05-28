@@ -3526,7 +3526,7 @@ DISAS_INSN(movec)
     } else {
         reg = DREG(ext, 12);
     }
-    gen_helper_movec(cpu_env, tcg_const_i32(ext & 0xfff), reg);
+    gen_helper_movec_to(cpu_env, tcg_const_i32(ext & 0xfff), reg);
     gen_lookup_tb(s);
 }
 

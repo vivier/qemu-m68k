@@ -361,7 +361,7 @@ set_x:
     env->cc_dest = flags;
 }
 
-void HELPER(movec)(CPUM68KState *env, uint32_t reg, uint32_t val)
+void HELPER(movec_to)(CPUM68KState * env, uint32_t reg, uint32_t val)
 {
     switch (reg) {
     case 0x02: /* CACR */
@@ -378,6 +378,24 @@ void HELPER(movec)(CPUM68KState *env, uint32_t reg, uint32_t val)
     default:
         cpu_abort(env, "Unimplemented control register write 0x%x = 0x%x\n",
                   reg, val);
+    }
+}
+
+uint32_t HELPER(movec_from)(CPUM68KState * env, uint32_t reg)
+{
+    switch (reg) {
+    case 0x02: /* CACR */
+        return env->cacr;
+    case 0x04: case 0x05: case 0x06: case 0x07: /* ACR[0-3] */
+        /* TODO: Implement Access Control Registers.  */
+        return 0;
+    case 0x801: /* VBR */
+        return env->vbr;
+        break;
+    /* TODO: Implement control registers.  */
+    default:
+        cpu_abort(env, "Unimplemented control register read 0x%x\n",
+                  reg);
     }
 }
 
