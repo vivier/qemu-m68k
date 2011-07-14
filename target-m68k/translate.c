@@ -1996,28 +1996,18 @@ static void gen_set_sr_im(DisasContext *s, uint16_t val, int ccr_only)
 static void gen_set_sr(DisasContext *s, uint16_t insn, int ccr_only)
 {
     TCGv tmp;
-    TCGv reg;
+    TCGv src;
 
     s->cc_op = CC_OP_FLAGS;
-    if ((insn & 0x38) == 0)
-      {
-        tmp = tcg_temp_new();
-        reg = DREG(insn, 0);
-        tcg_gen_andi_i32(QREG_CC_DEST, reg, 0xf);
-        tcg_gen_shri_i32(tmp, reg, 4);
-        tcg_gen_andi_i32(QREG_CC_X, tmp, 1);
-        if (!ccr_only) {
-            gen_helper_set_sr(cpu_env, reg);
-        }
-      }
-    else if ((insn & 0x3f) == 0x3c)
-      {
-        uint16_t val;
-        val = read_im16(s);
-        gen_set_sr_im(s, val, ccr_only);
-      }
-    else
-        disas_undef(s, insn);
+    SRC_EA(src, OS_WORD, 0, NULL);
+
+    tmp = tcg_temp_new();
+    tcg_gen_andi_i32(QREG_CC_DEST, src, 0xf);
+    tcg_gen_shri_i32(tmp, src, 4);
+    tcg_gen_andi_i32(QREG_CC_X, tmp, 1);
+    if (!ccr_only) {
+        gen_helper_set_sr(cpu_env, src);
+    }
 }
 
 DISAS_INSN(move_to_ccr)
@@ -3443,16 +3433,14 @@ DISAS_INSN(strldsr)
 
 DISAS_INSN(move_from_sr)
 {
-    TCGv reg;
     TCGv sr;
 
-    if (IS_USER(s)) {
+    if (IS_USER(s)) {    /* FIXME: not privileged on 68000 */
         gen_exception(s, s->pc - 2, EXCP_PRIVILEGE);
         return;
     }
     sr = gen_get_sr(s);
-    reg = DREG(insn, 0);
-    gen_partset_reg(OS_WORD, reg, sr);
+    DEST_EA(insn, OS_WORD, sr, NULL);
 }
 
 DISAS_INSN(move_to_sr)
@@ -4424,7 +4412,7 @@ void register_m68k_insns (CPUM68KState *env)
     INSN(negx,      4000, ff00, M68000);
     INSN(undef,     40c0, ffc0, M68000);
     INSN(move_from_sr, 40c0, fff8, CF_ISA_A);
-    INSN(move_from_sr, 40c0, fff8, M68000);
+    INSN(move_from_sr, 40c0, ffc0, M68000);
     INSN(lea,       41c0, f1c0, CF_ISA_A);
     INSN(lea,       41c0, f1c0, M68000);
     INSN(clr,       4200, ff00, CF_ISA_A);
