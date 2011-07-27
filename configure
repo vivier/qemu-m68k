@@ -3297,6 +3297,7 @@ target_dir="$target"
 config_target_mak=$target_dir/config-target.mak
 target_arch2=`echo $target | cut -d '-' -f 1`
 target_bigendian="no"
+target_default_cpu="any"
 
 case "$target_arch2" in
   armeb|lm32|m68k|microblaze|mips|mipsn32|mips64|ppc|ppcemb|ppc64|ppc64abi32|s390x|sh4eb|sparc|sparc64|sparc32plus|xtensaeb)
@@ -3373,11 +3374,13 @@ TARGET_ABI_DIR=""
 case "$target_arch2" in
   i386)
     target_phys_bits=64
+    target_default_cpu="qemu32"
   ;;
   x86_64)
     TARGET_BASE_ARCH=i386
     target_phys_bits=64
     target_long_alignment=8
+    target_default_cpu="qemu64"
   ;;
   alpha)
     target_phys_bits=64
@@ -3420,12 +3423,14 @@ case "$target_arch2" in
     echo "TARGET_ABI_MIPSO32=y" >> $config_target_mak
     target_nptl="yes"
     target_phys_bits=64
+    target_default_cpu="24Kf"
   ;;
   mipsn32|mipsn32el)
     TARGET_ARCH=mipsn32
     TARGET_BASE_ARCH=mips
     echo "TARGET_ABI_MIPSN32=y" >> $config_target_mak
     target_phys_bits=64
+    target_default_cpu="20Kc"
   ;;
   mips64|mips64el)
     TARGET_ARCH=mips64
@@ -3433,12 +3438,14 @@ case "$target_arch2" in
     echo "TARGET_ABI_MIPSN64=y" >> $config_target_mak
     target_phys_bits=64
     target_long_alignment=8
+    target_default_cpu="20Kc"
   ;;
   ppc)
     gdb_xml_files="power-core.xml power-fpu.xml power-altivec.xml power-spe.xml"
     target_phys_bits=64
     target_nptl="yes"
     target_libs_softmmu="$fdt_libs"
+    target_default_cpu="750"
   ;;
   ppcemb)
     TARGET_BASE_ARCH=ppc
@@ -3447,6 +3454,7 @@ case "$target_arch2" in
     target_phys_bits=64
     target_nptl="yes"
     target_libs_softmmu="$fdt_libs"
+    target_default_cpu="750"
   ;;
   ppc64)
     TARGET_BASE_ARCH=ppc
@@ -3455,6 +3463,7 @@ case "$target_arch2" in
     target_phys_bits=64
     target_long_alignment=8
     target_libs_softmmu="$fdt_libs"
+    target_default_cpu="970fx"
   ;;
   ppc64abi32)
     TARGET_ARCH=ppc64
@@ -3464,6 +3473,7 @@ case "$target_arch2" in
     gdb_xml_files="power64-core.xml power-fpu.xml power-altivec.xml power-spe.xml"
     target_phys_bits=64
     target_libs_softmmu="$fdt_libs"
+    target_default_cpu="750"
   ;;
   sh4|sh4eb)
     TARGET_ARCH=sh4
@@ -3473,11 +3483,13 @@ case "$target_arch2" in
   ;;
   sparc)
     target_phys_bits=64
+    target_default_cpu="Fujitsu MB86904"
   ;;
   sparc64)
     TARGET_BASE_ARCH=sparc
     target_phys_bits=64
     target_long_alignment=8
+    target_default_cpu="TI UltraSparc II"
   ;;
   sparc32plus)
     TARGET_ARCH=sparc64
@@ -3485,6 +3497,7 @@ case "$target_arch2" in
     TARGET_ABI_DIR=sparc
     echo "TARGET_ABI32=y" >> $config_target_mak
     target_phys_bits=64
+    target_default_cpu="Fujitsu MB86904"
   ;;
   s390x)
     target_nptl="yes"
@@ -3507,6 +3520,7 @@ echo "TARGET_SHORT_ALIGNMENT=$target_short_alignment" >> $config_target_mak
 echo "TARGET_INT_ALIGNMENT=$target_int_alignment" >> $config_target_mak
 echo "TARGET_LONG_ALIGNMENT=$target_long_alignment" >> $config_target_mak
 echo "TARGET_LLONG_ALIGNMENT=$target_llong_alignment" >> $config_target_mak
+echo "TARGET_DEFAULT_CPU=\"$target_default_cpu\"" >> $config_target_mak
 echo "TARGET_ARCH=$TARGET_ARCH" >> $config_target_mak
 target_arch_name="`echo $TARGET_ARCH | tr '[:lower:]' '[:upper:]'`"
 echo "TARGET_$target_arch_name=y" >> $config_target_mak

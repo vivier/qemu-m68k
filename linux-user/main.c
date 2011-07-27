@@ -3322,39 +3322,7 @@ int main(int argc, char **argv, char **envp)
     init_paths(interp_prefix);
 
     if (cpu_model == NULL) {
-#if defined(TARGET_I386)
-#ifdef TARGET_X86_64
-        cpu_model = "qemu64";
-#else
-        cpu_model = "qemu32";
-#endif
-#elif defined(TARGET_ARM)
-        cpu_model = "any";
-#elif defined(TARGET_UNICORE32)
-        cpu_model = "any";
-#elif defined(TARGET_M68K)
-        cpu_model = "any";
-#elif defined(TARGET_SPARC)
-#ifdef TARGET_SPARC64
-        cpu_model = "TI UltraSparc II";
-#else
-        cpu_model = "Fujitsu MB86904";
-#endif
-#elif defined(TARGET_MIPS)
-#if defined(TARGET_ABI_MIPSN32) || defined(TARGET_ABI_MIPSN64)
-        cpu_model = "20Kc";
-#else
-        cpu_model = "24Kf";
-#endif
-#elif defined(TARGET_PPC)
-#ifdef TARGET_PPC64
-        cpu_model = "970fx";
-#else
-        cpu_model = "750";
-#endif
-#else
-        cpu_model = "any";
-#endif
+        cpu_model = TARGET_DEFAULT_CPU;
     }
     tcg_exec_init(0);
     cpu_exec_init_all();
