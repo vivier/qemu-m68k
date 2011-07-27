@@ -744,6 +744,10 @@ for opt do
   ;;
   --target-list=*) target_list="$optarg"
   ;;
+  --*-default-cpu=*)
+    tmp=`expr "x$opt" : 'x--\(.*\)-default-cpu=.*'`
+    eval ${tmp}_default_cpu="\"$optarg\""
+  ;;
   --enable-trace-backend=*) trace_backend="$optarg"
   ;;
   --with-trace-file=*) trace_file="$optarg"
@@ -1189,6 +1193,7 @@ Standard options:
   --target-list=LIST       set target list (default: build everything)
 $(echo Available targets: $default_target_list | \
   fold -s -w 53 | sed -e 's/^/                           /')
+  --ARCH-default-cpu=CPU   set the default cpu for a given architecture
 
 Advanced options (experts only):
   --source-path=PATH       path of source code [$source_path]
@@ -4938,7 +4943,7 @@ case "$target_name" in
     TARGET_BASE_ARCH=sparc
     TARGET_ABI_DIR=sparc
     echo "TARGET_ABI32=y" >> $config_target_mak
-    target_default_cpu="Fujitsu MB86904"
+    target_default_cpu="TI UltraSparc II"
   ;;
   s390x)
   ;;
@@ -4962,6 +4967,10 @@ upper() {
     echo "$@"| LC_ALL=C tr '[a-z]' '[A-Z]'
 }
 
+tmp_target_default_cpu=`eval echo \\$${target_name}_default_cpu`
+if [ "x$tmp_target_default_cpu" != "x" ] ; then
+  target_default_cpu="$tmp_target_default_cpu"
+fi
 echo "TARGET_DEFAULT_CPU=\"$target_default_cpu\"" >> $config_target_mak
 target_arch_name="`upper $TARGET_ARCH`"
 echo "TARGET_$target_arch_name=y" >> $config_target_mak
