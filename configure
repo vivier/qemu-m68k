@@ -545,6 +545,10 @@ for opt do
   ;;
   --target-list=*) target_list="$optarg"
   ;;
+  --*-default-cpu=*)
+    tmp=`expr "x$opt" : 'x--\(.*\)-default-cpu=.*'`
+    eval ${tmp}_default_cpu="$optarg"
+  ;;
   --enable-trace-backend=*) trace_backend="$optarg"
   ;;
   --with-trace-file=*) trace_file="$optarg"
@@ -956,6 +960,7 @@ echo "                           use %M for cpu name [$interp_prefix]"
 echo "  --target-list=LIST       set target list (default: build everything)"
 echo "Available targets: $default_target_list" | \
     fold -s -w 53 | sed -e 's/^/                           /'
+echo "  --ARCH-default-cpu=CPU   set the default cpu for a given architecture"
 echo ""
 echo "Advanced options (experts only):"
 echo "  --source-path=PATH       path of source code [$source_path]"
@@ -3516,6 +3521,10 @@ case "$target_arch2" in
     exit 1
   ;;
 esac
+tmp_target_default_cpu=`eval echo \\$${target_arch2}_default_cpu`
+if [ "x$tmp_target_default_cpu" != "x" ] ; then
+  target_default_cpu="$tmp_target_default_cpu"
+fi
 echo "TARGET_SHORT_ALIGNMENT=$target_short_alignment" >> $config_target_mak
 echo "TARGET_INT_ALIGNMENT=$target_int_alignment" >> $config_target_mak
 echo "TARGET_LONG_ALIGNMENT=$target_long_alignment" >> $config_target_mak
