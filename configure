@@ -5540,6 +5540,7 @@ target_dir="$target"
 config_target_mak=$target_dir/config-target.mak
 target_name=`echo $target | cut -d '-' -f 1`
 target_bigendian="no"
+target_default_cpu="\"any\""
 
 case "$target_name" in
   armeb|lm32|m68k|microblaze|mips|mipsn32|mips64|moxie|or32|ppc|ppcemb|ppc64|ppc64abi32|s390x|sh4eb|sparc|sparc64|sparc32plus|xtensaeb)
@@ -5587,9 +5588,11 @@ TARGET_ABI_DIR=""
 
 case "$target_name" in
   i386)
+    target_default_cpu="\"qemu32\""
   ;;
   x86_64)
     TARGET_BASE_ARCH=i386
+    target_default_cpu="\"qemu64\""
   ;;
   alpha)
   ;;
@@ -5618,17 +5621,20 @@ case "$target_name" in
   mips|mipsel)
     TARGET_ARCH=mips
     echo "TARGET_ABI_MIPSO32=y" >> $config_target_mak
+    target_default_cpu="\"24Kf\""
   ;;
   mipsn32|mipsn32el)
     TARGET_ARCH=mips64
     TARGET_BASE_ARCH=mips
     echo "TARGET_ABI_MIPSN32=y" >> $config_target_mak
     echo "TARGET_ABI32=y" >> $config_target_mak
+    target_default_cpu="\"5KEf\""
   ;;
   mips64|mips64el)
     TARGET_ARCH=mips64
     TARGET_BASE_ARCH=mips
     echo "TARGET_ABI_MIPSN64=y" >> $config_target_mak
+    target_default_cpu="\"5KEf\""
   ;;
   moxie)
   ;;
@@ -5638,22 +5644,26 @@ case "$target_name" in
   ;;
   ppc)
     gdb_xml_files="power-core.xml power-fpu.xml power-altivec.xml power-spe.xml"
+    target_default_cpu="\"750\""
   ;;
   ppcemb)
     TARGET_BASE_ARCH=ppc
     TARGET_ABI_DIR=ppc
     gdb_xml_files="power-core.xml power-fpu.xml power-altivec.xml power-spe.xml"
+    target_default_cpu="\"750\""
   ;;
   ppc64)
     TARGET_BASE_ARCH=ppc
     TARGET_ABI_DIR=ppc
     gdb_xml_files="power64-core.xml power-fpu.xml power-altivec.xml power-spe.xml power-vsx.xml"
+    target_default_cpu="\"POWER8\""
   ;;
   ppc64le)
     TARGET_ARCH=ppc64
     TARGET_BASE_ARCH=ppc
     TARGET_ABI_DIR=ppc
     gdb_xml_files="power64-core.xml power-fpu.xml power-altivec.xml power-spe.xml power-vsx.xml"
+    target_default_cpu="\"POWER8\""
   ;;
   ppc64abi32)
     TARGET_ARCH=ppc64
@@ -5661,21 +5671,26 @@ case "$target_name" in
     TARGET_ABI_DIR=ppc
     echo "TARGET_ABI32=y" >> $config_target_mak
     gdb_xml_files="power64-core.xml power-fpu.xml power-altivec.xml power-spe.xml power-vsx.xml"
+    target_default_cpu="\"750\""
   ;;
   sh4|sh4eb)
     TARGET_ARCH=sh4
     bflt="yes"
+    target_default_cpu=TYPE_SH7785_CPU
   ;;
   sparc)
+    target_default_cpu="\"Fujitsu MB86904\""
   ;;
   sparc64)
     TARGET_BASE_ARCH=sparc
+    target_default_cpu="\"TI UltraSparc II\""
   ;;
   sparc32plus)
     TARGET_ARCH=sparc64
     TARGET_BASE_ARCH=sparc
     TARGET_ABI_DIR=sparc
     echo "TARGET_ABI32=y" >> $config_target_mak
+    target_default_cpu="\"TI UltraSparc II\""
   ;;
   s390x)
     gdb_xml_files="s390x-core64.xml s390-acr.xml s390-fpr.xml s390-vx.xml s390-cr.xml s390-virt.xml"
@@ -5704,6 +5719,7 @@ upper() {
     echo "$@"| LC_ALL=C tr '[a-z]' '[A-Z]'
 }
 
+echo "TARGET_DEFAULT_CPU=$target_default_cpu" >> $config_target_mak
 target_arch_name="`upper $TARGET_ARCH`"
 echo "TARGET_$target_arch_name=y" >> $config_target_mak
 echo "TARGET_NAME=$target_name" >> $config_target_mak
