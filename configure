@@ -3251,6 +3251,7 @@ case "$target_arch2" in
   cris)
     target_nptl="yes"
     target_phys_bits=32
+    target_default_cpu=""
   ;;
   lm32)
     target_phys_bits=32
