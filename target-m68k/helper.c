@@ -57,6 +57,11 @@ void m68k_cpu_list(FILE *f, fprintf_function cpu_fprintf)
     unsigned int i;
 
     for (i = 0; m68k_cpu_defs[i].name; i++) {
+        if (strcmp(m68k_cpu_defs[i].name, TARGET_DEFAULT_CPU) == 0) {
+            (*cpu_fprintf)(f, " >");
+        } else {
+            (*cpu_fprintf)(f, "  ");
+        }
         (*cpu_fprintf)(f, "%s\n", m68k_cpu_defs[i].name);
     }
 }
