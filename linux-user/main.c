@@ -2815,8 +2815,10 @@ static void usage(void)
            "-strace      log system calls\n"
            "\n"
            "Environment variables:\n"
-           "QEMU_STRACE       Print system calls and arguments similar to the\n"
-           "                  'strace' program.  Enable by setting to any value.\n"
+           "QEMU_STRACE        Print system calls and arguments similar to the\n"
+           "                   'strace' program.  Enable by setting to any value.\n"
+           "QEMU_DEBUG=options Activate log. Use same options as '-d' options\n"
+           "QEMU_GDB=port      Wait gdb connection to port\n"
            "You can use -E and -U options to set/unset environment variables\n"
            "for target process.  It is possible to provide several variables\n"
            "by repeating the option.  For example:\n"
@@ -2872,7 +2874,7 @@ int main(int argc, char **argv, char **envp)
     const char *filename;
     const char *cpu_model;
     const char *log_file = DEBUG_LOGFILE;
-    const char *log_mask = NULL;
+    const char *log_mask = getenv("QEMU_DEBUG");
     struct target_pt_regs regs1, *regs = &regs1;
     struct image_info info1, *info = &info1;
     struct linux_binprm bprm;
@@ -2919,6 +2921,12 @@ int main(int argc, char **argv, char **envp)
 #if defined(cpudef_setup)
     cpudef_setup(); /* parse cpu definitions in target config file (TBD) */
 #endif
+    if (getenv("QEMU_GDB")) {
+      gdbstub_port = atoi(getenv("QEMU_GDB"));
+    }
+    /* don't propagate QEMU_DEBUG and _GDB to children */
+    unsetenv("QEMU_DEBUG");
+    unsetenv("QEMU_GDB");
 
     optind = 1;
     for(;;) {
