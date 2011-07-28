@@ -2404,6 +2404,10 @@ space emulator hasn't implemented ptrace).  At the moment this is
 incomplete.  All system calls that don't have a specific argument
 format are printed with information for six arguments.  Many
 flag-style arguments don't have decoders and will show up as numbers.
+@item QEMU_DEBUG=options
+Activate log. Use same options as '-d' options.
+@item QEMU_GDB=port
+Wait gdb connection to port.
 @end table
 
 @node Other binaries

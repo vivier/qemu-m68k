@@ -3305,6 +3305,12 @@ int main(int argc, char **argv, char **envp)
 #if defined(cpudef_setup)
     cpudef_setup(); /* parse cpu definitions in target config file (TBD) */
 #endif
+    if (getenv("QEMU_GDB")) {
+      gdbstub_port = atoi(getenv("QEMU_GDB"));
+    }
+    /* don't propagate QEMU_DEBUG and _GDB to children */
+    unsetenv("QEMU_DEBUG");
+    unsetenv("QEMU_GDB");
 
     /* init debug */
     cpu_set_log_filename(log_file);
