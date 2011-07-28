@@ -53,6 +53,11 @@ static void m68k_cpu_list_entry(gpointer data, gpointer user_data)
     ObjectClass *c = data;
     M68kCPUListState *s = user_data;
 
+    if (strcmp(object_class_get_name(c), TARGET_DEFAULT_CPU) == 0) {
+        (*s->cpu_fprintf)(s->file, " >");
+    } else {
+        (*s->cpu_fprintf)(s->file, "  ");
+    }
     (*s->cpu_fprintf)(s->file, "%s\n",
                       object_class_get_name(c));
 }
