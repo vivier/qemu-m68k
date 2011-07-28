@@ -453,7 +453,12 @@ void arm_cpu_list(FILE *f, fprintf_function cpu_fprintf)
 
     (*cpu_fprintf)(f, "Available CPUs:\n");
     for (i = 0; arm_cpu_names[i].name; i++) {
-        (*cpu_fprintf)(f, "  %s\n", arm_cpu_names[i].name);
+        if (strcmp(arm_cpu_names[i].name, TARGET_DEFAULT_CPU) == 0) {
+            (*cpu_fprintf)(f, " >");
+        } else {
+            (*cpu_fprintf)(f, "  ");
+        }
+        (*cpu_fprintf)(f, "%s\n", arm_cpu_names[i].name);
     }
 }
 
