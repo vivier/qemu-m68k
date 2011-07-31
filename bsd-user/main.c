@@ -914,7 +914,7 @@ int main(int argc, char **argv)
         exit(1);
     }
     cpu = ENV_GET_CPU(env);
-#if defined(TARGET_SPARC) || defined(TARGET_PPC)
+#if defined(TARGET_SPARC) || defined(TARGET_PPC) || defined(TARGET_M68K)
     cpu_reset(cpu);
 #endif
     thread_cpu = cpu;
