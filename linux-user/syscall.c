@@ -3998,7 +3998,7 @@ static int do_fork(CPUState *env, unsigned int flags, abi_ulong newsp,
         init_task_state(ts);
         /* we create a new CPU instance. */
         new_env = cpu_copy(env);
-#if defined(TARGET_I386) || defined(TARGET_SPARC) || defined(TARGET_PPC)
+#if defined(TARGET_I386) || defined(TARGET_SPARC) || defined(TARGET_PPC) || defined(TARGET_M68K)
         cpu_reset(new_env);
 #endif
         /* Init regs that differ from the parent.  */

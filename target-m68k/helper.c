@@ -321,7 +321,6 @@ CPUM68KState *cpu_m68k_init(const char *cpu_model)
         return NULL;
     }
 
-    cpu_reset(env);
     if (!inited) {
     if (m68k_feature (env, M68K_FEATURE_CF_FPU)) {
         gdb_register_coprocessor(env, cf_fpu_gdb_get_reg, cf_fpu_gdb_set_reg,
