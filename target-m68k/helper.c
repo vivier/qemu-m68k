@@ -320,16 +320,15 @@ CPUM68KState *cpu_m68k_init(const char *cpu_model)
         return NULL;
     }
 
-    cpu_reset(env);
     if (!inited) {
-    if (m68k_feature (env, M68K_FEATURE_CF_FPU)) {
-        gdb_register_coprocessor(env, cf_fpu_gdb_get_reg, cf_fpu_gdb_set_reg,
-                                 11, "cf-fp.xml", 18);
-    }
-    if (m68k_feature (env, M68K_FEATURE_FPU)) {
-        gdb_register_coprocessor(env, m68k_fpu_gdb_get_reg,
-				 m68k_fpu_gdb_set_reg, 11, "m68k-fp.xml", 18);
-    }
+        if (m68k_feature (env, M68K_FEATURE_CF_FPU)) {
+            gdb_register_coprocessor(env, cf_fpu_gdb_get_reg, cf_fpu_gdb_set_reg,
+                                     11, "cf-fp.xml", 18);
+        }
+        if (m68k_feature (env, M68K_FEATURE_FPU)) {
+            gdb_register_coprocessor(env, m68k_fpu_gdb_get_reg,
+				     m68k_fpu_gdb_set_reg, 11, "m68k-fp.xml", 18);
+        }
     }
     qemu_init_vcpu(env);
     inited = 1;
