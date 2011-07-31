@@ -208,7 +208,6 @@ CPUM68KState *cpu_m68k_init(const char *cpu_model)
     register_m68k_insns(env);
     /* TODO: Add [E]MAC registers.  */
 
-    cpu_reset(ENV_GET_CPU(env));
     if (!inited) {
         if (m68k_feature (env, M68K_FEATURE_CF_FPU)) {
             gdb_register_coprocessor(env, cf_fpu_gdb_get_reg, cf_fpu_gdb_set_reg,
