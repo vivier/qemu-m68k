@@ -154,6 +154,10 @@ Coroutine *qemu_coroutine_new(void)
         VALGRIND_STACK_REGISTER(co->stack, co->stack + stack_size);
 #endif
 
+    /* needs this to avoid gcc "uninitialized" error */
+    arg.i[0] = 0;
+    arg.i[1] = 0;
+    /* real value is put here */
     arg.p = co;
 
     makecontext(&uc, (void (*)(void))coroutine_trampoline,
