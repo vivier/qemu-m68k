@@ -136,6 +136,7 @@ gprof="no"
 debug_tcg="no"
 debug_mon="no"
 emulop="no"
+macrom_patch="no"
 debug="no"
 strip_opt="yes"
 bigendian="no"
@@ -582,6 +583,10 @@ for opt do
   --enable-debug-tcg) debug_tcg="yes"
   ;;
   --disable-debug-tcg) debug_tcg="no"
+  ;;
+  --enable-macrom-patch) macrom_patch="yes"
+  ;;
+  --disable-macrom-patch) macrom_patch="no"
   ;;
   --enable-emulop) emulop="yes"
   ;;
@@ -1051,6 +1056,8 @@ echo "  --disable-usb-redir      disable usb network redirection support"
 echo "  --enable-usb-redir       enable usb network redirection support"
 echo "  --disable-guest-agent    disable building of the QEMU Guest Agent"
 echo "  --enable-guest-agent     enable building of the QEMU Guest Agent"
+echo "  --enable-macrom-patch    enable MacOS ROM patch"
+echo "  --disable-macrom-patch   disable MacOS ROM patch"
 echo "  --enable-emulop          enable emulation tester helper"
 echo "  --disable-emulop         disable emulation tester helper"
 echo ""
@@ -2691,6 +2698,7 @@ echo "host CPU          $cpu"
 echo "host big endian   $bigendian"
 echo "target list       $target_list"
 echo "tcg debug enabled $debug_tcg"
+echo "MacOS ROM enabled $macrom_patch"
 echo "emulop enabled    $emulop"
 echo "Mon debug enabled $debug_mon"
 echo "gprof enabled     $gprof"
@@ -3457,6 +3465,9 @@ if test ! -z "$gdb_xml_files" ; then
   echo "TARGET_XML_FILES=$list" >> $config_target_mak
 fi
 
+if test "$target_user_only" = "no" -a  "$target_arch2" = "m68k" -a "$macrom_patch" = "yes" ; then
+  echo "CONFIG_MACROM_PATCH=y" >> $config_target_mak
+fi
 if test "$target_user_only" = "yes" -a  "$target_arch2" = "m68k" -a "$emulop" = "yes" ; then
   echo "CONFIG_EMULOP=y" >> $config_target_mak
 fi
@@ -3645,6 +3656,7 @@ DIRS="$DIRS roms/seabios roms/vgabios"
 DIRS="$DIRS fsdev ui"
 DIRS="$DIRS qapi"
 DIRS="$DIRS qga"
+DIRS="$DIRS macrom_patch"
 FILES="Makefile tests/Makefile"
 FILES="$FILES tests/cris/Makefile tests/cris/.gdbinit"
 FILES="$FILES pc-bios/optionrom/Makefile pc-bios/keymaps"

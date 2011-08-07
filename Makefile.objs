@@ -393,6 +393,17 @@ qapi-nested-y = qapi-visit-core.o qmp-input-visitor.o qmp-output-visitor.o qapi-
 qapi-nested-y += qmp-registry.o qmp-dispatch.o
 qapi-obj-y = $(addprefix qapi/, $(qapi-nested-y))
 
+######################################################################
+# macrom_patch
+
+macrom_patch-nested-y = patch.o
+macrom_patch-nested-y += slot.o
+macrom_patch-nested-y += disk.o
+macrom_patch-nested-y += cdrom.o
+macrom_patch-nested-y += sony.o
+macrom_patch-nested-y += simcall.o
+macrom_patch-obj-y = $(addprefix macrom_patch/, $(macrom_patch-nested-y))
+
 vl.o: QEMU_CFLAGS+=$(GPROF_CFLAGS)
 
 vl.o: QEMU_CFLAGS+=$(SDL_CFLAGS)

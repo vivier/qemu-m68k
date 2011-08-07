@@ -19,10 +19,22 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
+
+#include "sysemu.h"
+#include "cpu.h"
 #include "hw.h"
 #include "boards.h"
 #include "elf.h"
 #include "loader.h"
+#include "macrom_patch/macrom.h"
+
+#define MACROM_FILENAME "MacROM.bin"
+
+static void main_cpu_reset(void *opaque)
+{
+    CPUState *env = opaque;
+    cpu_reset(env);
+}
 
 static void q800_init(ram_addr_t ram_size,
                        const char *boot_device,
@@ -36,16 +48,17 @@ static void q800_init(ram_addr_t ram_size,
     ram_addr_t ram_offset;
     int32_t kernel_size;
     uint64_t elf_entry;
-#if 0
+    ram_addr_t bios_offset;
     char *filename;
+    int bios_size;
+    uint8_t *rom;
+#if 0
     qemu_irq *pic, **heathrow_irqs;
     int i;
-    ram_addr_t bios_offset;
     uint32_t kernel_base, initrd_base;
     int32_t initrd_size;
     PCIBus *pci_bus;
     MacIONVRAMState *nvr;
-    int bios_size;
     int pic_mem_index, nvram_mem_index, dbdma_mem_index, cuda_mem_index;
     int escc_mem_index, ide_mem_index[2];
     uint16_t ppc_boot_device;
@@ -65,34 +78,10 @@ static void q800_init(ram_addr_t ram_size,
             hw_error("qemu: unable to find m68k CPU definition\n");
             exit(1);
     }
-    qemu_register_reset((QEMUResetHandler *)&cpu_reset, env);
+    qemu_register_reset((QEMUResetHandler *)&main_cpu_reset, env);
 
     ram_offset = qemu_ram_alloc(NULL, "m68k_mac.ram", ram_size);
     cpu_register_physical_memory(0, ram_size, ram_offset | IO_MEM_RAM);
-
-#if 0
-    /* allocate and load BIOS */
-    bios_offset = qemu_ram_alloc(NULL, "ppc_heathrow.bios", BIOS_SIZE);
-    if (bios_name == NULL) {
-        bios_name = PROM_FILENAME;
-    }
-    filename = qemu_find_file(QEMU_FILE_TYPE_BIOS, bios_name);
-    cpu_register_physical_memory(PROM_ADDR, BIOS_SIZE,
-                                 bios_offset | IO_MEM_ROM);
-
-    /* Load OpenBIOS (ELF) */
-    if (filename) {
-        bios_size = load_elf(filename, 0, NULL, NULL, NULL, NULL,
-                             1, ELF_MACHINE, 0);
-        qemu_free(filename);
-    } else {
-        bios_size = -1;
-    }
-    if (bios_size < 0 || bios_size > BIOS_SIZE) {
-        hw_error("qemu: could not load PowerPC bios '%s'\n", bios_name);
-        exit(1);
-    }
-#endif
 
     if (linux_boot) {
 
@@ -121,7 +110,35 @@ static void q800_init(ram_addr_t ram_size,
             initrd_size = 0;
         }
 #endif
+    } else {
+        /* allocate and load BIOS */
+        bios_offset = qemu_ram_alloc(NULL, "m68k_mac.rom", MACROM_SIZE);
+        if (bios_name == NULL) {
+            bios_name = MACROM_FILENAME;
+        }
+        filename = qemu_find_file(QEMU_FILE_TYPE_BIOS, bios_name);
+        cpu_register_physical_memory(MACROM_ADDR, MACROM_SIZE,
+                                     bios_offset | IO_MEM_ROM);
+
+        /* Load MacROM binary */
+        if (filename) {
+            bios_size = load_image_targphys(filename, MACROM_ADDR, MACROM_SIZE);
+            qemu_free(filename);
+        } else {
+            bios_size = -1;
+        }
+        if (bios_size < 0 || bios_size > MACROM_SIZE) {
+            hw_error("qemu: could not load MacROM '%s'\n", bios_name);
+            exit(1);
+        }
+        if (semihosting_enabled) {
+            rom = rom_ptr(MACROM_ADDR);
+            macrom_patch(rom, bios_size);
+            stl_phys(0, ldl_p(rom));	/* reset initial SP */
+            stl_phys(4, MACROM_ADDR + ldl_p(rom + 4)); /* reset initial PC */
+        }
     }
+
 
 #if 0
     /* XXX: we register only 1 output pin for heathrow PIC */

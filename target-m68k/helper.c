@@ -281,14 +281,17 @@ void cpu_reset(CPUM68KState *env)
         log_cpu_state(env, 0);
     }
 
-#if defined(CONFIG_USER_ONLY)
     memset(env, 0, offsetof(CPUM68KState, breakpoints));
-    /* TODO: We should set PC from the interrupt vector.  */
+#if defined(CONFIG_USER_ONLY)
     env->pc = 0;
+    m68k_switch_sp(env);
 #else
     env->sr = 0x2700;
+    env->vbr = 0;
+    env->current_sp = M68K_ISP;
+    env->aregs[7] = ldl_phys(0);
+    env->pc = ldl_phys(4);
 #endif
-    m68k_switch_sp(env);
 
     for (i = 0; i < 8; i++) {
         env->fregs[i].d = floatx80_default_nan;
@@ -607,8 +610,13 @@ void m68k_switch_sp(CPUM68KState *env)
     int new_sp;
 
     env->sp[env->current_sp] = env->aregs[7];
-    new_sp = (env->sr & SR_S && env->cacr & M68K_CACR_EUSP)
-             ? M68K_SSP : M68K_USP;
+    if (env->sr & SR_S && env->sr & SR_M) {
+        new_sp = M68K_SSP;
+    } else if (env->sr & SR_S && !(env->sr & SR_M)) {
+        new_sp = M68K_ISP;
+    } else {
+        new_sp = M68K_USP;
+    }
     env->aregs[7] = env->sp[new_sp];
     env->current_sp = new_sp;
 }

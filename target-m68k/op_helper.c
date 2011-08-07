@@ -33,6 +33,10 @@ void do_interrupt_m68k_hardirq(CPUState *env1)
 
 #else
 
+#if CONFIG_MACROM_PATCH
+#include "macrom_patch/macrom.h"
+#endif
+
 extern int semihosting_enabled;
 
 #include "softmmu_exec.h"
@@ -113,6 +117,17 @@ static void do_interrupt_all(int is_hw)
             /* Return from an exception.  */
             do_rte();
             return;
+        case EXCP_UNSUPPORTED:
+#ifdef CONFIG_MACROM_PATCH
+            if (semihosting_enabled &&
+                rom_version != 0x0000 &&
+                do_macrom_simcall(env) == 0) {
+                return;
+            }
+#endif
+            cpu_abort(env, "Illegal instruction: %04x @ %08x",
+                      lduw_code(env->pc), env->pc);
+            break;
         case EXCP_HALT_INSN:
             if (semihosting_enabled
                     && (env->sr & SR_S) != 0

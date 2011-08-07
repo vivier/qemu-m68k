@@ -1,0 +1,83 @@
+#include <inttypes.h>
+#include "cpu.h"
+
+#define MACROM_ADDR     0x800000
+#define MACROM_SIZE     0x100000
+
+/* ROM version number */
+
+enum {
+    MACOS_ROM_VERSION_64K = 0x0000,      /* Original Macintosh (64KB) */
+    MACOS_ROM_VERSION_PLUS = 0x0075,     /* Mac Plus ROMs (128KB) */
+    MACOS_ROM_VERSION_CLASSIC = 0x0276,  /* SE/Classic ROMs (256/512KB) */
+    MACOS_ROM_VERSION_II = 0x0178,       /* Not 32-bit clean Mac II ROMs (256KB) */
+    MACOS_ROM_VERSION_32 = 0x067c        /* 32-bit clean Mac II ROMs (512KB/1MB) */
+};
+
+extern uint16_t rom_version;
+
+/* Extended opcodes */
+
+enum {
+    M68K_EXEC_RETURN = 0x7100,              /* Extended opcodes (illegal moveq form) */
+    M68K_EMUL_BREAK,
+    M68K_EMUL_OP_SHUTDOWN,
+    M68K_EMUL_OP_RESET,
+    M68K_EMUL_OP_CLKNOMEM,
+    M68K_EMUL_OP_READ_XPRAM,
+    M68K_EMUL_OP_READ_XPRAM2,
+    M68K_EMUL_OP_PATCH_BOOT_GLOBS,
+    M68K_EMUL_OP_FIX_BOOTSTACK,             /* 0x7108 */
+    M68K_EMUL_OP_FIX_MEMSIZE,
+    M68K_EMUL_OP_INSTALL_DRIVERS,
+    M68K_EMUL_OP_SERD,
+    M68K_EMUL_OP_SONY_OPEN,
+    M68K_EMUL_OP_SONY_PRIME,
+    M68K_EMUL_OP_SONY_CONTROL,
+    M68K_EMUL_OP_SONY_STATUS,
+    M68K_EMUL_OP_DISK_OPEN,                 /* 0x7110 */
+    M68K_EMUL_OP_DISK_PRIME,
+    M68K_EMUL_OP_DISK_CONTROL,
+    M68K_EMUL_OP_DISK_STATUS,
+    M68K_EMUL_OP_CDROM_OPEN,
+    M68K_EMUL_OP_CDROM_PRIME,
+    M68K_EMUL_OP_CDROM_CONTROL,
+    M68K_EMUL_OP_CDROM_STATUS,
+    M68K_EMUL_OP_VIDEO_OPEN,                /* 0x7118 */
+    M68K_EMUL_OP_VIDEO_CONTROL,
+    M68K_EMUL_OP_VIDEO_STATUS,
+    M68K_EMUL_OP_SERIAL_OPEN,
+    M68K_EMUL_OP_SERIAL_PRIME,
+    M68K_EMUL_OP_SERIAL_CONTROL,
+    M68K_EMUL_OP_SERIAL_STATUS,
+    M68K_EMUL_OP_SERIAL_CLOSE,
+    M68K_EMUL_OP_ETHER_OPEN,                /* 0x7120 */
+    M68K_EMUL_OP_ETHER_CONTROL,
+    M68K_EMUL_OP_ETHER_READ_PACKET,
+    M68K_EMUL_OP_ADBOP,
+    M68K_EMUL_OP_INSTIME,
+    M68K_EMUL_OP_RMVTIME,
+    M68K_EMUL_OP_PRIMETIME,
+    M68K_EMUL_OP_MICROSECONDS,
+    M68K_EMUL_OP_SCSI_DISPATCH,             /* 0x7128 */
+    M68K_EMUL_OP_IRQ,
+    M68K_EMUL_OP_PUT_SCRAP,
+    M68K_EMUL_OP_GET_SCRAP,
+    M68K_EMUL_OP_CHECKLOAD,
+    M68K_EMUL_OP_AUDIO,
+    M68K_EMUL_OP_EXTFS_COMM,
+    M68K_EMUL_OP_EXTFS_HFS,
+    M68K_EMUL_OP_BLOCK_MOVE,                /* 0x7130 */
+    M68K_EMUL_OP_SOUNDIN_OPEN,
+    M68K_EMUL_OP_SOUNDIN_PRIME,
+    M68K_EMUL_OP_SOUNDIN_CONTROL,
+    M68K_EMUL_OP_SOUNDIN_STATUS,
+    M68K_EMUL_OP_SOUNDIN_CLOSE,
+    M68K_EMUL_OP_DEBUGUTIL,
+    M68K_EMUL_OP_MAX                        /* highest number */
+};
+
+extern uint32_t UniversalInfo;
+
+int macrom_patch(uint8_t *rom, int rom_size);
+int do_macrom_simcall(CPUState *env);

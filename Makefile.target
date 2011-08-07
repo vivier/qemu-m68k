@@ -388,6 +388,7 @@ monitor.o: hmp-commands.h qmp-commands.h
 $(obj-y) $(obj-$(TARGET_BASE_ARCH)-y): $(GENERATED_HEADERS)
 
 obj-y += $(addprefix ../, $(common-obj-y))
+obj-y += $(addprefix ../, $(macrom_patch-obj-$(CONFIG_MACROM_PATCH)))
 obj-y += $(addprefix ../libdis/, $(libdis-y))
 obj-y += $(libobj-y)
 obj-y += $(addprefix $(HWDIR)/, $(hw-obj-y))

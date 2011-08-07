@@ -1304,8 +1304,6 @@ DISAS_INSN(undef_fpu)
 DISAS_INSN(undef)
 {
     gen_exception(s, s->pc - 2, EXCP_UNSUPPORTED);
-    cpu_abort(cpu_single_env, "Illegal instruction: %04x @ %08x",
-              insn, s->pc - 2);
 }
 
 DISAS_INSN(mulw)
