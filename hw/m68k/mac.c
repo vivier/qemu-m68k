@@ -30,12 +30,24 @@
 #include "ui/console.h"
 #include "exec/address-spaces.h"
 #include "hw/char/escc.h"
+#include "bootinfo.h"
 
 #define MACROM_ADDR     0x800000
 #define MACROM_SIZE     0x100000
 #define MACROM_FILENAME "MacROM.bin"
 
+#define Q800_MACHINE_ID 35
+#define Q800_CPU_ID (1<<2)
+#define Q800_FPU_ID (1<<2)
+#define Q800_MMU_ID (1<<2)
+
+#define MACH_MAC        3
+#define Q800_MAC_CPU_ID 2
+
+#define VIA1_BASE 0x50f00000
+#define VIA2_BASE 0x50f02000
 #define SCC_BASE  0x50f0c020
+#define VIDEO_BASE 0xf9001000
 #define MAC_CLOCK  3686418 //783300
 
 static void main_cpu_reset(void *opaque)
@@ -61,7 +73,9 @@ static void q800_init(QEMUMachineInitArgs *args)
     ram_addr_t ram_size = args->ram_size;
     const char *kernel_filename = args->kernel_filename;
     const char *initrd_filename = args->initrd_filename;
+    const char *kernel_cmdline = args->kernel_cmdline;
     const char *cpu_model = args->cpu_model;
+    hwaddr parameters_base;
 
     linux_boot = (kernel_filename != NULL);
 
@@ -91,7 +105,27 @@ static void q800_init(QEMUMachineInitArgs *args)
             exit(1);
         }
         stl_phys(4, elf_entry); /* reset initial PC */
+        parameters_base = (high + 1) & ~1;
         
+        BOOTINFO1(parameters_base, BI_MACHTYPE, MACH_MAC);
+        BOOTINFO1(parameters_base, BI_FPUTYPE, Q800_FPU_ID);
+        BOOTINFO1(parameters_base, BI_MMUTYPE, Q800_MMU_ID);
+        BOOTINFO1(parameters_base, BI_CPUTYPE, Q800_CPU_ID);
+        BOOTINFO1(parameters_base, BI_MAC_CPUID, Q800_MAC_CPU_ID);
+        BOOTINFO1(parameters_base, BI_MAC_MODEL, Q800_MACHINE_ID);
+        BOOTINFO1(parameters_base, BI_MAC_MEMSIZE, ram_size >> 20); /* in MB */
+        BOOTINFO2(parameters_base, BI_MEMCHUNK, 0, ram_size);
+        BOOTINFO1(parameters_base, BI_MAC_VADDR, VIDEO_BASE);
+        BOOTINFO1(parameters_base, BI_MAC_VDEPTH, graphic_depth);
+        BOOTINFO1(parameters_base, BI_MAC_VDIM, (480 << 16) | 640);
+        BOOTINFO1(parameters_base, BI_MAC_VROW,
+                     640 * ((graphic_depth  + 7) / 8));
+        BOOTINFO1(parameters_base, BI_MAC_SCCBASE, SCC_BASE);
+
+        if (kernel_cmdline) {
+            BOOTINFOSTR(parameters_base, BI_COMMAND_LINE, kernel_cmdline);
+        }
+
         /* load initrd */
         if (initrd_filename) {
            initrd_size = get_image_size(initrd_filename);
@@ -104,10 +138,12 @@ static void q800_init(QEMUMachineInitArgs *args)
             initrd_base = (ram_size - initrd_size) & TARGET_PAGE_MASK;
             load_image_targphys(initrd_filename, initrd_base,
                                 ram_size - initrd_base);
+            BOOTINFO2(parameters_base, BI_RAMDISK, initrd_base, initrd_size);
         } else {
             initrd_base = 0;
             initrd_size = 0;
         }
+        BOOTINFO0(parameters_base, BI_LAST);
     } else {
         /* allocate and load BIOS */
         rom = g_malloc(sizeof(*rom));
