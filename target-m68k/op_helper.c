@@ -172,6 +172,10 @@ static void do_interrupt_all(int is_hw)
             /* Return from an exception.  */
             do_rte();
             return;
+        case EXCP_UNSUPPORTED:
+            cpu_abort(env, "Illegal instruction: %04x @ %08x",
+                      lduw_code(env->pc), env->pc);
+            break;
         case EXCP_HALT_INSN:
             if (semihosting_enabled
                     && (env->sr & SR_S) != 0
