@@ -77,6 +77,7 @@ enum {
     M68K_EMUL_OP_MAX                        /* highest number */
 };
 
+extern int fpu_type; /* FIXME */
 extern uint32_t UniversalInfo;
 
 int macrom_patch(uint8_t *rom, int rom_size);
