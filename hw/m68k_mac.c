@@ -27,6 +27,7 @@
 #include "elf.h"
 #include "loader.h"
 #include "macrom_patch/macrom.h"
+#include "macrom_patch/xpram.h"
 
 #define MACROM_FILENAME "MacROM.bin"
 
@@ -133,8 +134,9 @@ static void q800_init(ram_addr_t ram_size,
         }
         if (semihosting_enabled) {
             rom = rom_ptr(MACROM_ADDR);
+            xpram_init();
             macrom_patch(rom, bios_size);
-            stl_phys(0, ldl_p(rom));	/* reset initial SP */
+            stl_phys(0, ldl_p(rom));    /* reset initial SP */
             stl_phys(4, MACROM_ADDR + ldl_p(rom + 4)); /* reset initial PC */
         }
     }

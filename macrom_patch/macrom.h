@@ -77,6 +77,7 @@ enum {
     M68K_EMUL_OP_MAX                        /* highest number */
 };
 
+extern int TwentyFourBitAddressing;
 extern int fpu_type; /* FIXME */
 extern uint32_t UniversalInfo;
 

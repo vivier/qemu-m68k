@@ -4,6 +4,8 @@
 #include "dyngen-exec.h"
 #include "softmmu_exec.h"
 #include "macrom.h"
+#include "utils.h"
+#include "xpram.h"
 
 #define RAMBaseMac 0
 
@@ -50,6 +52,108 @@ static int do_simcall_reset(CPUState *env)
     return 0;
 }
 
+/*
+ * Clock/PRAM operations
+ */
+
+static int do_simcall_clknomem(CPUState *env)
+{
+    int localtalk, is_read;
+    uint8_t reg;
+    uint32_t t;
+    uint8_t b;
+
+    is_read = env->dregs[1] & 0x80;
+
+    if ((env->dregs[1] & 0x78) == 0x38) {
+
+        /* XPRAM */
+
+        reg = ((env->dregs[1] << 5) & 0xe0) |
+              ((env->dregs[1] >> 10) & 0x1f);
+
+        if (is_read) {
+
+            env->dregs[2] = XPRAM[reg];
+
+            /* LocalTalk enabled? */
+
+            localtalk = !(XPRAM[0xe0] || XPRAM[0xe1]);
+
+            switch (reg) {
+            case 0x08:
+                if (rom_version != MACOS_ROM_VERSION_32) {
+                    env->dregs[2] &= 0xf8;
+                }
+                break;
+            case 0x8a: /* 32bit mode is always enabled */
+                env->dregs[2] |= 0x05;
+                break;
+
+            /* Disable LocalTalk (use EtherTalk instead) */
+
+            case 0xe0:
+                if (localtalk) {
+                    env->dregs[2] = 0x00;
+                }
+                break;
+            case 0xe1:
+                if (localtalk) {
+                    env->dregs[2] = 0xf1;
+                }
+                break;
+            case 0xe2:
+                if (localtalk) {
+                    env->dregs[2] = 0x00;
+                }
+                break;
+            case 0xe3:
+                if (localtalk) {
+                    env->dregs[2] = 0x0a;
+                }
+                break;
+            }
+        } else { /* !is_read */
+            if (reg == 0x8a && !TwentyFourBitAddressing) {
+                /* 32bit mode is always enabled if possible */
+                env->dregs[2] |= 0x05;
+            }
+            XPRAM[reg] = env->dregs[2];
+        }
+    } else {
+        /* PRAM, RTC and other clock registers */
+
+        reg = (env->dregs[1] >> 2) & 0x1f;
+
+        if (reg >= 0x10 || (reg >= 0x08 && reg < 0x0c)) {
+            if (is_read) {
+                env->dregs[2] = XPRAM[reg];
+            } else {
+                XPRAM[reg] = env->dregs[2];
+            }
+        } else if (reg < 0x08 && is_read) {
+            t = convert_to_mac_time(time(NULL));
+            b = t;
+            switch (reg & 3) {
+            case 1:
+                b = t >> 8;
+                break;
+            case 2:
+                b = t >> 16;
+                break;
+            case 3:
+                b = t >> 24;
+                break;
+            }
+            env->dregs[2] = b;
+        }
+    }
+    env->dregs[0] = 0;
+    env->dregs[1] = env->dregs[2];
+
+    return 0;
+}
+
 int do_macrom_simcall(CPUState *env)
 {
     int ret = -1;
@@ -60,6 +164,9 @@ int do_macrom_simcall(CPUState *env)
     switch(simcall) {
     case M68K_EMUL_OP_RESET:
         ret = do_simcall_reset(env);
+        break;
+    case M68K_EMUL_OP_CLKNOMEM:
+        ret = do_simcall_clknomem(env);
         break;
     }
 
