@@ -154,6 +154,17 @@ static int do_simcall_clknomem(CPUState *env)
     return 0;
 }
 
+static int do_simcall_patch_boot_globs(CPUState *env)
+{
+    stl_phys(env->aregs[4] - 20, ram_size); /* MemTop */
+    stb_phys(env->aregs[4] - 26, 0); /* No MMU */
+    stb_phys(env->aregs[4] - 25,
+             ldub_phys(env->aregs[4] - 25) | 1); /* No MMU */
+    env->aregs[6] = ram_size; /* MemTop */
+
+    return 0;
+}
+
 int do_macrom_simcall(CPUState *env)
 {
     int ret = -1;
@@ -167,6 +178,9 @@ int do_macrom_simcall(CPUState *env)
         break;
     case M68K_EMUL_OP_CLKNOMEM:
         ret = do_simcall_clknomem(env);
+        break;
+    case M68K_EMUL_OP_PATCH_BOOT_GLOBS:
+        ret = do_simcall_patch_boot_globs(env);
         break;
     }
 
