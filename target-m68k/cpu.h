@@ -112,7 +112,6 @@ typedef struct CPUM68KState {
     /* SSP and USP.  The current_sp is stored in aregs[7], the other here.  */
     int current_sp;
     uint32_t sp[3];
-
     /* Condition flags.  */
     uint32_t cc_op;
     uint32_t cc_dest;
@@ -419,5 +418,6 @@ static inline void cpu_pc_from_tb(CPUState *env, TranslationBlock *tb)
 {
     env->pc = tb->pc;
 }
+
 
 #endif

@@ -29,6 +29,8 @@
 #include "tcg-op.h"
 #include "qemu-log.h"
 
+#include "sysemu.h"
+
 #include "helpers.h"
 #define GEN_HELPER 1
 #include "helpers.h"
@@ -178,7 +180,6 @@ static inline void gen_flush_cc_op(DisasContext *s)
     if (s->cc_op != CC_OP_DYNAMIC)
         tcg_gen_movi_i32(QREG_CC_OP, s->cc_op);
 }
-
 
 /* Generate a jump to an immediate address.  */
 static void gen_jmp_im(DisasContext *s, uint32_t dest)
@@ -1824,7 +1825,7 @@ DISAS_INSN(arith_im)
         tcg_gen_addi_i32(dest, dest, im);
         gen_update_cc_add(dest, tcg_const_i32(im));
         SET_X_FLAG(opsize, dest, tcg_const_i32(im));
-	SET_CC_OP(opsize, ADD);
+    SET_CC_OP(opsize, ADD);
         break;
     case 5: /* eori */
         tcg_gen_xori_i32(dest, src1, im);
@@ -3550,7 +3551,7 @@ DISAS_INSN(move_from_sr)
 {
     TCGv sr;
 
-    if (IS_USER(s)) {    /* FIXME: not privileged on 68000 */
+    if (IS_USER(s)) { /* FICME: not privledged on 68000 */
         gen_exception(s, s->pc - 2, EXCP_PRIVILEGE);
         return;
     }
@@ -4120,8 +4121,8 @@ DISAS_INSN(fpu)
     case 0x33: case 0x34: case 0x35:
     case 0x36: case 0x37:
         gen_helper_sincos_FP0_FP1(cpu_env);
-        gen_op_store_fpr_FP0(REG(ext, 7));	/* sin */
-        gen_op_store_fpr_FP1(REG(ext, 0));	/* cos */
+        gen_op_store_fpr_FP0(REG(ext, 7));  /* sin */
+        gen_op_store_fpr_FP1(REG(ext, 0));  /* cos */
         break;
     case 0x38: /* fcmp */
         gen_op_load_fpr_FP1(REG(ext, 7));
@@ -4287,7 +4288,9 @@ DISAS_INSN(fscc_reg)
     tcg_gen_andi_i32(reg, reg, 0xffffff00);
     gen_set_label(l1);
 }
-
+/* abort is disabled here, as pasing through these instructions merely breaks the fpu
+ *  preferable when we want to get the machine booting first
+ */
 DISAS_INSN(frestore)
 {
     TCGv addr;
@@ -4860,6 +4863,7 @@ void register_m68k_insns (CPUM68KState *env)
     INSN(addx_mem,  d108, f138, M68000);
     INSN(adda,      d1c0, f1c0, CF_ISA_A);
     INSN(adda,      d0c0, f0c0, M68000);
+    /* Bit ops */
     INSN(shift_im,  e080, f0f0, CF_ISA_A);
     INSN(shift_reg, e0a0, f0f0, CF_ISA_A);
     INSN(shift8_im, e000, f0f0, M68000);
@@ -4878,6 +4882,7 @@ void register_m68k_insns (CPUM68KState *env)
     INSN(rotate_mem, e4c0, fcc0, M68000);
     INSN(bitfield_mem,e8c0, f8c0, BITFIELD);
     INSN(bitfield_reg,e8c0, f8f8, BITFIELD);
+    /* FPU */
     INSN(undef_fpu, f000, f000, CF_ISA_A);
     INSN(undef_fpu, f000, f000, M68000);
     INSN(fpu,       f200, ffc0, CF_FPU);
@@ -4891,6 +4896,7 @@ void register_m68k_insns (CPUM68KState *env)
     INSN(frestore,  f140, f1c0, FPU);
     INSN(fsave,     f100, f1c0, FPU);
     INSN(intouch,   f340, ffc0, CF_ISA_A);
+    /* MMU */
     INSN(cpushl,    f428, ff38, CF_ISA_A);
     INSN(cpush,     f420, ff20, M68000);
     INSN(cinv,      f400, ff20, M68000);
@@ -4986,7 +4992,7 @@ gen_intermediate_code_internal(CPUState *env, TranslationBlock *tb,
         if (num_insns + 1 == max_insns && (tb->cflags & CF_LAST_IO))
             gen_io_start();
         dc->insn_pc = dc->pc;
-	disas_m68k_insn(env, dc);
+    disas_m68k_insn(env, dc);
         num_insns++;
     } while (!dc->is_jmp && gen_opc_ptr < gen_opc_end &&
              !env->singlestep_enabled &&
