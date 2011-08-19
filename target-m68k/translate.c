@@ -626,7 +626,10 @@ static TCGv gen_lea(DisasContext *s, uint16_t insn, int opsize)
     case 4: /* Indirect predecrememnt.  */
         reg = AREG(insn, 0);
         tmp = tcg_temp_new();
-        tcg_gen_subi_i32(tmp, reg, opsize_bytes(opsize));
+        tcg_gen_subi_i32(tmp, reg,
+                         REG(insn, 0) == 7 && opsize == OS_BYTE
+                         ? 2
+                         : opsize_bytes(opsize));
         return tmp;
     case 5: /* Indirect displacement.  */
         reg = AREG(insn, 0);
@@ -717,7 +720,10 @@ static TCGv gen_ea(DisasContext *s, uint16_t insn, int opsize, TCGv val,
         /* ??? This is not exception safe.  The instruction may still
            fault after this point.  */
         if (what == EA_STORE || !addrp)
-            tcg_gen_addi_i32(reg, reg, opsize_bytes(opsize));
+            tcg_gen_addi_i32(reg, reg,
+                             REG(insn, 0) == 7 && opsize == OS_BYTE
+                             ? 2
+                             : opsize_bytes(opsize));
         return result;
     case 4: /* Indirect predecrememnt.  */
         {
