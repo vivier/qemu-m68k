@@ -1760,6 +1760,41 @@ DISAS_INSN(bitop_im)
     }
 }
 
+static TCGv gen_get_ccr(DisasContext *s)
+{
+    TCGv dest;
+
+    gen_flush_flags(s);
+    dest = tcg_temp_new();
+    tcg_gen_shli_i32(dest, QREG_CC_X, 4);
+    tcg_gen_or_i32(dest, dest, QREG_CC_DEST);
+    return dest;
+}
+
+static TCGv gen_get_sr(DisasContext *s)
+{
+    TCGv ccr;
+    TCGv sr;
+
+    ccr = gen_get_ccr(s);
+    sr = tcg_temp_new();
+    tcg_gen_andi_i32(sr, QREG_SR, 0xffe0);
+    tcg_gen_or_i32(sr, sr, ccr);
+    return sr;
+}
+
+static void gen_set_sr(DisasContext *s, TCGv val, int ccr_only)
+{
+    TCGv tmp;
+    tmp = tcg_temp_new();
+    tcg_gen_andi_i32(QREG_CC_DEST, val, 0xf);
+    tcg_gen_shri_i32(tmp, val, 4);
+    tcg_gen_andi_i32(QREG_CC_X, tmp, 1);
+    if (!ccr_only) {
+        gen_helper_set_sr(cpu_env, val);
+    }
+}
+
 DISAS_INSN(arith_im)
 {
     int op;
@@ -1784,7 +1819,20 @@ DISAS_INSN(arith_im)
     default:
        abort();
     }
-    SRC_EA(env, src1, opsize, -1, (op == 6) ? NULL : &addr);
+    if ((op == 0 || op == 1) &&
+        (insn & 0x3f) == 0x3c) {
+        if (opsize == OS_BYTE) {
+            src1 = gen_get_ccr(s);
+        } else {
+            if (IS_USER(s)) {
+                gen_exception(s, s->pc - 2, EXCP_PRIVILEGE);
+                return;
+            }
+            src1 = gen_get_sr(s);
+        }
+    } else {
+        SRC_EA(env, src1, opsize, -1, (op == 6) ? NULL : &addr);
+    }
     dest = tcg_temp_new();
     switch (op) {
     case 0: /* ori */
@@ -1823,7 +1871,12 @@ DISAS_INSN(arith_im)
         abort();
     }
     if (op != 6) {
-        DEST_EA(env, insn, opsize, dest, &addr);
+        if ((op == 0 || op == 1) &&
+            (insn & 0x3f) == 0x3c) {
+            gen_set_sr(s, dest, opsize == OS_BYTE);
+        } else {
+            DEST_EA(env, insn, opsize, dest, &addr);
+        }
     }
 }
 
@@ -1985,17 +2038,6 @@ DISAS_INSN(clr)
     gen_logic_cc(s, tcg_const_i32(0), opsize);
 }
 
-static TCGv gen_get_ccr(DisasContext *s)
-{
-    TCGv dest;
-
-    gen_flush_flags(s);
-    dest = tcg_temp_new();
-    tcg_gen_shli_i32(dest, QREG_CC_X, 4);
-    tcg_gen_or_i32(dest, dest, QREG_CC_DEST);
-    return dest;
-}
-
 DISAS_INSN(move_from_ccr)
 {
     TCGv reg;
@@ -2032,27 +2074,19 @@ static void gen_set_sr_im(DisasContext *s, uint16_t val, int ccr_only)
     }
 }
 
-static void gen_set_sr(CPUM68KState *env, DisasContext *s, uint16_t insn,
-                       int ccr_only)
+static void gen_move_to_sr(CPUM68KState *env, DisasContext *s, uint16_t insn,
+                           int ccr_only)
 {
-    TCGv tmp;
     TCGv src;
 
     s->cc_op = CC_OP_FLAGS;
     SRC_EA(env, src, OS_WORD, 0, NULL);
-
-    tmp = tcg_temp_new();
-    tcg_gen_andi_i32(QREG_CC_DEST, src, 0xf);
-    tcg_gen_shri_i32(tmp, src, 4);
-    tcg_gen_andi_i32(QREG_CC_X, tmp, 1);
-    if (!ccr_only) {
-        gen_helper_set_sr(cpu_env, src);
-    }
+    gen_set_sr(s, src, ccr_only);
 }
 
 DISAS_INSN(move_to_ccr)
 {
-    gen_set_sr(env, s, insn, 1);
+    gen_move_to_sr(env, s, insn, 1);
 }
 
 DISAS_INSN(not)
@@ -3439,18 +3473,6 @@ DISAS_INSN(ff1)
     gen_helper_ff1(reg, reg);
 }
 
-static TCGv gen_get_sr(DisasContext *s)
-{
-    TCGv ccr;
-    TCGv sr;
-
-    ccr = gen_get_ccr(s);
-    sr = tcg_temp_new();
-    tcg_gen_andi_i32(sr, QREG_SR, 0xffe0);
-    tcg_gen_or_i32(sr, sr, ccr);
-    return sr;
-}
-
 DISAS_INSN(strldsr)
 {
     uint16_t ext;
@@ -3489,7 +3511,7 @@ DISAS_INSN(move_to_sr)
         gen_exception(s, s->pc - 2, EXCP_PRIVILEGE);
         return;
     }
-    gen_set_sr(env, s, insn, 0);
+    gen_move_to_sr(env, s, insn, 0);
     gen_lookup_tb(s);
 }
 
