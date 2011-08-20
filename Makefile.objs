@@ -404,6 +404,7 @@ macrom_patch-nested-y += sony.o
 macrom_patch-nested-y += simcall.o
 macrom_patch-nested-y += utils.o
 macrom_patch-nested-y += xpram.o
+macrom_patch-nested-y += timer.o
 macrom_patch-obj-y = $(addprefix macrom_patch/, $(macrom_patch-nested-y))
 
 vl.o: QEMU_CFLAGS+=$(GPROF_CFLAGS)

@@ -6,6 +6,7 @@
 #include "macrom.h"
 #include "utils.h"
 #include "xpram.h"
+#include "timer.h"
 
 #define RAMBaseMac 0
 
@@ -17,8 +18,9 @@ static int do_simcall_reset(CPUState *env)
 {
     int i;
     uint32 boot_globs = RAMBaseMac + ram_size - 0x1c;
-#if 0
+
     TimerReset();
+#if 0
     EtherReset();
     AudioReset();
 #endif
@@ -179,6 +181,27 @@ static int do_simcall_fix_memsize(CPUState *env)
     return 0;
 }
 
+static int do_simcall_instime(CPUState *env)
+{
+    env->dregs[0] = InsTime(env->aregs[0], env->dregs[1]);
+
+    return 0;
+}
+
+static int do_simcall_rmvtime(CPUState *env)
+{
+    env->dregs[0] = RmvTime(env->aregs[0]);
+
+    return 0;
+}
+
+static int do_simcall_primetime(CPUState *env)
+{
+    env->dregs[0] = PrimeTime(env->aregs[0], env->dregs[0]);
+
+    return 0;
+}
+
 int do_macrom_simcall(CPUState *env)
 {
     int ret = -1;
@@ -198,6 +221,15 @@ int do_macrom_simcall(CPUState *env)
         break;
     case M68K_EMUL_OP_FIX_MEMSIZE:
         ret = do_simcall_fix_memsize(env);
+        break;
+    case M68K_EMUL_OP_INSTIME:
+        ret = do_simcall_instime(env);
+        break;
+    case M68K_EMUL_OP_RMVTIME:
+        ret = do_simcall_rmvtime(env);
+        break;
+    case M68K_EMUL_OP_PRIMETIME:
+        ret = do_simcall_primetime(env);
         break;
     }
 
