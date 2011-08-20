@@ -165,6 +165,20 @@ static int do_simcall_patch_boot_globs(CPUState *env)
     return 0;
 }
 
+static int do_simcall_fix_memsize(CPUState *env)
+{
+    uint32_t diff;
+
+    /* Difference between logical and physical size */
+
+    diff = ldl_phys(0x1ef8) - ldl_phys(0x1ef4);
+
+    stl_phys(0x1ef8, ram_size);
+    stl_phys(0x1ef4, ram_size - diff);
+
+    return 0;
+}
+
 int do_macrom_simcall(CPUState *env)
 {
     int ret = -1;
@@ -181,6 +195,9 @@ int do_macrom_simcall(CPUState *env)
         break;
     case M68K_EMUL_OP_PATCH_BOOT_GLOBS:
         ret = do_simcall_patch_boot_globs(env);
+        break;
+    case M68K_EMUL_OP_FIX_MEMSIZE:
+        ret = do_simcall_fix_memsize(env);
         break;
     }
 
