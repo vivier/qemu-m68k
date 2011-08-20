@@ -86,15 +86,65 @@ void tlb_fill (target_ulong addr, int is_write, int mmu_idx, void *retaddr)
 static void do_rte(void)
 {
     uint32_t sp;
-    uint32_t fmt;
+    uint16_t fmt;
 
     sp = env->aregs[7];
-    fmt = ldl_kernel(sp);
-    env->pc = ldl_kernel(sp + 4);
-    sp |= (fmt >> 28) & 3;
-    env->sr = fmt & 0xffff;
-    m68k_switch_sp(env);
-    env->aregs[7] = sp + 8;
+    if (m68k_feature(env, M68K_FEATURE_M68000)) {
+        env->sr = lduw_kernel(sp);
+        sp += 2;
+        env->sr = ldl_kernel(sp);
+        sp += 4;
+        fmt = lduw_kernel(sp);
+        sp += 2;
+        switch (fmt >> 12) {
+        case 0:
+        case 1:
+            sp += 2;
+            break;
+        case 2:
+        case 3:
+            sp += 6;
+            break;
+        case 4:
+            sp += 10;
+            break;
+        case 7:
+            sp += 52;
+            break;
+        }
+    } else {
+        fmt = ldl_kernel(sp);
+        env->pc = ldl_kernel(sp + 4);
+        sp |= (fmt >> 28) & 3;
+        env->sr = fmt & 0xffff;
+        m68k_switch_sp(env);
+        sp += 8;
+    }
+    env->aregs[7] = sp;
+}
+
+static inline void do_stack_frame(uint32_t *sp, uint16_t format,
+                                  uint32_t addr, uint32_t retaddr)
+{
+    switch (format) {
+    case 4:
+        *sp -= 4;
+        stl_kernel(*sp, env->pc);
+        *sp -= 4;
+        stl_kernel(*sp, addr);
+        break;
+    case 3:
+    case 2:
+        *sp -= 4;
+        stl_kernel(*sp, addr);
+        break;
+    }
+    *sp -= 2;
+    stw_kernel(*sp, (format << 12) + (env->exception_index << 2));
+    *sp -= 4;
+    stl_kernel(*sp, retaddr);
+    *sp -= 2;
+    stw_kernel(*sp, env->sr);
 }
 
 static void do_interrupt_all(int is_hw)
@@ -139,11 +189,6 @@ static void do_interrupt_all(int is_hw)
 
     sp = env->aregs[7];
 
-    fmt |= 0x40000000;
-    fmt |= (sp & 3) << 28;
-    fmt |= vector << 16;
-    fmt |= env->sr;
-
     env->sr |= SR_S;
     if (is_hw) {
         env->sr = (env->sr & ~SR_I) | (env->pending_level << SR_I_SHIFT);
@@ -152,11 +197,70 @@ static void do_interrupt_all(int is_hw)
     m68k_switch_sp(env);
 
     /* ??? This could cause MMU faults.  */
-    sp &= ~3;
-    sp -= 4;
-    stl_kernel(sp, retaddr);
-    sp -= 4;
-    stl_kernel(sp, fmt);
+
+    if (m68k_feature(env, M68K_FEATURE_M68000)) {
+        sp &= ~1;
+        if (env->exception_index == 2) {
+            /* FIXME */
+            sp -= 4;
+            stl_kernel(sp, 0); /* PD3 */
+            sp -= 4;
+            stl_kernel(sp, 0); /* PD2 */
+            sp -= 4;
+            stl_kernel(sp, 0); /* PD1 */
+            sp -= 4;
+            stl_kernel(sp, 0); /* WB1D/PD0 */
+            sp -= 4;
+            stl_kernel(sp, 0); /* WB1A */
+            sp -= 4;
+            stl_kernel(sp, 0); /* WB2D */
+            sp -= 4;
+            stl_kernel(sp, 0); /* WB2A */
+            sp -= 4;
+            stl_kernel(sp, 0); /* WB3D */
+            sp -= 4;
+            stl_kernel(sp, env->mmu.ar); /* WB3A */
+            sp -= 4;
+            stl_kernel(sp, env->mmu.ar); /* FA */
+            sp -= 2;
+            stw_kernel(sp, 0); /* WB1S */
+            sp -= 2;
+            stw_kernel(sp, 0); /* WB2S */
+            sp -= 2;
+            stw_kernel(sp, 0); /* WB3S */
+            sp -= 2;
+            stw_kernel(sp, 0); /* SPECIAL STATUS WORD */
+            sp -= 4;
+            stl_kernel(sp, env->mmu.ar); /* EA */
+            do_stack_frame(&sp, 7, 0, retaddr);
+        } else if (env->exception_index == 3) {
+            do_stack_frame(&sp, 2, 0, retaddr);
+        } else if (env->exception_index == 5 ||
+                   env->exception_index == 6 ||
+                   env->exception_index == 7 ||
+                   env->exception_index == 9) {
+            /* FIXME: addr is not only env->pc */
+            do_stack_frame(&sp, 2, env->pc, retaddr);
+        } else if (is_hw && env->exception_index >= 24 &&
+                   env->exception_index < 32) {
+            do_stack_frame(&sp, 0, 0, retaddr);
+            do_stack_frame(&sp, 1, 0, retaddr);
+        } else {
+            do_stack_frame(&sp, 0, 0, retaddr);
+        }
+    } else {
+        fmt |= 0x40000000;
+        fmt |= (sp & 3) << 28;
+        fmt |= vector << 16;
+        fmt |= env->sr;
+
+        sp &= ~3;
+        sp -= 4;
+        stl_kernel(sp, retaddr);
+        sp -= 4;
+        stl_kernel(sp, fmt);
+    }
+
     env->aregs[7] = sp;
     /* Jump to vector.  */
     env->pc = ldl_kernel(env->vbr + vector);
