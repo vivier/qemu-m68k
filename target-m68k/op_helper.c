@@ -139,11 +139,6 @@ static void do_interrupt_all(int is_hw)
 
     sp = env->aregs[7];
 
-    fmt |= 0x40000000;
-    fmt |= (sp & 3) << 28;
-    fmt |= vector << 16;
-    fmt |= env->sr;
-
     env->sr |= SR_S;
     if (is_hw) {
         env->sr = (env->sr & ~SR_I) | (env->pending_level << SR_I_SHIFT);
@@ -152,11 +147,33 @@ static void do_interrupt_all(int is_hw)
     m68k_switch_sp(env);
 
     /* ??? This could cause MMU faults.  */
-    sp &= ~3;
-    sp -= 4;
-    stl_kernel(sp, retaddr);
-    sp -= 4;
-    stl_kernel(sp, fmt);
+
+    if (m68k_feature(env, M68K_FEATURE_M68000)) {
+        sp &= ~1;
+        sp -= 2;
+        stw_kernel(sp, env->sr);
+        sp -= 4;
+        stl_kernel(sp, retaddr);
+        if (m68k_feature(env, M68K_FEATURE_QUAD_MULDIV)) {
+            /* 680x0, except 68000
+             * FIXME: 68060 ?
+             */
+            sp -= 2;
+            stw_kernel(sp, vector & 0x0fff);
+        }
+    } else {
+        fmt |= 0x40000000;
+        fmt |= (sp & 3) << 28;
+        fmt |= vector << 16;
+        fmt |= env->sr;
+
+        sp &= ~3;
+        sp -= 4;
+        stl_kernel(sp, retaddr);
+        sp -= 4;
+        stl_kernel(sp, fmt);
+    }
+
     env->aregs[7] = sp;
     /* Jump to vector.  */
     env->pc = ldl_kernel(env->vbr + vector);
