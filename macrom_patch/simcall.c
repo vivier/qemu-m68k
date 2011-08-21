@@ -7,6 +7,7 @@
 #include "utils.h"
 #include "xpram.h"
 #include "timer.h"
+#include "scsi.h"
 
 #define RAMBaseMac 0
 
@@ -202,6 +203,83 @@ static int do_simcall_primetime(CPUState *env)
     return 0;
 }
 
+static int do_simcall_scsi_dispatch(CPUState *env)
+{
+    uint32_t ret;
+    uint16_t sel;
+    int stack = 0;
+
+    ret = ldl_phys(env->aregs[7]);      /* get return address */
+    sel = lduw_phys(env->aregs[7] + 4); /* get selector */
+
+    env->aregs[7] += 6;
+
+    switch (sel) {
+    case 0:         /* SCSIReset */
+        stw_phys(env->aregs[7], SCSIReset());
+        stack = 0;
+        break;
+    case 1:         /* SCSIGet */
+        stw_phys(env->aregs[7], SCSIGet());
+        stack = 0;
+        break;
+    case 2:         /* SCSISelect */
+    case 11:        /* SCSISelAtn */
+        stw_phys(env->aregs[7] + 2,
+                 SCSISelect(lduw_phys(env->aregs[7]) & 0xff));
+        stack = 2;
+        break;
+    case 3:         /* SCSICmd */
+        stw_phys(env->aregs[7] + 6,
+            SCSICmd(lduw_phys(env->aregs[7]),
+                    (target_phys_addr_t)ldl_phys(env->aregs[7] + 2)));
+        stack = 6;
+        break;
+    case 4:         /* SCSIComplete */
+        stw_phys(env->aregs[7] + 12,
+                 SCSIComplete(ldl_phys(env->aregs[7]),
+                              ldl_phys(env->aregs[7] + 4),
+                              ldl_phys(env->aregs[7] + 8)));
+        stack = 12;
+        break;
+    case 5:         /* SCSIRead */
+    case 8:         /* SCSIRBlind */
+        stw_phys(env->aregs[7] + 4, SCSIRead(ldl_phys(env->aregs[7])));
+        stack = 4;
+        break;
+    case 6:         /* SCSIWrite */
+    case 9:         /* SCSIWBlind */
+        stw_phys(env->aregs[7] + 4, SCSIWrite(ldl_phys(env->aregs[7])));
+        stack = 4;
+        break;
+    case 10:        /* SCSIStat */
+        stw_phys(env->aregs[7], SCSIStat());
+        stack = 0;
+        break;
+    case 12:        /* SCSIMsgIn */
+        stw_phys(env->aregs[7] + 4, 0);
+        stack = 4;
+        break;
+    case 13:        /* SCSIMsgOut */
+        stw_phys(env->aregs[7] + 2, 0);
+        stack = 2;
+        break;
+    case 14:        /* SCSIMgrBusy */
+        stw_phys(env->aregs[7], SCSIMgrBusy());
+        stack = 0;
+        break;
+    default:
+        return -1;
+    }
+
+    /* "rtd" emulation, a0 = return address, a1 = new stack pointer */
+
+    env->aregs[0] = ret;
+    env->aregs[1] = env->aregs[7] + stack;
+
+    return 0;
+}
+
 int do_macrom_simcall(CPUState *env)
 {
     int ret = -1;
@@ -230,6 +308,9 @@ int do_macrom_simcall(CPUState *env)
         break;
     case M68K_EMUL_OP_PRIMETIME:
         ret = do_simcall_primetime(env);
+        break;
+    case M68K_EMUL_OP_SCSI_DISPATCH:
+        ret = do_simcall_scsi_dispatch(env);
         break;
     }
 
