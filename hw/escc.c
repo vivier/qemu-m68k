@@ -472,8 +472,13 @@ static void escc_mem_write(void *opaque, target_phys_addr_t addr,
     int newreg, channel;
 
     val &= 0xff;
+#if 0
     saddr = (addr >> serial->it_shift) & 1;
     channel = (addr >> (serial->it_shift + 1)) & 1;
+#else
+    saddr = (addr >> 2) & 1;
+    channel = (addr >> 1) & 1;
+#endif
     s = &serial->chn[channel];
     switch (saddr) {
     case SERIAL_CTRL:
@@ -574,8 +579,13 @@ static uint64_t escc_mem_read(void *opaque, target_phys_addr_t addr,
     uint32_t ret;
     int channel;
 
+#if 0
     saddr = (addr >> serial->it_shift) & 1;
     channel = (addr >> (serial->it_shift + 1)) & 1;
+#else
+    saddr = (addr >> 2) & 1;
+    channel = (addr >> 1) & 1;
+#endif
     s = &serial->chn[channel];
     switch (saddr) {
     case SERIAL_CTRL:
@@ -886,8 +896,13 @@ static int escc_init1(SysBusDevice *dev)
     s->chn[0].otherchn = &s->chn[1];
     s->chn[1].otherchn = &s->chn[0];
 
+#if 0
     memory_region_init_io(&s->mmio, &escc_mem_ops, s, "escc",
                           ESCC_SIZE << s->it_shift);
+#else
+    memory_region_init_io(&s->mmio, &escc_mem_ops, s, "escc",
+                          6);
+#endif
     sysbus_init_mmio_region(dev, &s->mmio);
 
     if (s->chn[0].type == mouse) {
