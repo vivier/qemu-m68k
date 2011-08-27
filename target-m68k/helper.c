@@ -600,6 +600,11 @@ hwaddr m68k_cpu_get_phys_page_debug(CPUState *cs, vaddr addr)
     hwaddr phys_addr;
     int prot;
 
+    if ((env->mmu.tcr & (1 << 15)) == 0) {
+        /* MMU disabled */
+        return addr;
+    }
+
     if (get_physical_address(env, &phys_addr, &prot,
                              addr, ACCESS_INT) != 0) {
         return -1;
@@ -614,6 +619,15 @@ int cpu_m68k_handle_mmu_fault (CPUM68KState *env, target_ulong address, int rw,
     int prot;
     int access_type;
     int ret;
+
+    if ((env->mmu.tcr & (1 << 15)) == 0) {
+        /* MMU disabled */
+        tlb_set_page(env, address & TARGET_PAGE_MASK,
+                     address & TARGET_PAGE_MASK,
+                     PAGE_READ | PAGE_WRITE | PAGE_EXEC,
+                     mmu_idx, TARGET_PAGE_SIZE);
+        return 0;
+    }
 
     if (rw == 2) {
         access_type = ACCESS_CODE;
