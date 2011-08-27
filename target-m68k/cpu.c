@@ -55,6 +55,7 @@ static void m68k_cpu_reset(CPUState *s)
     env->pc = 0;
     m68k_switch_sp(env);
 #else
+    env->mmu.tcr = 0x4000; /* disabled / 8 kB page size */
     env->sr = 0x2700;
     env->vbr = 0;
     env->current_sp = M68K_ISP;
