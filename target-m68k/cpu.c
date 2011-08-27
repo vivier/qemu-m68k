@@ -47,6 +47,7 @@ static void m68k_cpu_reset(CPUState *s)
     /* TODO: We should set PC from the interrupt vector.  */
     env->pc = 0;
 #else
+    env->mmu.tcr = 0x4000;
     env->sr = 0x2700;
 #endif
     m68k_switch_sp(env);
