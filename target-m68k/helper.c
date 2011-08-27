@@ -476,39 +476,97 @@ set_x:
 void HELPER(movec_to)(CPUM68KState * env, uint32_t reg, uint32_t val)
 {
     switch (reg) {
-    case 0x02: /* CACR */
+    /* MC680[234]0 */
+    case M68K_CR_SFC:
+        env->sfc = val;
+        break;
+    case M68K_CR_DFC:
+        env->dfc = val;
+        break;
+    case M68K_CR_USP:
+        env->sp[M68K_USP] = val;
+        break;
+    case M68K_CR_VBR:
+        env->vbr = val;
+        return;
+    /* MC680[234]0 */
+    case M68K_CR_CACR:
         env->cacr = val;
         m68k_switch_sp(env);
+        return;
+    case M68K_CR_CAAR:
+    case M68K_CR_MSP:
+    case M68K_CR_ISP:
         break;
-    case 0x04: case 0x05: case 0x06: case 0x07: /* ACR[0-3] */
-        /* TODO: Implement Access Control Registers.  */
-        break;
-    case 0x801: /* VBR */
-        env->vbr = val;
-        break;
-    /* TODO: Implement control registers.  */
-    default:
-        cpu_abort(env, "Unimplemented control register write 0x%x = 0x%x\n",
-                  reg, val);
+    /* MC68040/MC68LC040 */
+    case M68K_CR_TC:
+        env->mmu.tcr = val;
+        return;
+    case M68K_CR_ITT0:
+        env->mmu.ittr0 = val;
+        return;
+    case M68K_CR_ITT1:
+        env->mmu.ittr1 = val;
+        return;
+    case M68K_CR_DTT0:
+        env->mmu.dttr0 = val;
+        return;
+    case M68K_CR_DTT1:
+        env->mmu.dttr1 = val;
+        return;
+    case M68K_CR_MMUSR:
+        env->mmu.mmusr = val;
+        return;
+    case M68K_CR_URP:
+        env->mmu.urp = val;
+        return;
+    case M68K_CR_SRP:
+        env->mmu.srp = val;
+        return;
     }
+    cpu_abort(env, "Unimplemented control register write 0x%x = 0x%x\n",
+              reg, val);
 }
 
 uint32_t HELPER(movec_from)(CPUM68KState * env, uint32_t reg)
 {
     switch (reg) {
-    case 0x02: /* CACR */
-        return env->cacr;
-    case 0x04: case 0x05: case 0x06: case 0x07: /* ACR[0-3] */
-        /* TODO: Implement Access Control Registers.  */
-        return 0;
-    case 0x801: /* VBR */
+    /* MC680[234]0 */
+    case M68K_CR_SFC:
+        return env->dfc;
+    case M68K_CR_DFC:
+        return env->dfc;
+    case M68K_CR_USP:
+        return env->sp[M68K_USP];
+    case M68K_CR_VBR:
         return env->vbr;
+    /* MC680[234]0 */
+    case M68K_CR_CACR:
+        return env->cacr;
+    case M68K_CR_CAAR:
+    case M68K_CR_MSP:
+    case M68K_CR_ISP:
         break;
-    /* TODO: Implement control registers.  */
-    default:
-        cpu_abort(env, "Unimplemented control register read 0x%x\n",
-                  reg);
+    /* MC68040/MC68LC040 */
+    case M68K_CR_TC:
+        return env->mmu.tcr;
+    case M68K_CR_ITT0:
+        return env->mmu.ittr0;
+    case M68K_CR_ITT1:
+        return env->mmu.ittr1;
+    case M68K_CR_DTT0:
+        return env->mmu.dttr0;
+    case M68K_CR_DTT1:
+        return env->mmu.dttr1;
+    case M68K_CR_MMUSR:
+        return env->mmu.mmusr;
+    case M68K_CR_URP:
+        return env->mmu.urp;
+    case M68K_CR_SRP:
+        return env->mmu.srp;
     }
+    cpu_abort(env, "Unimplemented control register read 0x%x\n",
+              reg);
 }
 
 void HELPER(set_macsr)(CPUM68KState *env, uint32_t val)
@@ -570,21 +628,53 @@ int cpu_m68k_handle_mmu_fault (CPUState *env, target_ulong address, int rw,
 
 /* MMU */
 
-/* TODO: This will need fixing once the MMU is implemented.  */
+static int get_physical_address(CPUState *env, target_phys_addr_t *physical,
+                                int *prot, target_ulong address,
+                                int rw, int access_type)
+{
+    int ret = 0;
+    *physical = address;
+    *prot = PAGE_READ | PAGE_WRITE | PAGE_EXEC;
+    return ret;
+}
+
 target_phys_addr_t cpu_get_phys_page_debug(CPUState *env, target_ulong addr)
 {
-    return addr;
+    target_phys_addr_t phys_addr;
+    int prot;
+
+    if (get_physical_address(env, &phys_addr, &prot,
+                             addr, 0, ACCESS_INT) != 0) {
+        return -1;
+    }
+    return phys_addr;
 }
 
 int cpu_m68k_handle_mmu_fault (CPUState *env, target_ulong address, int rw,
                                int mmu_idx)
 {
+    target_phys_addr_t physical;
     int prot;
+    int access_type;
+    int ret;
 
-    address &= TARGET_PAGE_MASK;
-    prot = PAGE_READ | PAGE_WRITE | PAGE_EXEC;
-    tlb_set_page(env, address, address, prot, mmu_idx, TARGET_PAGE_SIZE);
-    return 0;
+    if (rw == 2) {
+        access_type = ACCESS_CODE;
+        rw = 0;
+    } else {
+        access_type = ACCESS_INT;
+    }
+
+    ret = get_physical_address(env, &physical, &prot,
+                               address, rw, access_type);
+    if (ret == 0) {
+        tlb_set_page(env, address & TARGET_PAGE_MASK,
+                     physical & TARGET_PAGE_MASK,
+                     prot, mmu_idx, TARGET_PAGE_SIZE);
+        return 0;
+    }
+    /* FIXME: manage MMU fault */
+    return 1;
 }
 
 /* Notify CPU of a pending interrupt.  Prioritization and vectoring should

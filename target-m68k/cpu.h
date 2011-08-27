@@ -24,7 +24,6 @@
 
 #define CPUState struct CPUM68KState
 
-#include "qemu-common.h"
 #include "cpu-defs.h"
 
 #include "softfloat.h"
@@ -73,6 +72,18 @@
 
 #include "cpu-all.h"
 
+enum {
+    /* 1 bit to define user level / supervisor access */
+    ACCESS_USER  = 0x00,
+    ACCESS_SUPER = 0x01,
+    /* 1 bit to indicate direction */
+    ACCESS_STORE = 0x02,
+    /* Type of instruction that generated the access */
+    ACCESS_CODE  = 0x10, /* Code fetch access                */
+    ACCESS_INT   = 0x20, /* Integer load/store access        */
+    ACCESS_FLOAT = 0x30, /* floating point load/store access */
+};
+
 typedef uint32_t CPUM68K_SingleU;
 typedef uint64_t CPUM68K_DoubleU;
 
@@ -106,6 +117,13 @@ typedef struct CPUM68KState {
     uint32_t cc_src;
     uint32_t cc_x;
 
+    /* Control Registers */
+
+    uint32_t sfc;
+    uint32_t dfc;
+
+    /* FPU Registers */
+
     FPReg fregs[8];
     uint32_t fpcr;
     uint32_t fpsr;
@@ -136,6 +154,15 @@ typedef struct CPUM68KState {
     /* MMU status.  */
     struct {
         uint32_t ar;
+        /* 68040 */
+        uint16_t tcr;
+        uint32_t urp;
+        uint32_t srp;
+        uint32_t dttr0;
+        uint32_t dttr1;
+        uint32_t ittr0;
+        uint32_t ittr1;
+        uint32_t mmusr;
     } mmu;
 
     /* Control registers.  */
@@ -207,6 +234,40 @@ enum {
 
 #define M68K_SSP    0
 #define M68K_USP    1
+
+/* m68k Control Registers */
+
+/* MC680[1234]0/CPU32 */
+
+#define M68K_CR_SFC   0x000
+#define M68K_CR_DFC   0x001
+#define M68K_CR_USP   0x800
+#define M68K_CR_VBR   0x801
+
+/* MC680[234]0 */
+
+#define M68K_CR_CACR  0x002
+#define M68K_CR_CAAR  0x802 /* MC68020 and MC68030 only */
+#define M68K_CR_MSP   0x803
+#define M68K_CR_ISP   0x804
+
+/* MC68040/MC68LC040 */
+
+#define M68K_CR_TC    0x003
+#define M68K_CR_ITT0  0x004
+#define M68K_CR_ITT1  0x005
+#define M68K_CR_DTT0  0x006
+#define M68K_CR_DTT1  0x007
+#define M68K_CR_MMUSR 0x805
+#define M68K_CR_URP   0x806
+#define M68K_CR_SRP   0x807
+
+/* MC68EC040 */
+
+#define M68K_CR_IACR0 0x004
+#define M68K_CR_IACR1 0x005
+#define M68K_CR_DACR0 0x006
+#define M68K_CR_DACR1 0x007
 
 /* CACR fields are implementation defined, but some bits are common.  */
 #define M68K_CACR_EUSP  0x10
