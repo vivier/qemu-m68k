@@ -628,11 +628,75 @@ int cpu_m68k_handle_mmu_fault (CPUState *env, target_ulong address, int rw,
 
 /* MMU */
 
+static int check_TTR(uint32_t ttr, target_phys_addr_t *physical, int *prot,
+                     target_ulong addr, int access_type)
+{
+    uint32_t base, mask;
+
+    /* check if transparent translation is enabled */
+
+    if ((ttr & (1 << 15)) == 0) {
+        return 0;
+    }
+
+    /* check mode access */
+
+    if ((ttr & (1 << 14)) == 0) {
+        if (ttr & (1 << 13)) {
+            /* match only if supervisor */
+            if ((access_type & ACCESS_SUPER) == 0) {
+                return 0;
+            }
+        } else {
+            /* match only if user */
+            if ((access_type & ACCESS_SUPER) != 0) {
+                return 0;
+            }
+        }
+    }
+
+    /* check address matching */
+
+    base = ttr & 0xff000000;
+    mask = ((ttr << 8) & 0xff000000) ^ 0xff000000;
+
+    if ((addr & mask) != (base & mask)) {
+        return 0;
+    }
+
+    *physical = addr;
+    *prot = PAGE_READ | PAGE_EXEC;
+    if ((ttr & (1 << 2)) == 0) {
+        *prot |= PAGE_WRITE;
+    }
+
+    return 1;
+}
+
 static int get_physical_address(CPUState *env, target_phys_addr_t *physical,
                                 int *prot, target_ulong address,
-                                int rw, int access_type)
+                                int access_type)
 {
     int ret = 0;
+
+    /* Transparent Translation (physical = logical) */
+
+    if (access_type & ACCESS_CODE) {
+        if (check_TTR(env->mmu.ittr0, physical, prot, address, access_type)) {
+            return 0;
+        }
+        if (check_TTR(env->mmu.ittr1, physical, prot, address, access_type)) {
+            return 0;
+        }
+    } else {
+        if (check_TTR(env->mmu.dttr0, physical, prot, address, access_type)) {
+            return 0;
+        }
+        if (check_TTR(env->mmu.dttr1, physical, prot, address, access_type)) {
+            return 0;
+        }
+    }
+
     *physical = address;
     *prot = PAGE_READ | PAGE_WRITE | PAGE_EXEC;
     return ret;
@@ -644,7 +708,7 @@ target_phys_addr_t cpu_get_phys_page_debug(CPUState *env, target_ulong addr)
     int prot;
 
     if (get_physical_address(env, &phys_addr, &prot,
-                             addr, 0, ACCESS_INT) != 0) {
+                             addr, ACCESS_INT) != 0) {
         return -1;
     }
     return phys_addr;
@@ -663,10 +727,17 @@ int cpu_m68k_handle_mmu_fault (CPUState *env, target_ulong address, int rw,
         rw = 0;
     } else {
         access_type = ACCESS_INT;
+        if (rw) {
+            access_type |= ACCESS_STORE;
+        }
+    }
+
+    if (mmu_idx != MMU_USER_IDX) {
+        access_type |= ACCESS_SUPER;
     }
 
     ret = get_physical_address(env, &physical, &prot,
-                               address, rw, access_type);
+                               address, access_type);
     if (ret == 0) {
         tlb_set_page(env, address & TARGET_PAGE_MASK,
                      physical & TARGET_PAGE_MASK,
