@@ -286,6 +286,7 @@ void cpu_reset(CPUM68KState *env)
     /* TODO: We should set PC from the interrupt vector.  */
     env->pc = 0;
 #else
+    env->mmu.tcr = 0x4000; /* disabled / 8 kB page size */
     env->sr = 0x2700;
 #endif
     m68k_switch_sp(env);
@@ -707,6 +708,11 @@ target_phys_addr_t cpu_get_phys_page_debug(CPUState *env, target_ulong addr)
     target_phys_addr_t phys_addr;
     int prot;
 
+    if ((env->mmu.tcr & (1 << 15)) == 0) {
+        /* MMU disabled */
+        return addr;
+    }
+
     if (get_physical_address(env, &phys_addr, &prot,
                              addr, ACCESS_INT) != 0) {
         return -1;
@@ -721,6 +727,15 @@ int cpu_m68k_handle_mmu_fault (CPUState *env, target_ulong address, int rw,
     int prot;
     int access_type;
     int ret;
+
+    if ((env->mmu.tcr & (1 << 15)) == 0) {
+        /* MMU disabled */
+        tlb_set_page(env, address & TARGET_PAGE_MASK,
+                     address & TARGET_PAGE_MASK,
+                     PAGE_READ | PAGE_WRITE | PAGE_EXEC,
+                     mmu_idx, TARGET_PAGE_SIZE);
+        return 0;
+    }
 
     if (rw == 2) {
         access_type = ACCESS_CODE;
