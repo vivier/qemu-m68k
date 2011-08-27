@@ -74,7 +74,6 @@
 
 enum {
     /* 1 bit to define user level / supervisor access */
-    ACCESS_USER  = 0x00,
     ACCESS_SUPER = 0x01,
     /* 1 bit to indicate direction */
     ACCESS_STORE = 0x02,
