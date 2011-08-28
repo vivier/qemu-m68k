@@ -313,8 +313,8 @@ static void q800_init(ram_addr_t ram_size,
         if (kernel_cmdline) {
             stw_phys(parameters_base, BI_COMMAND_LINE);
             parameters_base += 2;
-            stw_phys(parameters_base, sizeof(struct bi_record) +
-                     strlen(kernel_cmdline) + 1);
+            stw_phys(parameters_base, (sizeof(struct bi_record) +
+                     strlen(kernel_cmdline) + 2) & ~1);
             parameters_base += 2;
             for (i = 0; kernel_cmdline[i]; i++) {
                 stb_phys(parameters_base, kernel_cmdline[i]);
