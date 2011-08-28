@@ -366,7 +366,7 @@ static TCGv gen_addr_index(uint16_t ext, TCGv tmp)
 
 /* Handle a base + index + displacement effective addresss.
    A NULL_QREG base means pc-relative.  */
-static TCGv gen_lea_indexed(DisasContext *s, int opsize, TCGv base)
+static TCGv gen_lea_indexed(DisasContext *s, TCGv base)
 {
     uint32_t offset;
     uint16_t ext;
@@ -639,7 +639,7 @@ static TCGv gen_lea(DisasContext *s, uint16_t insn, int opsize)
         return tmp;
     case 6: /* Indirect index + displacement.  */
         reg = AREG(insn, 0);
-        return gen_lea_indexed(s, opsize, reg);
+        return gen_lea_indexed(s, reg);
     case 7: /* Other */
         switch (insn & 7) {
         case 0: /* Absolute short.  */
@@ -655,7 +655,7 @@ static TCGv gen_lea(DisasContext *s, uint16_t insn, int opsize)
             s->pc += 2;
             return tcg_const_i32(offset);
         case 3: /* pc index+displacement.  */
-            return gen_lea_indexed(s, opsize, NULL_QREG);
+            return gen_lea_indexed(s, NULL_QREG);
         case 4: /* Immediate.  */
         default:
             return NULL_QREG;
