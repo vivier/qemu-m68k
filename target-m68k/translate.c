@@ -245,10 +245,10 @@ static void gen_op_load_fpr_FP1(int freg)
 
 /* Generate a load from the specified address.  Narrow values are
    sign extended to full register width.  */
-static inline TCGv gen_load(DisasContext * s, int opsize, TCGv addr, int sign)
+static inline TCGv gen_load(DisasContext *s, int opsize, TCGv addr,
+                            int sign, int index)
 {
     TCGv tmp;
-    int index = IS_USER(s);
     s->is_mem = 1;
     tmp = tcg_temp_new_i32();
     switch(opsize) {
@@ -275,9 +275,9 @@ static inline TCGv gen_load(DisasContext * s, int opsize, TCGv addr, int sign)
 }
 
 /* Generate a store.  */
-static inline void gen_store(DisasContext *s, int opsize, TCGv addr, TCGv val)
+static inline void gen_store(DisasContext *s, int opsize, TCGv addr, TCGv val,
+                             int index)
 {
-    int index = IS_USER(s);
     s->is_mem = 1;
     switch(opsize) {
     case OS_BYTE:
@@ -304,13 +304,13 @@ typedef enum {
 /* Generate an unsigned load if VAL is 0 a signed load if val is -1,
    otherwise generate a store.  */
 static TCGv gen_ldst(DisasContext *s, int opsize, TCGv addr, TCGv val,
-                     ea_what what)
+                     ea_what what, int index)
 {
     if (what == EA_STORE) {
-        gen_store(s, opsize, addr, val);
+        gen_store(s, opsize, addr, val, index);
         return store_dummy;
     } else {
-        return gen_load(s, opsize, addr, what == EA_LOADS);
+        return gen_load(s, opsize, addr, what == EA_LOADS, index);
     }
 }
 
@@ -433,7 +433,7 @@ static TCGv gen_lea_indexed(CPUM68KState *env, DisasContext *s, TCGv base)
         }
         if ((ext & 3) != 0) {
             /* memory indirect */
-            base = gen_load(s, OS_LONG, add, 0);
+            base = gen_load(s, OS_LONG, add, 0, IS_USER(s));
             if ((ext & 0x44) == 4) {
                 add = gen_addr_index(ext, tmp);
                 tcg_gen_add_i32(tmp, add, base);
@@ -672,8 +672,8 @@ static TCGv gen_lea(CPUM68KState *env, DisasContext *s, uint16_t insn,
 /* Helper function for gen_ea. Reuse the computed address between the
    for read/write operands.  */
 static inline TCGv gen_ea_once(CPUM68KState *env, DisasContext *s,
-                               uint16_t insn, int opsize, TCGv val,
-                               TCGv *addrp, ea_what what)
+                               uint16_t insn, int opsize,
+                               TCGv val, TCGv *addrp, ea_what what, int index)
 {
     TCGv tmp;
 
@@ -686,14 +686,15 @@ static inline TCGv gen_ea_once(CPUM68KState *env, DisasContext *s,
         if (addrp)
             *addrp = tmp;
     }
-    return gen_ldst(s, opsize, tmp, val, what);
+    return gen_ldst(s, opsize, tmp, val, what, index);
 }
 
 /* Generate code to load/store a value from/into an EA.  If VAL > 0 this is
    a write otherwise it is a read (0 == sign extend, -1 == zero extend).
    ADDRP is non-null for readwrite operands.  */
 static TCGv gen_ea(CPUM68KState *env, DisasContext *s, uint16_t insn,
-                   int opsize, TCGv val, TCGv *addrp, ea_what what)
+                   int opsize, TCGv val,
+                   TCGv *addrp, ea_what what, int index)
 {
     TCGv reg;
     TCGv result;
@@ -718,10 +719,10 @@ static TCGv gen_ea(CPUM68KState *env, DisasContext *s, uint16_t insn,
         }
     case 2: /* Indirect register */
         reg = AREG(insn, 0);
-        return gen_ldst(s, opsize, reg, val, what);
+        return gen_ldst(s, opsize, reg, val, what, index);
     case 3: /* Indirect postincrement.  */
         reg = AREG(insn, 0);
-        result = gen_ldst(s, opsize, reg, val, what);
+        result = gen_ldst(s, opsize, reg, val, what, index);
         /* ??? This is not exception safe.  The instruction may still
            fault after this point.  */
         if (what == EA_STORE || !addrp)
@@ -742,7 +743,7 @@ static TCGv gen_ea(CPUM68KState *env, DisasContext *s, uint16_t insn,
                 if (addrp)
                     *addrp = tmp;
             }
-            result = gen_ldst(s, opsize, tmp, val, what);
+            result = gen_ldst(s, opsize, tmp, val, what, index);
             /* ??? This is not exception safe.  The instruction may still
                fault after this point.  */
             if (what == EA_STORE || !addrp) {
@@ -753,14 +754,14 @@ static TCGv gen_ea(CPUM68KState *env, DisasContext *s, uint16_t insn,
         return result;
     case 5: /* Indirect displacement.  */
     case 6: /* Indirect index + displacement.  */
-        return gen_ea_once(env, s, insn, opsize, val, addrp, what);
+        return gen_ea_once(env, s, insn, opsize, val, addrp, what, index);
     case 7: /* Other */
         switch (insn & 7) {
         case 0: /* Absolute short.  */
         case 1: /* Absolute long.  */
         case 2: /* pc displacement  */
         case 3: /* pc index+displacement.  */
-            return gen_ea_once(env, s, insn, opsize, val, addrp, what);
+            return gen_ea_once(env, s, insn, opsize, val, addrp, what, index);
         case 4: /* Immediate.  */
             /* Sign extend values for consistency.  */
             switch (opsize) {
@@ -1247,19 +1248,20 @@ static void gen_jmp(DisasContext *s, TCGv dest)
 }
 
 #define SRC_EA(env, result, opsize, op_sign, addrp) do { \
-    result = gen_ea(env, s, insn, opsize, NULL_QREG, addrp, op_sign ? EA_LOADS : EA_LOADU); \
+    result = gen_ea(env, s, insn, opsize, NULL_QREG, addrp, \
+                    op_sign ? EA_LOADS : EA_LOADU, IS_USER(s)); \
     if (IS_NULL_QREG(result)) { \
         gen_addr_fault(s); \
         return; \
     } \
     } while (0)
 
-#define DEST_EA(env, insn, opsize, val, addrp) do {                     \
-        TCGv ea_result = gen_ea(env, s, insn, opsize, val, addrp, EA_STORE); \
-        if (IS_NULL_QREG(ea_result)) {                                  \
-            gen_addr_fault(s);                                          \
-            return;                                                     \
-        }                                                               \
+#define DEST_EA(env, insn, opsize, val, addrp) do { \
+    TCGv ea_result = gen_ea(env, s, insn, opsize, val, addrp, EA_STORE, IS_USER(s));\
+    if (IS_NULL_QREG(ea_result)) { \
+        gen_addr_fault(s); \
+        return; \
+    } \
     } while (0)
 
 /* Generate a jump to an immediate address.  */
@@ -1468,15 +1470,15 @@ DISAS_INSN(abcd_mem)
 
     addr_src = AREG(insn, 0);
     tcg_gen_subi_i32(addr_src, addr_src, OS_BYTE);
-    src = gen_load(s, OS_BYTE, addr_src, 0);
+    src = gen_load(s, OS_BYTE, addr_src, 0, IS_USER(s));
 
     addr_dest = AREG(insn, 9);
     tcg_gen_subi_i32(addr_dest, addr_dest, OS_BYTE);
-    dest = gen_load(s, OS_BYTE, addr_dest, 0);
+    dest = gen_load(s, OS_BYTE, addr_dest, 0, IS_USER(s));
 
     gen_helper_abcd_cc(dest, cpu_env, src, dest);
 
-    gen_store(s, OS_BYTE, addr_dest, dest);
+    gen_store(s, OS_BYTE, addr_dest, dest, IS_USER(s));
 }
 
 DISAS_INSN(sbcd_reg)
@@ -1498,15 +1500,15 @@ DISAS_INSN(sbcd_mem)
 
     addr_src = AREG(insn, 0);
     tcg_gen_subi_i32(addr_src, addr_src, OS_BYTE);
-    src = gen_load(s, OS_BYTE, addr_src, 0);
+    src = gen_load(s, OS_BYTE, addr_src, 0, IS_USER(s));
 
     addr_dest = AREG(insn, 9);
     tcg_gen_subi_i32(addr_dest, addr_dest, OS_BYTE);
-    dest = gen_load(s, OS_BYTE, addr_dest, 0);
+    dest = gen_load(s, OS_BYTE, addr_dest, 0, IS_USER(s));
 
     gen_helper_sbcd_cc(dest, cpu_env, src, dest);
 
-    gen_store(s, OS_BYTE, addr_dest, dest);
+    gen_store(s, OS_BYTE, addr_dest, dest, IS_USER(s));
 }
 
 DISAS_INSN(nbcd)
@@ -1636,7 +1638,7 @@ static void gen_push(DisasContext *s, TCGv val)
 
     tmp = tcg_temp_new();
     tcg_gen_subi_i32(tmp, QREG_SP, 4);
-    gen_store(s, OS_LONG, tmp, val);
+    gen_store(s, OS_LONG, tmp, val, IS_USER(s));
     tcg_gen_mov_i32(QREG_SP, tmp);
     tcg_temp_free(tmp);
 }
@@ -1670,31 +1672,34 @@ DISAS_INSN(movem)
                    reg = DREG(i, 0);
                else
                    reg = AREG(i, 0);
-               gen_store(s, opsize, addr, reg);
+               gen_store(s, opsize, addr, reg, IS_USER(s));
                if (mask != 1)
                    tcg_gen_subi_i32(addr, addr, incr);
            }
        }
        tcg_gen_mov_i32(AREG(insn, 0), addr);
     } else {
-       for (i = 0; i < 16; i++, mask >>= 1) {
-           if (mask & 1) {
-               if (i < 8)
-                   reg = DREG(i, 0);
-               else
-                   reg = AREG(i, 0);
-               if (is_load) {
-                   tmp = gen_load(s, opsize, addr, 1);
-                   tcg_gen_mov_i32(reg, tmp);
-               } else {
-                   gen_store(s, opsize, addr, reg);
-               }
-               if (mask != 1 || (insn & 070) == 030)
-                   tcg_gen_addi_i32(addr, addr, incr);
-           }
-       }
-       if ((insn & 070) == 030)
-           tcg_gen_mov_i32(AREG(insn, 0), addr);
+        for (i = 0; i < 16; i++, mask >>= 1) {
+            if (mask & 1) {
+                if (i < 8) {
+                    reg = DREG(i, 0);
+                } else {
+                    reg = AREG(i, 0);
+                }
+                if (is_load) {
+                    tmp = gen_load(s, opsize, addr, 1, IS_USER(s));
+                    tcg_gen_mov_i32(reg, tmp);
+                } else {
+                    gen_store(s, opsize, addr, reg, IS_USER(s));
+                }
+                if (mask != 1 || (insn & 070) == 030) {
+                    tcg_gen_addi_i32(addr, addr, incr);
+                }
+            }
+        }
+        if ((insn & 070) == 030) {
+            tcg_gen_mov_i32(AREG(insn, 0), addr);
+        }
     }
 }
 
@@ -1920,7 +1925,7 @@ DISAS_INSN(cas)
 
     cmp = DREG(ext, 0);
     update = DREG(ext, 6);
-    tmp = gen_load(s, opsize, taddr, 0);
+    tmp = gen_load(s, opsize, taddr, 0, IS_USER(s));
     dest = tcg_temp_local_new();
     tcg_gen_mov_i32(dest, tmp);
     addr = tcg_temp_local_new ();
@@ -1934,7 +1939,7 @@ DISAS_INSN(cas)
     l2 = gen_new_label();
 
     gen_jmpcc(s, 6 /* !Z */, l1);
-    gen_store(s, opsize, addr, update);
+    gen_store(s, opsize, addr, update, IS_USER(s));
     tcg_gen_br(l2);
     gen_set_label(l1);
     tcg_gen_mov_i32(cmp, dest);
@@ -1949,6 +1954,53 @@ DISAS_INSN(byterev)
 
     reg = DREG(insn, 0);
     tcg_gen_bswap32_i32(reg, reg);
+}
+
+DISAS_INSN(moves)
+{
+    int opsize;
+    uint16_t ext;
+    int mem_index;
+    /* int data; */
+    TCGv reg;
+    TCGv ea_result;
+
+    if (IS_USER(s)) {
+        gen_exception(s, s->pc - 2, EXCP_PRIVILEGE);
+        return;
+    }
+
+    ext = read_im16(env, s);
+
+    opsize = insn_opsize(insn, 6);
+
+    if (ext & 0x8000) {
+        /* address register */
+        reg = AREG(ext, 12);
+    } else {
+        /* data register */
+        reg = DREG(ext, 12);
+    }
+
+    if (ext & 0x0800) {
+        /* from reg to ea */
+        mem_index = (s->env->dfc & 4) ? MMU_KERNEL_IDX : MMU_USER_IDX;
+        /* data = (s->env->dfc & 3) != 2; FIXME: manage data */
+        ea_result = gen_ea(env, s, insn, opsize, reg, NULL, EA_STORE, mem_index);
+        if (IS_NULL_QREG(ea_result)) {
+            gen_addr_fault(s);
+            return;
+        }
+    } else {
+        /* from ea to reg */
+        mem_index = (s->env->sfc & 4) ? MMU_KERNEL_IDX : MMU_USER_IDX;
+        /* data = (s->env->sfc & 3) != 2; FIXME: manage data */
+        ea_result = gen_ea(env, s, insn, opsize, reg, NULL, EA_LOADS, mem_index);
+        if (IS_NULL_QREG(ea_result)) {
+            gen_addr_fault(s);
+            return;
+        }
+    }
 }
 
 DISAS_INSN(move)
@@ -2244,7 +2296,7 @@ DISAS_INSN(link)
     reg = AREG(insn, 0);
     tmp = tcg_temp_new();
     tcg_gen_subi_i32(tmp, QREG_SP, 4);
-    gen_store(s, OS_LONG, tmp, reg);
+    gen_store(s, OS_LONG, tmp, reg, IS_USER(s));
     if ((insn & 7) != 7)
         tcg_gen_mov_i32(reg, tmp);
     tcg_gen_addi_i32(QREG_SP, tmp, offset);
@@ -2260,7 +2312,7 @@ DISAS_INSN(linkl)
     reg = AREG(insn, 0);
     tmp = tcg_temp_new();
     tcg_gen_subi_i32(tmp, QREG_SP, 4);
-    gen_store(s, OS_LONG, tmp, reg);
+    gen_store(s, OS_LONG, tmp, reg, IS_USER(s));
     if ((insn & 7) != 7)
         tcg_gen_mov_i32(reg, tmp);
     tcg_gen_addi_i32(QREG_SP, tmp, offset);
@@ -2275,7 +2327,7 @@ DISAS_INSN(unlk)
     src = tcg_temp_new();
     reg = AREG(insn, 0);
     tcg_gen_mov_i32(src, reg);
-    tmp = gen_load(s, OS_LONG, src, 0);
+    tmp = gen_load(s, OS_LONG, src, 0, IS_USER(s));
     tcg_gen_mov_i32(reg, tmp);
     tcg_gen_addi_i32(QREG_SP, src, 4);
 }
@@ -2288,7 +2340,7 @@ DISAS_INSN(rts)
 {
     TCGv tmp;
 
-    tmp = gen_load(s, OS_LONG, QREG_SP, 0);
+    tmp = gen_load(s, OS_LONG, QREG_SP, 0, IS_USER(s));
     tcg_gen_addi_i32(QREG_SP, QREG_SP, 4);
     gen_jmp(s, tmp);
 }
@@ -2502,11 +2554,11 @@ DISAS_INSN(subx_mem)
 
     addr_src = AREG(insn, 0);
     tcg_gen_subi_i32(addr_src, addr_src, opsize);
-    src = gen_load(s, opsize, addr_src, 0);
+    src = gen_load(s, opsize, addr_src, 0, IS_USER(s));
 
     addr_reg = AREG(insn, 9);
     tcg_gen_subi_i32(addr_reg, addr_reg, opsize);
-    reg = gen_load(s, opsize, addr_reg, 0);
+    reg = gen_load(s, opsize, addr_reg, 0, IS_USER(s));
 
     switch(opsize) {
     case OS_BYTE:
@@ -2521,7 +2573,7 @@ DISAS_INSN(subx_mem)
     }
     s->cc_op = CC_OP_FLAGS;
 
-    gen_store(s, opsize, addr_reg, reg);
+    gen_store(s, opsize, addr_reg, reg, IS_USER(s));
 }
 
 DISAS_INSN(mov3q)
@@ -2586,11 +2638,11 @@ DISAS_INSN(eor)
     if (((insn >> 3) & 7) == 1 ) {
         /* cmpm */
         reg = AREG(insn, 0);
-        src = gen_load(s, opsize, reg, 1);
+        src = gen_load(s, opsize, reg, 1, IS_USER(s));
         tcg_gen_addi_i32(reg, reg, opsize_bytes(opsize));
 
         reg = AREG(insn, 9);
-        dest = gen_load(s, opsize, reg, 1);
+        dest = gen_load(s, opsize, reg, 1, IS_USER(s));
         tcg_gen_addi_i32(reg, reg, opsize_bytes(opsize));
 
         reg = tcg_temp_new();
@@ -2712,11 +2764,11 @@ DISAS_INSN(addx_mem)
 
     addr_src = AREG(insn, 0);
     tcg_gen_subi_i32(addr_src, addr_src, opsize);
-    src = gen_load(s, opsize, addr_src, 0);
+    src = gen_load(s, opsize, addr_src, 0, IS_USER(s));
 
     addr_reg = AREG(insn, 9);
     tcg_gen_subi_i32(addr_reg, addr_reg, opsize);
-    reg = gen_load(s, opsize, addr_reg, 0);
+    reg = gen_load(s, opsize, addr_reg, 0, IS_USER(s));
 
     switch(opsize) {
     case OS_BYTE:
@@ -2731,7 +2783,7 @@ DISAS_INSN(addx_mem)
     }
     s->cc_op = CC_OP_FLAGS;
 
-    gen_store(s, opsize, addr_reg, reg);
+    gen_store(s, opsize, addr_reg, reg, IS_USER(s));
 }
 
 /* TODO: This could be implemented without helper functions.  */
@@ -4115,10 +4167,10 @@ DISAS_INSN(fscc_mem)
     l1 = gen_new_label();
     l2 = gen_new_label();
     gen_fjmpcc(s, ext & 0x3f, l1);
-    gen_store(s, OS_BYTE, addr, tcg_const_i32(0x00));
+    gen_store(s, OS_BYTE, addr, tcg_const_i32(0x00), IS_USER(s));
     tcg_gen_br(l2);
     gen_set_label(l1);
-    gen_store(s, OS_BYTE, addr, tcg_const_i32(0xff));
+    gen_store(s, OS_BYTE, addr, tcg_const_i32(0xff), IS_USER(s));
     gen_set_label(l2);
     tcg_temp_free(addr);
 }
@@ -4215,7 +4267,7 @@ DISAS_INSN(mac)
         tcg_gen_and_i32(addr, tmp, QREG_MAC_MASK);
         /* Load the value now to ensure correct exception behavior.
            Perform writeback after reading the MAC inputs.  */
-        loadval = gen_load(s, OS_LONG, addr, 0);
+        loadval = gen_load(s, OS_LONG, addr, 0, IS_USER(s));
 
         acc ^= 1;
         rx = (ext & 0x8000) ? AREG(ext, 12) : DREG(insn, 12);
@@ -4548,6 +4600,7 @@ void register_m68k_insns (CPUM68KState *env)
     INSN(bitop_im,  0840, ffc0, M68000);
     INSN(bitop_im,  0880, ffc0, CF_ISA_A);
     INSN(bitop_im,  0880, ffc0, M68000);
+    INSN(moves,     0e00, ff00, M68000);
     INSN(cas,       08c0, f9c0, CAS);
     INSN(bitop_im,  08c0, ffc0, CF_ISA_A);
     INSN(bitop_im,  08c0, ffc0, M68000);
