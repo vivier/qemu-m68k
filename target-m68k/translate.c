@@ -4044,14 +4044,17 @@ DISAS_INSN(fscc_reg)
 
 DISAS_INSN(frestore)
 {
-    /* TODO: Implement frestore.  */
-    qemu_assert(0, "FRESTORE not implemented");
+    TCGv addr;
+
+    SRC_EA(addr, OS_LONG, 0, NULL);
+    /* FIXME: check the state frame */
 }
 
 DISAS_INSN(fsave)
 {
-    /* TODO: Implement fsave.  */
-    qemu_assert(0, "FSAVE not implemented");
+    /* always write IDLE */
+    /* FIXME: 68040 only */
+    DEST_EA(insn, OS_LONG, tcg_const_i32(0x41000000), NULL);
 }
 
 static inline TCGv gen_mac_extract_word(DisasContext *s, TCGv val, int upper)
@@ -4638,8 +4641,8 @@ void register_m68k_insns (CPUM68KState *env)
     INSN(fscc_mem,  f240, ffc0, FPU);
     INSN(fscc_reg,  f240, fff8, FPU);
     INSN(fbcc,      f280, ffc0, FPU);
-    INSN(frestore,  f340, ffc0, FPU);
-    INSN(fsave,     f340, ffc0, FPU);
+    INSN(frestore,  f140, f1c0, FPU);
+    INSN(fsave,     f100, f1c0, FPU);
     INSN(intouch,   f340, ffc0, CF_ISA_A);
     INSN(cpushl,    f428, ff38, CF_ISA_A);
     INSN(cpush,     f420, ff20, M68000);
