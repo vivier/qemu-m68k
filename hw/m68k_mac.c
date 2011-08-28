@@ -266,6 +266,15 @@ static void q800_init(ram_addr_t ram_size,
         stl_phys(parameters_base, Q800_CPU_ID);
         parameters_base += 4;
 
+        stw_phys(parameters_base, BI_MEMCHUNK);
+        parameters_base += 2;
+        stw_phys(parameters_base, sizeof(struct bi_record) + 2*4);
+        parameters_base += 2;
+        stl_phys(parameters_base, 0);        /* memory base address */
+        parameters_base += 4;
+        stl_phys(parameters_base, ram_size); /* memory size */
+        parameters_base += 4;
+
         stw_phys(parameters_base, BI_MAC_VADDR);
         parameters_base += 2;
         stw_phys(parameters_base, sizeof(struct bi_record) + 4);
@@ -291,7 +300,7 @@ static void q800_init(ram_addr_t ram_size,
         parameters_base += 2;
         stw_phys(parameters_base, sizeof(struct bi_record) + 4);
         parameters_base += 2;
-	stl_phys(parameters_base, 640 * ((graphic_depth  + 7)/ 8));
+        stl_phys(parameters_base, 640 * ((graphic_depth  + 7) / 8));
         parameters_base += 4;
 
         stw_phys(parameters_base, BI_MAC_SCCBASE);
@@ -308,10 +317,11 @@ static void q800_init(ram_addr_t ram_size,
                      strlen(kernel_cmdline) + 1);
             parameters_base += 2;
             for (i = 0; kernel_cmdline[i]; i++) {
-               stb_phys(parameters_base + i, kernel_cmdline[i]);
+                stb_phys(parameters_base, kernel_cmdline[i]);
+                parameters_base++;
             }
-            stb_phys(parameters_base + i, 0);
-            parameters_base = parameters_base + strlen(kernel_cmdline) + 1;
+            stb_phys(parameters_base, 0);
+            parameters_base++;
             parameters_base = (parameters_base + 1) & ~1;
         }
 
