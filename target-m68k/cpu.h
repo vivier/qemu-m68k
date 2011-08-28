@@ -333,6 +333,7 @@ void register_m68k_insns (CPUM68KState *env);
 /* MMU modes definitions */
 #define MMU_MODE0_SUFFIX _kernel
 #define MMU_MODE1_SUFFIX _user
+#define MMU_KERNEL_IDX 0
 #define MMU_USER_IDX 1
 static inline int cpu_mmu_index (CPUState *env)
 {
