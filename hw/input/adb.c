@@ -24,15 +24,16 @@
 #include "qemu/osdep.h"
 #include "hw/input/adb.h"
 
-/* debug ADB */
-//#define DEBUG_ADB
+#define ADB_POLL_FREQ 50
 
-#ifdef DEBUG_ADB
-#define ADB_DPRINTF(fmt, ...) \
-do { printf("ADB: " fmt , ## __VA_ARGS__); } while (0)
-#else
-#define ADB_DPRINTF(fmt, ...)
-#endif
+/* Apple Macintosh Family Hardware Refenece
+ * Table 19-10 ADB transaction states
+ */
+
+#define STATE_NEW	0
+#define STATE_EVEN	1
+#define STATE_ODD	2
+#define STATE_IDLE	3
 
 /* error codes */
 #define ADB_RET_NOTPRESENT (-2)
@@ -69,7 +70,6 @@ int adb_request(ADBBusState *s, uint8_t *obuf, const uint8_t *buf, int len)
     return ADB_RET_NOTPRESENT;
 }
 
-/* XXX: move that to cuda ? */
 int adb_poll(ADBBusState *s, uint8_t *obuf, uint16_t poll_mask)
 {
     ADBDevice *d;
@@ -94,6 +94,60 @@ int adb_poll(ADBBusState *s, uint8_t *obuf, uint16_t poll_mask)
         s->poll_index++;
     }
     return olen;
+}
+
+void adb_send(ADBBusState *adb, int state, uint8_t data)
+{
+    switch(state) {
+    case STATE_NEW:
+        adb->data_out[0] = data;
+        adb->data_out_index = 1;
+        break;
+    case STATE_EVEN:
+        if ((adb->data_out_index & 1) == 0)
+            return;
+        adb->data_out[adb->data_out_index++] = data;
+        break;
+    case STATE_ODD:
+        if (adb->data_out_index & 1)
+            return;
+        adb->data_out[adb->data_out_index++] = data;
+        break;
+    case STATE_IDLE:
+        if (adb->data_out_index == 0)
+            return;
+         adb->data_in_size = adb_request(adb, adb->data_in,
+                                         adb->data_out, adb->data_out_index);
+        if (adb->data_in_size <= 0)
+            return;
+        break;
+    }
+    qemu_irq_raise(adb->data_ready);
+}
+
+void adb_receive(ADBBusState *adb, int state, uint8_t *data)
+{
+    if (adb->data_in_index >= adb->data_in_size)
+        return;
+    switch(state) {
+    case STATE_NEW:
+        return;
+    case STATE_EVEN:
+        if ((adb->data_in_index & 1) == 0)
+            return;
+        *data = adb->data_in[adb->data_in_index++];
+        break;
+    case STATE_ODD:
+        if (adb->data_in_index & 1)
+            return;
+        *data = adb->data_in[adb->data_in_index++];
+        break;
+    case STATE_IDLE:
+        *data = adb->data_in[0];
+         adb->data_in_index = 1;
+        break;
+    }
+    qemu_irq_raise(adb->data_ready);
 }
 
 static const TypeInfo adb_bus_type_info = {
