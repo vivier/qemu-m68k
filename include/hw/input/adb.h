@@ -99,6 +99,12 @@ struct ADBBusState {
     ADBDevice *devices[MAX_ADB_DEVICES];
     int nb_devices;
     int poll_index;
+    qemu_irq data_ready;
+    int data_in_size;
+    int data_in_index;
+    int data_out_index;
+    uint8_t data_in[128];
+    uint8_t data_out[16];
 };
 
 int adb_request(ADBBusState *s, uint8_t *buf_out,
@@ -108,4 +114,6 @@ int adb_poll(ADBBusState *s, uint8_t *buf_out);
 #define TYPE_ADB_KEYBOARD "adb-keyboard"
 #define TYPE_ADB_MOUSE "adb-mouse"
 
+void adb_send(ADBBusState *adb, int state, uint8_t data);
+void adb_receive(ADBBusState *adb, int state, uint8_t *data);
 #endif /* !defined(__ADB_H__) */
