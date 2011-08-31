@@ -33,7 +33,6 @@ static void adb_kbd_put_keycode(void *opaque, int keycode)
 {
     ADBDevice *d = opaque;
     KBDState *s = d->opaque;
-
     if (s->count < sizeof(s->data)) {
         s->data[s->wptr] = keycode;
         if (++s->wptr == sizeof(s->data))

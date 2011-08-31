@@ -47,7 +47,7 @@ common-obj-$(CONFIG_I82378) += i82378.o
 # Mac shared devices
 common-obj-$(CONFIG_MACIO) += macio.o
 common-obj-$(CONFIG_CUDA) += cuda.o
-common-obj-$(CONFIG_ADB) += adb.o
+common-obj-$(CONFIG_ADB) += adb.o adb-mouse.o adb-kbd.o
 common-obj-$(CONFIG_MAC_NVRAM) += mac_nvram.o
 common-obj-$(CONFIG_MAC_DBDMA) += mac_dbdma.o
 # OldWorld PowerMac
