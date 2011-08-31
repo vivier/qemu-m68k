@@ -30,10 +30,25 @@
 #include "console.h"
 #include "exec-memory.h"
 #include "escc.h"
+#include "sysbus.h"
 #include "bootinfo.h"
+#include "mac_via.h"
 
 #define MACROM_ADDR     0x800000
 #define MACROM_SIZE     0x100000
+
+
+/*
+ *              .ident          = MAC_MODEL_Q800,
+ *              .name           = "Quadra 800",
+ *              .adb_type       = MAC_ADB_II,
+ *              .via_type       = MAC_VIA_QUADRA,
+ *              .scsi_type      = MAC_SCSI_QUADRA,
+ *              .scc_type       = MAC_SCC_QUADRA,
+ *              .ether_type     = MAC_ETHER_SONIC,
+ *              .nubus_type     = MAC_NUBUS
+ */
+
 #define MACROM_FILENAME "MacROM.bin"
 
 #define Q800_MACHINE_ID 35
@@ -44,11 +59,37 @@
 #define MACH_MAC        3
 #define Q800_MAC_CPU_ID 2
 
-#define VIA1_BASE 0x50f00000
-#define VIA2_BASE 0x50f02000
-#define SCC_BASE  0x50f0c020
+#define VIA_BASE   0x50f00000
+#define SCC_BASE   0x50f0c020
 #define VIDEO_BASE 0xf9001000
+
 #define MAC_CLOCK  3686418 //783300
+
+typedef struct {
+    CPUM68KState *env;
+    uint8_t ipr;
+} q800_glue_state_t;
+
+static void q800_glue_set_irq(void *opaque, int irq, int level)
+{
+    int i;
+
+    q800_glue_state_t *s = opaque;
+
+    if (level) {
+        s->ipr |= 1 << irq;
+    } else {
+        s->ipr &= ~(1 << irq);
+    }
+
+    for (i = 7; i >= 0; i--) {
+        if ((s->ipr >> i) & 1) {
+            m68k_set_irq_level(s->env, i + 1, i + 25);
+            return;
+        }
+    }
+    m68k_set_irq_level(s->env, 0, 0);
+}
 
 static void main_cpu_reset(void *opaque)
 {
@@ -71,7 +112,12 @@ static void q800_init(ram_addr_t ram_size,
     int32_t initrd_size;
     MemoryRegion *rom;
     MemoryRegion *ram;
+    MemoryRegion *escc_mem;
+    q800_glue_state_t *s;
+    qemu_irq *pic;
     target_phys_addr_t parameters_base;
+    DeviceState *dev;
+    SysBusDevice *sysbus;
 
     linux_boot = (kernel_filename != NULL);
 
@@ -89,6 +135,26 @@ static void q800_init(ram_addr_t ram_size,
     ram = g_malloc(sizeof (*ram));
     memory_region_init_ram(ram, "m68k_mac.ram", ram_size);
     memory_region_add_subregion(get_system_memory(), 0, ram);
+
+    /* Glue */
+
+    s = (q800_glue_state_t *)g_malloc0(sizeof(q800_glue_state_t));
+    s->env = env;
+    pic = qemu_allocate_irqs(q800_glue_set_irq, s, 6);
+
+    /* VIA */
+
+    dev = qdev_create(NULL, "mac_via");
+    qdev_init_nofail(dev);
+    sysbus = sysbus_from_qdev(dev);
+    sysbus_mmio_map(sysbus, 0, VIA_BASE);
+    sysbus_connect_irq(sysbus, 0, pic[0]);
+    sysbus_connect_irq(sysbus, 1, pic[1]);
+
+    /* SCC */
+
+    escc_mem = escc_init(SCC_BASE, pic[3], pic[3], serial_hds[0],
+                         serial_hds[1], MAC_CLOCK, 0);
 
     if (linux_boot) {
         uint64_t high;

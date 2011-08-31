@@ -42,7 +42,7 @@ hw-obj-$(CONFIG_I82378) += i82378.o
 # Mac shared devices
 hw-obj-$(CONFIG_MACIO) += macio.o
 hw-obj-$(CONFIG_CUDA) += cuda.o
-hw-obj-$(CONFIG_ADB) += adb.o
+hw-obj-$(CONFIG_ADB) += adb.o adb-mouse.o adb-kbd.o
 hw-obj-$(CONFIG_MAC_NVRAM) += mac_nvram.o
 hw-obj-$(CONFIG_MAC_DBDMA) += mac_dbdma.o
 # OldWorld PowerMac
