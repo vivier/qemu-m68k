@@ -77,25 +77,27 @@ static void do_rte(CPUM68KState *env)
     if (m68k_feature(env, M68K_FEATURE_M68000)) {
         env->sr = cpu_lduw_kernel(env, sp);
         sp += 2;
-        env->sr = cpu_ldl_kernel(env, sp);
+        env->pc = cpu_ldl_kernel(env, sp);
         sp += 4;
-        fmt = cpu_lduw_kernel(env, sp);
-        sp += 2;
-        switch (fmt >> 12) {
-        case 0:
-        case 1:
+        if (m68k_feature(env, M68K_FEATURE_QUAD_MULDIV)) {
+            /*  all excepte 68000 */
+            fmt = cpu_lduw_kernel(env, sp);
             sp += 2;
-            break;
-        case 2:
-        case 3:
-            sp += 6;
-            break;
-        case 4:
-            sp += 10;
-            break;
-        case 7:
-            sp += 52;
-            break;
+            switch (fmt >> 12) {
+            case 0:
+            case 1:
+                break;
+            case 2:
+            case 3:
+                sp += 4;
+                break;
+            case 4:
+                sp += 8;
+                break;
+            case 7:
+                sp += 52;
+                break;
+            }
         }
     } else {
         fmt = cpu_ldl_kernel(env, sp);
@@ -235,7 +237,6 @@ static void do_interrupt_all(CPUM68KState *env, int is_hw)
             do_stack_frame(env, &sp, 2, env->pc, retaddr);
         } else if (is_hw && cs->exception_index >= 24 &&
                    cs->exception_index < 32) {
-            do_stack_frame(env, &sp, 0, 0, retaddr);
             do_stack_frame(env, &sp, 1, 0, retaddr);
         } else {
             do_stack_frame(env, &sp, 0, 0, retaddr);
