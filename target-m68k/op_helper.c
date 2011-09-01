@@ -91,25 +91,27 @@ static void do_rte(void)
     if (m68k_feature(env, M68K_FEATURE_M68000)) {
         env->sr = lduw_kernel(sp);
         sp += 2;
-        env->sr = ldl_kernel(sp);
+        env->pc = ldl_kernel(sp);
         sp += 4;
-        fmt = lduw_kernel(sp);
-        sp += 2;
-        switch (fmt >> 12) {
-        case 0:
-        case 1:
+        if (m68k_feature(env, M68K_FEATURE_QUAD_MULDIV)) {
+            /*  all excepte 68000 */
+            fmt = lduw_kernel(sp);
             sp += 2;
-            break;
-        case 2:
-        case 3:
-            sp += 6;
-            break;
-        case 4:
-            sp += 10;
-            break;
-        case 7:
-            sp += 52;
-            break;
+            switch (fmt >> 12) {
+            case 0:
+            case 1:
+                break;
+            case 2:
+            case 3:
+                sp += 4;
+                break;
+            case 4:
+                sp += 8;
+                break;
+            case 7:
+                sp += 52;
+                break;
+            }
         }
     } else {
         fmt = ldl_kernel(sp);
@@ -242,7 +244,6 @@ static void do_interrupt_all(int is_hw)
             do_stack_frame(&sp, 2, env->pc, retaddr);
         } else if (is_hw && env->exception_index >= 24 &&
                    env->exception_index < 32) {
-            do_stack_frame(&sp, 0, 0, retaddr);
             do_stack_frame(&sp, 1, 0, retaddr);
         } else {
             do_stack_frame(&sp, 0, 0, retaddr);
