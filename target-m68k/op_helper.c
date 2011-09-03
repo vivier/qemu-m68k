@@ -75,6 +75,7 @@ static void do_rte(CPUM68KState *env)
 
     sp = env->aregs[7];
     if (m68k_feature(env, M68K_FEATURE_M68000)) {
+throwaway:
         env->sr = cpu_lduw_kernel(env, sp);
         sp += 2;
         env->pc = cpu_ldl_kernel(env, sp);
@@ -85,8 +86,11 @@ static void do_rte(CPUM68KState *env)
             sp += 2;
             switch (fmt >> 12) {
             case 0:
-            case 1:
                 break;
+            case 1:
+                env->aregs[7] = sp;
+                m68k_switch_sp(env);
+                goto throwaway;
             case 2:
             case 3:
                 sp += 4;
@@ -98,20 +102,22 @@ static void do_rte(CPUM68KState *env)
                 sp += 52;
                 break;
             }
+            env->aregs[7] = sp;
+            m68k_switch_sp(env);
         }
     } else {
         fmt = cpu_ldl_kernel(env, sp);
         env->pc = cpu_ldl_kernel(env, sp + 4);
         sp |= (fmt >> 28) & 3;
         env->sr = fmt & 0xffff;
-        m68k_switch_sp(env);
         sp += 8;
+        env->aregs[7] = sp;
+        m68k_switch_sp(env);
     }
-    env->aregs[7] = sp;
 }
 
-static inline void do_stack_frame(CPUM68KState *env,
-                                  uint32_t *sp, uint16_t format,
+static inline void do_stack_frame(CPUM68KState *env, uint32_t *sp,
+                                  uint16_t format, uint16_t sr,
                                   uint32_t addr, uint32_t retaddr)
 {
     CPUState *cs = CPU(m68k_env_get_cpu(env));
@@ -133,7 +139,7 @@ static inline void do_stack_frame(CPUM68KState *env,
     *sp -= 4;
     cpu_stl_kernel(env, *sp, retaddr);
     *sp -= 2;
-    cpu_stw_kernel(env, *sp, env->sr);
+    cpu_stw_kernel(env, *sp, sr);
 }
 
 static void do_interrupt_all(CPUM68KState *env, int is_hw)
@@ -143,6 +149,7 @@ static void do_interrupt_all(CPUM68KState *env, int is_hw)
     uint32_t fmt;
     uint32_t retaddr;
     uint32_t vector;
+    int oldsr;
 
     fmt = 0;
     retaddr = env->pc;
@@ -183,12 +190,24 @@ static void do_interrupt_all(CPUM68KState *env, int is_hw)
 
     sp = env->aregs[7];
 
+
+    /*
+     * MC68040UM/AD,  chapter 9.3.10
+     */
+
+    /* "the processor first make an internal copy" */
+    oldsr = env->sr;
+    /* "set the mode to supervisor" */
     env->sr |= SR_S;
+    /* "suppress tracing" */
+    env->sr &= ~SR_T;
+    /* "sets the processor interrupt mask" */
     if (is_hw) {
-        env->sr = (env->sr & ~SR_I) | (env->pending_level << SR_I_SHIFT);
-        env->sr &= ~SR_M;
+        env->sr |= (env->sr & ~SR_I) | (env->pending_level << SR_I_SHIFT);
     }
+
     m68k_switch_sp(env);
+    sp = env->aregs[7];
 
     /* ??? This could cause MMU faults.  */
 
@@ -226,20 +245,28 @@ static void do_interrupt_all(CPUM68KState *env, int is_hw)
             cpu_stw_kernel(env, sp, 0); /* SPECIAL STATUS WORD */
             sp -= 4;
             cpu_stl_kernel(env, sp, env->mmu.ar); /* EA */
-            do_stack_frame(env, &sp, 7, 0, retaddr);
+            do_stack_frame(env, &sp, 7, env->sr, 0, retaddr);
         } else if (cs->exception_index == 3) {
-            do_stack_frame(env, &sp, 2, 0, retaddr);
+            do_stack_frame(env, &sp, 2, env->sr, 0, retaddr);
         } else if (cs->exception_index == 5 ||
                    cs->exception_index == 6 ||
                    cs->exception_index == 7 ||
                    cs->exception_index == 9) {
             /* FIXME: addr is not only env->pc */
-            do_stack_frame(env, &sp, 2, env->pc, retaddr);
+            do_stack_frame(env, &sp, 2, env->sr, env->pc, retaddr);
         } else if (is_hw && cs->exception_index >= 24 &&
                    cs->exception_index < 32) {
-            do_stack_frame(env, &sp, 1, 0, retaddr);
+            do_stack_frame(env, &sp, 0, oldsr, 0, retaddr);
+            if (env->sr & SR_M) {
+                oldsr = env->sr;
+                env->sr &= ~SR_M;
+                env->aregs[7] = sp;
+                m68k_switch_sp(env);
+                sp = env->aregs[7] & ~1;
+                do_stack_frame(env, &sp, 1, oldsr, 0, retaddr);
+            }
         } else {
-            do_stack_frame(env, &sp, 0, 0, retaddr);
+            do_stack_frame(env, &sp, 0, env->sr, 0, retaddr);
         }
     } else {
         fmt |= 0x40000000;
