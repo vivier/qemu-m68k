@@ -89,6 +89,7 @@ static void do_rte(void)
 
     sp = env->aregs[7];
     if (m68k_feature(env, M68K_FEATURE_M68000)) {
+throwaway:
         env->sr = lduw_kernel(sp);
         sp += 2;
         env->pc = ldl_kernel(sp);
@@ -99,8 +100,11 @@ static void do_rte(void)
             sp += 2;
             switch (fmt >> 12) {
             case 0:
-            case 1:
                 break;
+            case 1:
+                env->aregs[7] = sp;
+                m68k_switch_sp(env);
+                goto throwaway;
             case 2:
             case 3:
                 sp += 4;
@@ -112,19 +116,22 @@ static void do_rte(void)
                 sp += 52;
                 break;
             }
+            env->aregs[7] = sp;
+            m68k_switch_sp(env);
         }
     } else {
         fmt = ldl_kernel(sp);
         env->pc = ldl_kernel(sp + 4);
         sp |= (fmt >> 28) & 3;
         env->sr = fmt & 0xffff;
-        m68k_switch_sp(env);
         sp += 8;
+        env->aregs[7] = sp;
+        m68k_switch_sp(env);
     }
-    env->aregs[7] = sp;
 }
 
 static inline void do_stack_frame(uint32_t *sp, uint16_t format,
+                                  uint16_t sr,
                                   uint32_t addr, uint32_t retaddr)
 {
     switch (format) {
@@ -145,7 +152,7 @@ static inline void do_stack_frame(uint32_t *sp, uint16_t format,
     *sp -= 4;
     stl_kernel(*sp, retaddr);
     *sp -= 2;
-    stw_kernel(*sp, env->sr);
+    stw_kernel(*sp, sr);
 }
 
 static void do_interrupt_all(int is_hw)
@@ -154,6 +161,7 @@ static void do_interrupt_all(int is_hw)
     uint32_t fmt;
     uint32_t retaddr;
     uint32_t vector;
+    int oldsr;
 
     fmt = 0;
     retaddr = env->pc;
@@ -190,12 +198,24 @@ static void do_interrupt_all(int is_hw)
 
     sp = env->aregs[7];
 
+
+    /*
+     * MC68040UM/AD,  chapter 9.3.10
+     */
+
+    /* "the processor first make an internal copy" */
+    oldsr = env->sr;
+    /* "set the mode to supervisor" */
     env->sr |= SR_S;
+    /* "suppress tracing" */
+    env->sr &= ~SR_T;
+    /* "sets the processor interrupt mask" */
     if (is_hw) {
-        env->sr = (env->sr & ~SR_I) | (env->pending_level << SR_I_SHIFT);
-        env->sr &= ~SR_M;
+        env->sr |= (env->sr & ~SR_I) | (env->pending_level << SR_I_SHIFT);
     }
+
     m68k_switch_sp(env);
+    sp = env->aregs[7];
 
     /* ??? This could cause MMU faults.  */
 
@@ -233,20 +253,28 @@ static void do_interrupt_all(int is_hw)
             stw_kernel(sp, 0); /* SPECIAL STATUS WORD */
             sp -= 4;
             stl_kernel(sp, env->mmu.ar); /* EA */
-            do_stack_frame(&sp, 7, 0, retaddr);
+            do_stack_frame(&sp, 7, env->sr, 0, retaddr);
         } else if (env->exception_index == 3) {
-            do_stack_frame(&sp, 2, 0, retaddr);
+            do_stack_frame(&sp, 2, env->sr, 0, retaddr);
         } else if (env->exception_index == 5 ||
                    env->exception_index == 6 ||
                    env->exception_index == 7 ||
                    env->exception_index == 9) {
             /* FIXME: addr is not only env->pc */
-            do_stack_frame(&sp, 2, env->pc, retaddr);
+            do_stack_frame(&sp, 2, env->sr, env->pc, retaddr);
         } else if (is_hw && env->exception_index >= 24 &&
                    env->exception_index < 32) {
-            do_stack_frame(&sp, 1, 0, retaddr);
+            do_stack_frame(&sp, 0, oldsr, 0, retaddr);
+            if (env->sr & SR_M) {
+                oldsr = env->sr;
+                env->sr &= ~SR_M;
+                env->aregs[7] = sp;
+                m68k_switch_sp(env);
+                sp = env->aregs[7] & ~1;
+                do_stack_frame(&sp, 1, oldsr, 0, retaddr);
+            }
         } else {
-            do_stack_frame(&sp, 0, 0, retaddr);
+            do_stack_frame(&sp, 0, env->sr, 0, retaddr);
         }
     } else {
         fmt |= 0x40000000;
