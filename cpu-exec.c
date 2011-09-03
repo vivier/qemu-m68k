@@ -472,9 +472,9 @@ int cpu_exec(CPUState *env)
                         next_tb = 0;
                     }
 #elif defined(TARGET_M68K)
-                    if (interrupt_request & CPU_INTERRUPT_HARD
-                        && ((env->sr & SR_I) >> SR_I_SHIFT)
-                            < env->pending_level) {
+                    if (interrupt_request & CPU_INTERRUPT_HARD &&
+                        ((((env->sr & SR_I) >> SR_I_SHIFT) <
+                          env->pending_level) || env->pending_level == 7)) {
                         /* Real hardware gets the interrupt vector via an
                            IACK cycle at this point.  Current emulated
                            hardware doesn't rely on this, so we
