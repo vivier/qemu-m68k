@@ -303,6 +303,13 @@ static void q800_init(ram_addr_t ram_size,
         stl_phys(parameters_base, Q800_CPU_ID);
         parameters_base += 4;
 
+        stw_phys(parameters_base, BI_MAC_MODEL);
+        parameters_base += 2;
+        stw_phys(parameters_base, sizeof(struct bi_record) + 4);
+        parameters_base += 2;
+        stl_phys(parameters_base, Q800_MACHINE_ID);
+        parameters_base += 4;
+
         stw_phys(parameters_base, BI_MEMCHUNK);
         parameters_base += 2;
         stw_phys(parameters_base, sizeof(struct bi_record) + 2*4);
