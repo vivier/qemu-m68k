@@ -117,6 +117,50 @@ struct bi_record {
 #define BI_MAC_IOP_SWIM 0x8020  /* Mac SWIM floppy IOP */
 #define BI_MAC_IOP_ADB  0x8021  /* Mac ADB IOP */
 
+#define BOOTINFO0(base, id) \
+    do { \
+        stw_phys(base, id); \
+        base += 2; \
+        stw_phys(base, sizeof(struct bi_record)); \
+        base += 2; \
+    } while (0)
+
+#define BOOTINFO1(base, id, value) \
+    do { \
+        stw_phys(base, id); \
+        base += 2; \
+        stw_phys(base, sizeof(struct bi_record) + 4); \
+        base += 2; \
+        stl_phys(base, value); \
+        base += 4; \
+    } while (0)
+
+#define BOOTINFO2(base, id, value1, value2) \
+    do { \
+        stw_phys(base, id); \
+        base += 2; \
+        stw_phys(base, sizeof(struct bi_record) + 8); \
+        base += 2; \
+        stl_phys(base, value1); \
+        base += 4; \
+        stl_phys(base, value2); \
+        base += 4; \
+    } while (0)
+
+#define BOOTINFOSTR(base, id, string) \
+    do { \
+        int i; \
+        stw_phys(base, id); \
+        base += 2; \
+        stw_phys(base, (sizeof(struct bi_record) + strlen(string) + 2) & ~1); \
+        base += 2; \
+        for (i = 0; string[i]; i++) { \
+            stb_phys(base++, string[i]); \
+        } \
+        stb_phys(base++, 0); \
+        base = (parameters_base + 1) & ~1; \
+    } while (0)
+
 typedef struct {
     DisplayState *ds;
 } q800_state_t;
@@ -227,7 +271,6 @@ static void q800_init(ram_addr_t ram_size,
     q800_glue_state_t *s;
     qemu_irq *pic;
     target_phys_addr_t parameters_base;
-    int i;
 #if 0
     qemu_irq **heathrow_irqs;
     int i;
@@ -275,98 +318,23 @@ static void q800_init(ram_addr_t ram_size,
         stl_phys(4, elf_entry); /* reset initial PC */
         parameters_base = (high + 1) & ~1;
         
-        stw_phys(parameters_base, BI_MACHTYPE);
-        parameters_base += 2;
-        stw_phys(parameters_base, sizeof(struct bi_record) + 4);
-        parameters_base += 2;
-        stl_phys(parameters_base, MACH_MAC);
-        parameters_base += 4;
-
-        stw_phys(parameters_base, BI_FPUTYPE);
-        parameters_base += 2;
-        stw_phys(parameters_base, sizeof(struct bi_record) + 4);
-        parameters_base += 2;
-        stl_phys(parameters_base, Q800_FPU_ID);
-        parameters_base += 4;
-
-        stw_phys(parameters_base, BI_MMUTYPE);
-        parameters_base += 2;
-        stw_phys(parameters_base, sizeof(struct bi_record) + 4);
-        parameters_base += 2;
-        stl_phys(parameters_base, Q800_MMU_ID);
-        parameters_base += 4;
-
-        stw_phys(parameters_base, BI_CPUTYPE);
-        parameters_base += 2;
-        stw_phys(parameters_base, sizeof(struct bi_record) + 4);
-        parameters_base += 2;
-        stl_phys(parameters_base, Q800_CPU_ID);
-        parameters_base += 4;
-
-        stw_phys(parameters_base, BI_MAC_MODEL);
-        parameters_base += 2;
-        stw_phys(parameters_base, sizeof(struct bi_record) + 4);
-        parameters_base += 2;
-        stl_phys(parameters_base, Q800_MACHINE_ID);
-        parameters_base += 4;
-
-        stw_phys(parameters_base, BI_MEMCHUNK);
-        parameters_base += 2;
-        stw_phys(parameters_base, sizeof(struct bi_record) + 2*4);
-        parameters_base += 2;
-        stl_phys(parameters_base, 0);        /* memory base address */
-        parameters_base += 4;
-        stl_phys(parameters_base, ram_size); /* memory size */
-        parameters_base += 4;
-
-        stw_phys(parameters_base, BI_MAC_VADDR);
-        parameters_base += 2;
-        stw_phys(parameters_base, sizeof(struct bi_record) + 4);
-        parameters_base += 2;
-        stl_phys(parameters_base, VIDEO_BASE);
-        parameters_base += 4;
-
-        stw_phys(parameters_base, BI_MAC_VDEPTH);
-        parameters_base += 2;
-        stw_phys(parameters_base, sizeof(struct bi_record) + 4);
-        parameters_base += 2;
-        stl_phys(parameters_base, graphic_depth);
-        parameters_base += 4;
-
-        stw_phys(parameters_base, BI_MAC_VDIM);
-        parameters_base += 2;
-        stw_phys(parameters_base, sizeof(struct bi_record) + 4);
-        parameters_base += 2;
-        stl_phys(parameters_base, (480 << 16) | 640);
-        parameters_base += 4;
-
-        stw_phys(parameters_base, BI_MAC_VROW);
-        parameters_base += 2;
-        stw_phys(parameters_base, sizeof(struct bi_record) + 4);
-        parameters_base += 2;
-        stl_phys(parameters_base, 640 * ((graphic_depth  + 7) / 8));
-        parameters_base += 4;
-
-        stw_phys(parameters_base, BI_MAC_SCCBASE);
-        parameters_base += 2;
-        stw_phys(parameters_base, sizeof(struct bi_record) + 4);
-        parameters_base += 2;
-        stl_phys(parameters_base, SCC_BASE);
-        parameters_base += 4;
+        BOOTINFO1(parameters_base, BI_MACHTYPE, MACH_MAC);
+        BOOTINFO1(parameters_base, BI_FPUTYPE, Q800_FPU_ID);
+        BOOTINFO1(parameters_base, BI_MMUTYPE, Q800_MMU_ID);
+        BOOTINFO1(parameters_base, BI_CPUTYPE, Q800_CPU_ID);
+        BOOTINFO1(parameters_base, BI_MAC_CPUID, Q800_CPU_ID);
+        BOOTINFO1(parameters_base, BI_MAC_MODEL, Q800_MACHINE_ID);
+        BOOTINFO1(parameters_base, BI_MAC_MEMSIZE, ram_size);
+        BOOTINFO2(parameters_base, BI_MEMCHUNK, 0, ram_size);
+        BOOTINFO1(parameters_base, BI_MAC_VADDR, VIDEO_BASE);
+        BOOTINFO1(parameters_base, BI_MAC_VDEPTH, graphic_depth);
+        BOOTINFO1(parameters_base, BI_MAC_VDIM, (480 << 16) | 640);
+        BOOTINFO1(parameters_base, BI_MAC_VROW,
+                     640 * ((graphic_depth  + 7) / 8));
+        BOOTINFO1(parameters_base, BI_MAC_SCCBASE, SCC_BASE);
 
         if (kernel_cmdline) {
-            stw_phys(parameters_base, BI_COMMAND_LINE);
-            parameters_base += 2;
-            stw_phys(parameters_base, (sizeof(struct bi_record) +
-                     strlen(kernel_cmdline) + 2) & ~1);
-            parameters_base += 2;
-            for (i = 0; kernel_cmdline[i]; i++) {
-                stb_phys(parameters_base, kernel_cmdline[i]);
-                parameters_base++;
-            }
-            stb_phys(parameters_base, 0);
-            parameters_base++;
-            parameters_base = (parameters_base + 1) & ~1;
+            BOOTINFOSTR(parameters_base, BI_COMMAND_LINE, kernel_cmdline);
         }
 
         /* load initrd */
@@ -379,22 +347,12 @@ static void q800_init(ram_addr_t ram_size,
                          initrd_filename);
                 exit(1);
             }
-            stw_phys(parameters_base, BI_RAMDISK);
-            parameters_base += 2;
-            stw_phys(parameters_base, 8);
-            parameters_base += 2;
-            stl_phys(parameters_base, initrd_base);
-            parameters_base += 4;
-            stl_phys(parameters_base, initrd_size);
-            parameters_base += 4;
+            BOOTINFO2(parameters_base, BI_RAMDISK, initrd_base, initrd_size);
         } else {
             initrd_base = 0;
             initrd_size = 0;
         }
-        stw_phys(parameters_base, BI_LAST);
-        parameters_base += 2;
-        stw_phys(parameters_base, 0);
-        parameters_base += 2;
+        BOOTINFO0(parameters_base, BI_LAST);
     } else {
         /* allocate and load BIOS */
         bios_offset = qemu_ram_alloc(NULL, "m68k_mac.rom", MACROM_SIZE);
