@@ -674,11 +674,29 @@ static int check_TTR(uint32_t ttr, target_phys_addr_t *physical, int *prot,
     return 1;
 }
 
+#define GET_ENTRY() \
+do { \
+    next = ldl_phys(entry); \
+    if ((next & 3) == 0 || (next & 3) == 1) { \
+        return -1; /* INVALID */ \
+    } \
+    next |= 1 << 3; /* USED */ \
+    stl_phys(entry, next); \
+    if (next & (1 << 2)) { \
+        *prot &= ~PAGE_WRITE; /* WRITE PROTECTED */ \
+    } \
+} while (0)
+
 static int get_physical_address(CPUState *env, target_phys_addr_t *physical,
                                 int *prot, target_ulong address,
                                 int access_type)
 {
-    int ret = 0;
+    uint32_t tia;
+    uint32_t tib;
+    uint32_t tic;
+    uint32_t page_offset;
+    uint32_t entry;
+    uint32_t next;
 
     /* Transparent Translation (physical = logical) */
 
@@ -698,9 +716,78 @@ static int get_physical_address(CPUState *env, target_phys_addr_t *physical,
         }
     }
 
-    *physical = address;
     *prot = PAGE_READ | PAGE_WRITE | PAGE_EXEC;
-    return ret;
+    if (access_type & ACCESS_SUPER) {
+        next = env->mmu.srp;
+    } else {
+        next = env->mmu.urp;
+    }
+
+    tia = (address >> 25) & 0x7f;
+    entry = (next & ~0x1ff) + (tia << 2);
+    GET_ENTRY();
+
+    tib = (address >> 18) & 0x7f;
+    entry = (next & ~0x1ff) + (tib << 2);
+    GET_ENTRY();
+
+    if (env->mmu.tcr & 0x4000) {
+        /* 8 kB page */
+        tic = (address >> 13) & 0x1f;
+
+        entry = (next & ~0x7f) + (tic << 2);
+        next = ldl_phys(entry);
+        if ((next & 3) == 2) {
+            /* INDIRECT */
+            entry = next;
+            next = ldl_phys(entry);
+        }
+        next |= 1 << 3; /* USED */
+        if (access_type & ACCESS_STORE) {
+            next |= (1 << 4); /* MODIFIED */
+        }
+        stl_phys(entry, next);
+        if (next & (1 << 2)) {
+            *prot &= ~PAGE_WRITE; /* WRITE PROTECTED */
+        }
+        if (next & (1 << 7)) {
+            /* SUPERVISOR */
+            if ((access_type & ACCESS_SUPER) == 0) {
+                return -1;
+            }
+        }
+        page_offset = address & 0x1fff;
+        *physical = (next & ~0x1fff) + page_offset;
+    } else {
+        /* 4 kB page */
+        tic = (address >> 12) & 0x3f;
+
+        entry = (next & ~0xff) + (tic << 2);
+        next = ldl_phys(entry);
+        if ((next & 3) == 2) {
+            /* INDIRECT */
+            entry = next;
+            next = ldl_phys(entry);
+        }
+        next |= 1 << 3; /* USED */
+        if (access_type & ACCESS_STORE) {
+            next |= (1 << 4); /* MODIFIED */
+        }
+        stl_phys(entry, next);
+        if (next & (1 << 2)) {
+            *prot &= ~PAGE_WRITE; /* WRITE PROTECTED */
+        }
+        if (next & (1 << 7)) {
+            /* SUPERVISOR */
+            if ((access_type & ACCESS_SUPER) == 0) {
+                return -1;
+            }
+        }
+        page_offset = address & 0x0fff;
+        *physical = (next & ~0x0fff) + page_offset;
+    }
+
+    return 0;
 }
 
 target_phys_addr_t cpu_get_phys_page_debug(CPUState *env, target_ulong addr)
@@ -714,7 +801,7 @@ target_phys_addr_t cpu_get_phys_page_debug(CPUState *env, target_ulong addr)
     }
 
     if (get_physical_address(env, &phys_addr, &prot,
-                             addr, ACCESS_INT) != 0) {
+                             addr, ACCESS_SUPER | ACCESS_INT) != 0) {
         return -1;
     }
     return phys_addr;
@@ -759,7 +846,8 @@ int cpu_m68k_handle_mmu_fault (CPUState *env, target_ulong address, int rw,
                      prot, mmu_idx, TARGET_PAGE_SIZE);
         return 0;
     }
-    /* FIXME: manage MMU fault */
+    env->mmu.ar = address;
+    env->exception_index = EXCP_ACCESS;
     return 1;
 }
 
