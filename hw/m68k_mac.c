@@ -55,6 +55,7 @@
 #define Q800_MMU_ID (1<<2)
 
 #define MACH_MAC        3 
+#define Q800_MAC_CPU_ID 2
 
 #define SCC_BASE  0x50f0c020
 #define MAC_ESP_IO_BASE 0x50F00000
@@ -322,9 +323,9 @@ static void q800_init(ram_addr_t ram_size,
         BOOTINFO1(parameters_base, BI_FPUTYPE, Q800_FPU_ID);
         BOOTINFO1(parameters_base, BI_MMUTYPE, Q800_MMU_ID);
         BOOTINFO1(parameters_base, BI_CPUTYPE, Q800_CPU_ID);
-        BOOTINFO1(parameters_base, BI_MAC_CPUID, Q800_CPU_ID);
+        BOOTINFO1(parameters_base, BI_MAC_CPUID, Q800_MAC_CPU_ID);
         BOOTINFO1(parameters_base, BI_MAC_MODEL, Q800_MACHINE_ID);
-        BOOTINFO1(parameters_base, BI_MAC_MEMSIZE, ram_size);
+        BOOTINFO1(parameters_base, BI_MAC_MEMSIZE, ram_size >> 20); /* in MB */
         BOOTINFO2(parameters_base, BI_MEMCHUNK, 0, ram_size);
         BOOTINFO1(parameters_base, BI_MAC_VADDR, VIDEO_BASE);
         BOOTINFO1(parameters_base, BI_MAC_VDEPTH, graphic_depth);
