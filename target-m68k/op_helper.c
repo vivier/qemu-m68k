@@ -242,7 +242,7 @@ static void do_interrupt_all(CPUM68KState *env, int is_hw)
             sp -= 2;
             cpu_stw_kernel(env, sp, 0); /* WB3S */
             sp -= 2;
-            cpu_stw_kernel(env, sp, 0); /* SPECIAL STATUS WORD */
+            cpu_stw_kernel(env, sp, env->mmu.ssw); /* SPECIAL STATUS WORD */
             sp -= 4;
             cpu_stl_kernel(env, sp, env->mmu.ar); /* EA */
             do_stack_frame(env, &sp, 7, env->sr, 0, retaddr);
