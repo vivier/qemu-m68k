@@ -2470,4 +2470,22 @@ void HELPER(ptest)(CPUM68KState * env, uint32_t addr, uint32_t is_write)
     /* Bus error: Set B, clear all others */
     env->mmu.mmusr = 1 << 11;
 }
+
+void HELPER(pflush)(CPUM68KState * env, uint32_t addr, uint32_t opmode)
+{
+    M68kCPU *cpu = m68k_env_get_cpu(env);
+
+    switch (opmode) {
+    case 0: /* Flush page entry if not global */
+    case 1: /* Flush page entry */
+        tlb_flush_page(CPU(cpu), addr);
+        break;
+    case 2: /* Flush all except global entries */
+        tlb_flush(CPU(cpu), 0);
+        break;
+    case 3: /* Flush all entries */
+        tlb_flush(CPU(cpu), 1);
+        break;
+    }
+}
 #endif
