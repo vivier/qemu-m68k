@@ -216,35 +216,35 @@ static void do_interrupt_all(CPUM68KState *env, int is_hw)
         if (cs->exception_index == 2) {
             /* FIXME */
             sp -= 4;
-            cpu_stl_kernel(env, sp, 0); /* PD3 */
+            cpu_stl_kernel(env, sp, 0); /* push data 3 */
             sp -= 4;
-            cpu_stl_kernel(env, sp, 0); /* PD2 */
+            cpu_stl_kernel(env, sp, 0); /* push data 2 */
             sp -= 4;
-            cpu_stl_kernel(env, sp, 0); /* PD1 */
+            cpu_stl_kernel(env, sp, 0); /* push data 1 */
             sp -= 4;
-            cpu_stl_kernel(env, sp, 0); /* WB1D/PD0 */
+            cpu_stl_kernel(env, sp, 0); /* write back 1 / push data 0 */
             sp -= 4;
-            cpu_stl_kernel(env, sp, 0); /* WB1A */
+            cpu_stl_kernel(env, sp, 0); /* write back 1 address */
             sp -= 4;
-            cpu_stl_kernel(env, sp, 0); /* WB2D */
+            cpu_stl_kernel(env, sp, 0); /* write back 2 data */
             sp -= 4;
-            cpu_stl_kernel(env, sp, 0); /* WB2A */
+            cpu_stl_kernel(env, sp, 0); /* write back 2 address */
             sp -= 4;
-            cpu_stl_kernel(env, sp, 0); /* WB3D */
+            cpu_stl_kernel(env, sp, env->mmu.wb3_data); /* write back 3 data */
             sp -= 4;
-            cpu_stl_kernel(env, sp, env->mmu.ar); /* WB3A */
+            cpu_stl_kernel(env, sp, env->mmu.ar); /* write back 3 address */
             sp -= 4;
-            cpu_stl_kernel(env, sp, env->mmu.ar); /* FA */
+            cpu_stl_kernel(env, sp, env->mmu.ar); /* fault address */
             sp -= 2;
-            cpu_stw_kernel(env, sp, 0); /* WB1S */
+            cpu_stw_kernel(env, sp, 0); /* write back 1 status */
             sp -= 2;
-            cpu_stw_kernel(env, sp, 0); /* WB2S */
+            cpu_stw_kernel(env, sp, 0); /* write back 2 status */
             sp -= 2;
-            cpu_stw_kernel(env, sp, 0); /* WB3S */
+            cpu_stw_kernel(env, sp, env->mmu.wb3_status); /* write back 3 status */
             sp -= 2;
-            cpu_stw_kernel(env, sp, env->mmu.ssw); /* SPECIAL STATUS WORD */
+            cpu_stw_kernel(env, sp, env->mmu.ssw); /* special status word */
             sp -= 4;
-            cpu_stl_kernel(env, sp, env->mmu.ar); /* EA */
+            cpu_stl_kernel(env, sp, env->mmu.ar); /* effective address */
             do_stack_frame(env, &sp, 7, env->sr, 0, retaddr);
         } else if (cs->exception_index == 3) {
             do_stack_frame(env, &sp, 2, env->sr, 0, retaddr);
