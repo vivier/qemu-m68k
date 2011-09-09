@@ -774,6 +774,11 @@ int m68k_cpu_handle_mmu_fault(CPUState *cs, vaddr address, int rw,
                      prot, mmu_idx, TARGET_PAGE_SIZE);
         return 0;
     }
+    env->mmu.wb3_status = 0;
+    if (access_type & ACCESS_STORE) {
+        env->mmu.wb3_status = env->mmu.ssw & 0x7f;
+        env->mmu.wb3_status |= 0x80; /* valid */
+    }
     env->mmu.ar = address;
     cs->exception_index = EXCP_ACCESS;
     return 1;
