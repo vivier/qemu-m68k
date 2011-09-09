@@ -183,6 +183,19 @@ WORD_TYPE helper_le_ld_name(CPUArchState *env, target_ulong addr,
     /* If the TLB entry is for a different page, reload and try again.  */
     if ((addr & TARGET_PAGE_MASK)
          != (tlb_addr & (TARGET_PAGE_MASK | TLB_INVALID_MASK))) {
+#ifdef TARGET_M68K
+        switch (DATA_SIZE) {
+        case 1:
+            env->mmu.ssw = M68K_BA_SIZE_BYTE;
+            break;
+        case 2:
+            env->mmu.ssw = M68K_BA_SIZE_WORD;
+            break;
+        case 4:
+            env->mmu.ssw = M68K_BA_SIZE_LONG;
+            break;
+        }
+#endif
         if ((addr & (DATA_SIZE - 1)) != 0
             && (get_memop(oi) & MO_AMASK) == MO_ALIGN) {
             cpu_unaligned_access(ENV_GET_CPU(env), addr, READ_ACCESS_TYPE,
@@ -275,6 +288,19 @@ WORD_TYPE helper_be_ld_name(CPUArchState *env, target_ulong addr,
             cpu_unaligned_access(ENV_GET_CPU(env), addr, READ_ACCESS_TYPE,
                                  mmu_idx, retaddr);
         }
+#ifdef TARGET_M68K
+        switch (DATA_SIZE) {
+        case 1:
+            env->mmu.ssw = M68K_BA_SIZE_BYTE;
+            break;
+        case 2:
+            env->mmu.ssw = M68K_BA_SIZE_WORD;
+            break;
+        case 4:
+            env->mmu.ssw = M68K_BA_SIZE_LONG;
+            break;
+        }
+#endif
         if (!VICTIM_TLB_HIT(ADDR_READ)) {
             tlb_fill(ENV_GET_CPU(env), addr, READ_ACCESS_TYPE,
                      mmu_idx, retaddr);
@@ -398,6 +424,19 @@ void helper_le_st_name(CPUArchState *env, target_ulong addr, DATA_TYPE val,
     /* If the TLB entry is for a different page, reload and try again.  */
     if ((addr & TARGET_PAGE_MASK)
         != (tlb_addr & (TARGET_PAGE_MASK | TLB_INVALID_MASK))) {
+#ifdef TARGET_M68K
+        switch (DATA_SIZE) {
+        case 1:
+            env->mmu.ssw = M68K_BA_SIZE_BYTE;
+            break;
+        case 2:
+            env->mmu.ssw = M68K_BA_SIZE_WORD;
+            break;
+        case 4:
+            env->mmu.ssw = M68K_BA_SIZE_LONG;
+            break;
+        }
+#endif
         if ((addr & (DATA_SIZE - 1)) != 0
             && (get_memop(oi) & MO_AMASK) == MO_ALIGN) {
             cpu_unaligned_access(ENV_GET_CPU(env), addr, MMU_DATA_STORE,
@@ -478,6 +517,19 @@ void helper_be_st_name(CPUArchState *env, target_ulong addr, DATA_TYPE val,
     /* If the TLB entry is for a different page, reload and try again.  */
     if ((addr & TARGET_PAGE_MASK)
         != (tlb_addr & (TARGET_PAGE_MASK | TLB_INVALID_MASK))) {
+#ifdef TARGET_M68K
+        switch (DATA_SIZE) {
+        case 1:
+            env->mmu.ssw = M68K_BA_SIZE_BYTE;
+            break;
+        case 2:
+            env->mmu.ssw = M68K_BA_SIZE_WORD;
+            break;
+        case 4:
+            env->mmu.ssw = M68K_BA_SIZE_LONG;
+            break;
+        }
+#endif
         if ((addr & (DATA_SIZE - 1)) != 0
             && (get_memop(oi) & MO_AMASK) == MO_ALIGN) {
             cpu_unaligned_access(ENV_GET_CPU(env), addr, MMU_DATA_STORE,
