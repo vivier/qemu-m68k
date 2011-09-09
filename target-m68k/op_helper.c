@@ -224,35 +224,35 @@ static void do_interrupt_all(int is_hw)
         if (env->exception_index == 2) {
             /* FIXME */
             sp -= 4;
-            stl_kernel(sp, 0); /* PD3 */
+            stl_kernel(sp, 0); /* push data 3 */
             sp -= 4;
-            stl_kernel(sp, 0); /* PD2 */
+            stl_kernel(sp, 0); /* push data 2 */
             sp -= 4;
-            stl_kernel(sp, 0); /* PD1 */
+            stl_kernel(sp, 0); /* push data 1 */
             sp -= 4;
-            stl_kernel(sp, 0); /* WB1D/PD0 */
+            stl_kernel(sp, 0); /* write back 1 / push data 0 */
             sp -= 4;
-            stl_kernel(sp, 0); /* WB1A */
+            stl_kernel(sp, 0); /* write back 1 address */
             sp -= 4;
-            stl_kernel(sp, 0); /* WB2D */
+            stl_kernel(sp, 0); /* write back 2 data */
             sp -= 4;
-            stl_kernel(sp, 0); /* WB2A */
+            stl_kernel(sp, 0); /* write back 2 address */
             sp -= 4;
-            stl_kernel(sp, 0); /* WB3D */
+            stl_kernel(sp, env->mmu.wb3_data); /* write back 3 data */
             sp -= 4;
-            stl_kernel(sp, env->mmu.ar); /* WB3A */
+            stl_kernel(sp, env->mmu.ar); /* write back 3 address */
             sp -= 4;
-            stl_kernel(sp, env->mmu.ar); /* FA */
+            stl_kernel(sp, env->mmu.ar); /* fault address */
             sp -= 2;
-            stw_kernel(sp, 0); /* WB1S */
+            stw_kernel(sp, 0); /* write back 1 status */
             sp -= 2;
-            stw_kernel(sp, 0); /* WB2S */
+            stw_kernel(sp, 0); /* write back 2 status */
             sp -= 2;
-            stw_kernel(sp, 0); /* WB3S */
+            stw_kernel(sp, env->mmu.wb3_status); /* write back 3 status */
             sp -= 2;
-            stw_kernel(sp, env->mmu.ssw); /* SPECIAL STATUS WORD */
+            stw_kernel(sp, env->mmu.ssw); /* special status word */
             sp -= 4;
-            stl_kernel(sp, env->mmu.ar); /* EA */
+            stl_kernel(sp, env->mmu.ar); /* effective address */
             do_stack_frame(&sp, 7, env->sr, 0, retaddr);
         } else if (env->exception_index == 3) {
             do_stack_frame(&sp, 2, env->sr, 0, retaddr);
