@@ -336,6 +336,7 @@ void glue(glue(glue(HELPER_PREFIX, st), SUFFIX), MMUSUFFIX)(ENV_PARAM
             env->mmu.ssw = M68K_BA_SIZE_LONG;
             break;
         }
+        env->mmu.wb3_data = val;
 #endif
 #ifdef ALIGNED_ONLY
         if ((addr & (DATA_SIZE - 1)) != 0)
@@ -403,6 +404,7 @@ static void glue(glue(slow_st, SUFFIX), MMUSUFFIX)(ENV_PARAM
             env->mmu.ssw = M68K_BA_SIZE_LONG;
             break;
         }
+        env->mmu.wb3_data = val;
 #endif
         tlb_fill(env, addr, 1, mmu_idx, retaddr);
         goto redo;
