@@ -3696,6 +3696,18 @@ DISAS_INSN(pflush)
     /* Invalidate cache line.  Implement as no-op.  */
 }
 
+DISAS_INSN(ptest)
+{
+    TCGv reg;
+
+    if (IS_USER(s)) {
+        gen_exception(s, s->pc - 2, EXCP_PRIVILEGE);
+        return;
+    }
+    reg = AREG(insn, 0);
+    gen_helper_ptest(cpu_env, reg, tcg_const_i32(1 - ((insn >> 5) & 1)));
+}
+
 DISAS_INSN(wddata)
 {
     gen_exception(s, s->pc - 2, EXCP_PRIVILEGE);
@@ -4744,6 +4756,7 @@ void register_m68k_insns (CPUM68KState *env)
     INSN(cpush,     f420, ff20, M68000);
     INSN(cinv,      f400, ff20, M68000);
     INSN(pflush,    f500, ffe0, M68000);  /* FIXME: 68040 version only*/
+    INSN(ptest,     f548, ffd8, M68000);  /* FIXME: 68040 version only*/
     INSN(wddata,    fb00, ff00, CF_ISA_A);
     INSN(wdebug,    fbc0, ffc0, CF_ISA_A);
 #ifdef CONFIG_EMULOP

@@ -685,7 +685,11 @@ do { \
     next |= 1 << 3; /* USED */ \
     stl_phys(entry, next); \
     if (next & (1 << 2)) { \
-        *prot &= ~PAGE_WRITE; /* WRITE PROTECTED */ \
+        /* WRITE PROTECTED */ \
+        if (access_type & ACCESS_PTEST) { \
+            env->mmu.mmusr |= 1 << 2; \
+        } \
+        *prot &= ~PAGE_WRITE; \
     } \
 } while (0)
 
@@ -704,16 +708,21 @@ static int get_physical_address(CPUState *env, target_phys_addr_t *physical,
 
     if (access_type & ACCESS_CODE) {
         if (check_TTR(env->mmu.ittr0, physical, prot, address, access_type)) {
-            return 0;
+            goto TTR_exit;
         }
         if (check_TTR(env->mmu.ittr1, physical, prot, address, access_type)) {
-            return 0;
+            goto TTR_exit;
         }
     } else {
         if (check_TTR(env->mmu.dttr0, physical, prot, address, access_type)) {
-            return 0;
+            goto TTR_exit;
         }
         if (check_TTR(env->mmu.dttr1, physical, prot, address, access_type)) {
+TTR_exit:
+            if (access_type & ACCESS_PTEST) {
+                /* Transparent Translation Register bit */
+                env->mmu.mmusr |= 1 << 1;
+            }
             return 0;
         }
     }
@@ -744,13 +753,19 @@ static int get_physical_address(CPUState *env, target_phys_addr_t *physical,
             entry = next;
             next = ldl_phys(entry);
         }
-        next |= 1 << 3; /* USED */
-        if (access_type & ACCESS_STORE) {
-            next |= (1 << 4); /* MODIFIED */
+        if (!(access_type & ACCESS_PTEST)) {
+            next |= 1 << 3; /* USED */
+            if (access_type & ACCESS_STORE) {
+                next |= (1 << 4); /* MODIFIED */
+            }
         }
         stl_phys(entry, next);
+        /* WRITE PROTECTED */
         if (next & (1 << 2)) {
-            *prot &= ~PAGE_WRITE; /* WRITE PROTECTED */
+            if (access_type & ACCESS_PTEST) {
+                env->mmu.mmusr |= 1 << 2;
+            }
+            *prot &= ~PAGE_WRITE;
         }
         if (next & (1 << 7)) {
             /* SUPERVISOR */
@@ -772,13 +787,21 @@ static int get_physical_address(CPUState *env, target_phys_addr_t *physical,
             entry = next;
             next = ldl_phys(entry);
         }
-        next |= 1 << 3; /* USED */
-        if (access_type & ACCESS_STORE) {
-            next |= (1 << 4); /* MODIFIED */
+        if (!(access_type & ACCESS_PTEST)) {
+            next |= 1 << 3; /* USED */
+            if (access_type & ACCESS_STORE) {
+                next |= (1 << 4); /* MODIFIED */
+            }
+        } else {
+            env->mmu.mmusr |= next & 0x0000007f;
         }
         stl_phys(entry, next);
         if (next & (1 << 2)) {
-            *prot &= ~PAGE_WRITE; /* WRITE PROTECTED */
+            /* WRITE PROTECTED */
+            if (access_type & ACCESS_PTEST) {
+                env->mmu.mmusr |= 1 << 2;
+            }
+            *prot &= ~PAGE_WRITE;
         }
         if (next & (1 << 7)) {
             /* SUPERVISOR */
@@ -2481,4 +2504,29 @@ uint32_t HELPER(sbcd_cc)(CPUState *env, uint32_t src, uint32_t dest)
     env->cc_dest = flags;
 
     return dest;
+}
+
+void HELPER(ptest)(CPUState * env, uint32_t addr, uint32_t is_write)
+{
+    target_phys_addr_t physical;
+    int ret;
+    int access_type;
+    int prot;
+
+    access_type = ACCESS_PTEST;
+    access_type |= (env->dfc & 4) ? ACCESS_SUPER : 0;
+    if ((env->dfc & 3) == 2) {
+        access_type |= ACCESS_CODE;
+    }
+
+    env->mmu.mmusr = 0;
+    env->mmu.ssw = 0;
+    ret = get_physical_address(env, &physical, &prot, addr, access_type);
+    if (ret == 0) {
+        env->mmu.mmusr |= 1; /* RESIDENT */
+        env->mmu.mmusr |= physical & 0xfffff000;
+        return;
+    }
+    /* Bus error: Set B, clear all others */
+    env->mmu.mmusr = 1 << 11;
 }

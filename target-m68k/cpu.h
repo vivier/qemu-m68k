@@ -78,6 +78,8 @@ enum {
     ACCESS_SUPER = 0x01,
     /* 1 bit to indicate direction */
     ACCESS_STORE = 0x02,
+    /* PTEST instruction */
+    ACCESS_PTEST = 0x04,
     /* Type of instruction that generated the access */
     ACCESS_CODE  = 0x10, /* Code fetch access                */
     ACCESS_INT   = 0x20, /* Integer load/store access        */
