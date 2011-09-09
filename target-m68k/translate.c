@@ -3689,11 +3689,17 @@ DISAS_INSN(cinv)
 
 DISAS_INSN(pflush)
 {
+    TCGv reg;
+    int opmode;
+
     if (IS_USER(s)) {
         gen_exception(s, s->pc - 2, EXCP_PRIVILEGE);
         return;
     }
-    /* Invalidate cache line.  Implement as no-op.  */
+
+    reg = AREG(insn, 0);
+    opmode = (insn >> 3) & 3;
+    gen_helper_pflush(cpu_env, reg, tcg_const_i32(opmode));
 }
 
 DISAS_INSN(ptest)

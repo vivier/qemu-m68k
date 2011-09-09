@@ -123,4 +123,5 @@ DEF_HELPER_3(abcd_cc, i32, env, i32, i32);
 DEF_HELPER_3(sbcd_cc, i32, env, i32, i32);
 
 DEF_HELPER_3(ptest, void, env, i32, i32);
+DEF_HELPER_3(pflush, void, env, i32, i32);
 #include "def-helper.h"
