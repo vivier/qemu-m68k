@@ -154,6 +154,7 @@ typedef struct CPUM68KState {
     /* MMU status.  */
     struct {
         uint32_t ar;
+        uint32_t ssw;
         /* 68040 */
         uint16_t tcr;
         uint32_t urp;
@@ -234,6 +235,47 @@ enum {
 
 #define M68K_SSP    0
 #define M68K_USP    1
+
+/* bits for 68040 special status word */
+#define M68K_CP_040  (0x8000)
+#define M68K_CU_040  (0x4000)
+#define M68K_CT_040  (0x2000)
+#define M68K_CM_040  (0x1000)
+#define M68K_MA_040  (0x0800)
+#define M68K_ATC_040 (0x0400)
+#define M68K_LK_040  (0x0200)
+#define M68K_RW_040  (0x0100)
+#define M68K_SIZ_040 (0x0060)
+#define M68K_TT_040  (0x0018)
+#define M68K_TM_040  (0x0007)
+
+/* bits for 68040 write back status word */
+#define M68K_WBV_040   (0x80)
+#define M68K_WBSIZ_040 (0x60)
+#define M68K_WBBYT_040 (0x20)
+#define M68K_WBWRD_040 (0x40)
+#define M68K_WBLNG_040 (0x00)
+#define M68K_WBTT_040  (0x18)
+#define M68K_WBTM_040  (0x07)
+
+/* bus access size codes */
+#define M68K_BA_SIZE_BYTE    (0x20)
+#define M68K_BA_SIZE_WORD    (0x40)
+#define M68K_BA_SIZE_LONG    (0x00)
+#define M68K_BA_SIZE_LINE    (0x60)
+
+/* bus access transfer type codes */
+#define M68K_BA_TT_MOVE16    (0x08)
+
+/* bits for 68040 MMU status register (mmusr) */
+#define M68K_MMU_B_040   (0x0800)
+#define M68K_MMU_G_040   (0x0400)
+#define M68K_MMU_S_040   (0x0080)
+#define M68K_MMU_CM_040  (0x0060)
+#define M68K_MMU_M_040   (0x0010)
+#define M68K_MMU_WP_040  (0x0004)
+#define M68K_MMU_T_040   (0x0002)
+#define M68K_MMU_R_040   (0x0001)
 
 /* m68k Control Registers */
 

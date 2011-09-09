@@ -132,6 +132,19 @@ DATA_TYPE REGPARM glue(glue(__ld, SUFFIX), MMUSUFFIX)(target_ulong addr,
     } else {
         /* the page is not in the TLB : fill it */
         retaddr = GETPC();
+#ifdef TARGET_M68K
+        switch (DATA_SIZE) {
+        case 1:
+            env->mmu.ssw = M68K_BA_SIZE_BYTE;
+            break;
+        case 2:
+            env->mmu.ssw = M68K_BA_SIZE_WORD;
+            break;
+        case 4:
+            env->mmu.ssw = M68K_BA_SIZE_LONG;
+            break;
+        }
+#endif
 #ifdef ALIGNED_ONLY
         if ((addr & (DATA_SIZE - 1)) != 0)
             do_unaligned_access(addr, READ_ACCESS_TYPE, mmu_idx, retaddr);
@@ -186,6 +199,19 @@ static DATA_TYPE glue(glue(slow_ld, SUFFIX), MMUSUFFIX)(target_ulong addr,
         }
     } else {
         /* the page is not in the TLB : fill it */
+#ifdef TARGET_M68K
+        switch (DATA_SIZE) {
+        case 1:
+            env->mmu.ssw = M68K_BA_SIZE_BYTE;
+            break;
+        case 2:
+            env->mmu.ssw = M68K_BA_SIZE_WORD;
+            break;
+        case 4:
+            env->mmu.ssw = M68K_BA_SIZE_LONG;
+            break;
+        }
+#endif
         tlb_fill(env, addr, READ_ACCESS_TYPE, mmu_idx, retaddr);
         goto redo;
     }
@@ -270,6 +296,19 @@ void REGPARM glue(glue(__st, SUFFIX), MMUSUFFIX)(target_ulong addr,
     } else {
         /* the page is not in the TLB : fill it */
         retaddr = GETPC();
+#ifdef TARGET_M68K
+        switch (DATA_SIZE) {
+        case 1:
+            env->mmu.ssw = M68K_BA_SIZE_BYTE;
+            break;
+        case 2:
+            env->mmu.ssw = M68K_BA_SIZE_WORD;
+            break;
+        case 4:
+            env->mmu.ssw = M68K_BA_SIZE_LONG;
+            break;
+        }
+#endif
 #ifdef ALIGNED_ONLY
         if ((addr & (DATA_SIZE - 1)) != 0)
             do_unaligned_access(addr, 1, mmu_idx, retaddr);
@@ -321,6 +360,19 @@ static void glue(glue(slow_st, SUFFIX), MMUSUFFIX)(target_ulong addr,
         }
     } else {
         /* the page is not in the TLB : fill it */
+#ifdef TARGET_M68K
+        switch (DATA_SIZE) {
+        case 1:
+            env->mmu.ssw = M68K_BA_SIZE_BYTE;
+            break;
+        case 2:
+            env->mmu.ssw = M68K_BA_SIZE_WORD;
+            break;
+        case 4:
+            env->mmu.ssw = M68K_BA_SIZE_LONG;
+            break;
+        }
+#endif
         tlb_fill(env, addr, 1, mmu_idx, retaddr);
         goto redo;
     }
