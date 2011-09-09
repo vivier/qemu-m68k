@@ -1964,7 +1964,7 @@ DISAS_INSN(moves)
     int opsize;
     uint16_t ext;
     int mem_index;
-    int data;
+    /*int data;*/
     TCGv reg;
     TCGv ea_result;
 
@@ -1988,7 +1988,7 @@ DISAS_INSN(moves)
     if (ext & 0x0800) {
         /* from reg to ea */
         mem_index = (s->env->dfc & 4) ? MMU_KERNEL_IDX : MMU_USER_IDX;
-        data = (s->env->dfc & 3) != 2;
+        /* data = (s->env->dfc & 3) != 2; */
         /* FIXME: manage data */
         ea_result = gen_ea(env, s, insn, opsize, reg, NULL, EA_STORE, mem_index);
         if (IS_NULL_QREG(ea_result)) {
@@ -1998,7 +1998,7 @@ DISAS_INSN(moves)
     } else {
         /* from ea to reg */
         mem_index = (s->env->sfc & 4) ? MMU_KERNEL_IDX : MMU_USER_IDX;
-        data = (s->env->sfc & 3) != 2;
+        /* data = (s->env->sfc & 3) != 2; */
         /* FIXME: manage data */
         ea_result = gen_ea(env, s, insn, opsize, reg, NULL, EA_LOADS, mem_index);
         if (IS_NULL_QREG(ea_result)) {
@@ -3733,6 +3733,20 @@ DISAS_INSN(pflush)
     /* Invalidate cache line.  Implement as no-op.  */
 }
 
+#if !defined(CONFIG_USER_ONLY)
+DISAS_INSN(ptest)
+{
+    TCGv reg;
+
+    if (IS_USER(s)) {
+        gen_exception(s, s->pc - 2, EXCP_PRIVILEGE);
+        return;
+    }
+    reg = AREG(insn, 0);
+    gen_helper_ptest(cpu_env, reg, tcg_const_i32(1 - ((insn >> 5) & 1)));
+}
+#endif
+
 DISAS_INSN(wddata)
 {
     gen_exception(s, s->pc - 2, EXCP_PRIVILEGE);
@@ -4846,6 +4860,9 @@ void register_m68k_insns (CPUM68KState *env)
     INSN(cpush,     f420, ff20, M68000);
     INSN(cinv,      f400, ff20, M68000);
     INSN(pflush,    f500, ffe0, M68000);  /* FIXME: 68040 version only*/
+#if !defined(CONFIG_USER_ONLY)
+    INSN(ptest,     f548, ffd8, M68000);  /* FIXME: 68040 version only*/
+#endif
     INSN(wddata,    fb00, ff00, CF_ISA_A);
     INSN(wdebug,    fbc0, ffc0, CF_ISA_A);
 #ifdef CONFIG_EMULOP
