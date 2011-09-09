@@ -690,6 +690,10 @@ do { \
             env->mmu.mmusr |= 1 << 2; \
         } \
         *prot &= ~PAGE_WRITE; \
+        if (access_type & ACCESS_STORE) { \
+            env->mmu.ssw |= M68K_ATC_040; \
+            return -1; \
+        } \
     } \
 } while (0)
 
@@ -766,10 +770,15 @@ TTR_exit:
                 env->mmu.mmusr |= 1 << 2;
             }
             *prot &= ~PAGE_WRITE;
+            if (access_type & ACCESS_STORE) {
+                env->mmu.ssw |= M68K_ATC_040;
+                return -1;
+            }
         }
         if (next & (1 << 7)) {
             /* SUPERVISOR */
             if ((access_type & ACCESS_SUPER) == 0) {
+                env->mmu.ssw |= M68K_ATC_040;
                 env->mmu.ssw |= access_type & ACCESS_STORE ? M68K_RW_040 : 0;
                 return -1;
             }
@@ -802,10 +811,15 @@ TTR_exit:
                 env->mmu.mmusr |= 1 << 2;
             }
             *prot &= ~PAGE_WRITE;
+            if (access_type & ACCESS_STORE) {
+                env->mmu.ssw |= M68K_ATC_040;
+                return -1;
+            }
         }
         if (next & (1 << 7)) {
             /* SUPERVISOR */
             if ((access_type & ACCESS_SUPER) == 0) {
+                env->mmu.ssw |= M68K_ATC_040;
                 env->mmu.ssw |= access_type & ACCESS_STORE ? M68K_RW_040 : 0;
                 return -1;
             }
