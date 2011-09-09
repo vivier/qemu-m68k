@@ -157,6 +157,8 @@ typedef struct CPUM68KState {
     struct {
         uint32_t ar;
         uint32_t ssw;
+        uint32_t wb3_data;
+        uint32_t wb3_status;
         /* 68040 */
         uint16_t tcr;
         uint32_t urp;
