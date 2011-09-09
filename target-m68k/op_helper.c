@@ -250,7 +250,7 @@ static void do_interrupt_all(int is_hw)
             sp -= 2;
             stw_kernel(sp, 0); /* WB3S */
             sp -= 2;
-            stw_kernel(sp, 0); /* SPECIAL STATUS WORD */
+            stw_kernel(sp, env->mmu.ssw); /* SPECIAL STATUS WORD */
             sp -= 4;
             stl_kernel(sp, env->mmu.ar); /* EA */
             do_stack_frame(&sp, 7, env->sr, 0, retaddr);
