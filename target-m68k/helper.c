@@ -2530,3 +2530,19 @@ void HELPER(ptest)(CPUState * env, uint32_t addr, uint32_t is_write)
     /* Bus error: Set B, clear all others */
     env->mmu.mmusr = 1 << 11;
 }
+
+void HELPER(pflush)(CPUState * env, uint32_t addr, uint32_t opmode)
+{
+    switch (opmode) {
+    case 0: /* Flush page entry if not global */
+    case 1: /* Flush page entry */
+        tlb_flush_page(env, addr);
+        break;
+    case 2: /* Flush all except global entries */
+        tlb_flush(env, 0);
+        break;
+    case 3: /* Flush all entries */
+        tlb_flush(env, 1);
+        break;
+    }
+}
