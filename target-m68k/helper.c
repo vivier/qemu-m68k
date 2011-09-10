@@ -565,7 +565,7 @@ do { \
     next = ldl_phys(entry); \
     if ((next & 3) == 0 || (next & 3) == 1) { \
         env->mmu.ssw |= M68K_ATC_040; \
-        env->mmu.ssw |= access_type & ACCESS_STORE ? M68K_RW_040 : 0; \
+        env->mmu.ssw |= access_type & ACCESS_STORE ? 0 : M68K_RW_040; \
         return -1; /* INVALID */ \
     } \
     next |= 1 << 3; /* USED */ \
@@ -665,7 +665,7 @@ TTR_exit:
             /* SUPERVISOR */
             if ((access_type & ACCESS_SUPER) == 0) {
                 env->mmu.ssw |= M68K_ATC_040;
-                env->mmu.ssw |= access_type & ACCESS_STORE ? M68K_RW_040 : 0;
+                env->mmu.ssw |= access_type & ACCESS_STORE ? 0 : M68K_RW_040;
                 return -1;
             }
         }
@@ -706,7 +706,7 @@ TTR_exit:
             /* SUPERVISOR */
             if ((access_type & ACCESS_SUPER) == 0) {
                 env->mmu.ssw |= M68K_ATC_040;
-                env->mmu.ssw |= access_type & ACCESS_STORE ? M68K_RW_040 : 0;
+                env->mmu.ssw |= access_type & ACCESS_STORE ? 0 : M68K_RW_040;
                 return -1;
             }
         }
