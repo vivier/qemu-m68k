@@ -3889,6 +3889,7 @@ static void gen_op_fmovem(CPUM68KState *env, DisasContext *s,
    immediately before the next FP instruction is executed.  */
 DISAS_INSN(fpu)
 {
+    int ctrl;
     uint16_t ext;
     uint8_t rom_offset;
     int opmode;
@@ -3920,36 +3921,30 @@ DISAS_INSN(fpu)
         gen_op_store_ea_FP0(env, s, insn, opsize);
         return;
     case 4: /* fmove to control register.  */
-        switch ((ext >> 10) & 7) {
-        case 4: /* FPCR */
+        ctrl = (ext >> 10) & 7;
+        if (ctrl & 4) { /* FPCR */
             SRC_EA(env, val, OS_LONG, 0, NULL);
             gen_helper_set_fpcr(cpu_env, val);
-            return;
-        case 2: /* FPSR */
+        }
+        if (ctrl & 2) { /* FPSR */
             SRC_EA(env, QEMU_FPSR, OS_LONG, 0, NULL);
-            return;
-        case 1: /* FPIAR */
-        default:
-            cpu_abort(NULL, "Unimplemented: fmove to control %d",
-                      (ext >> 10) & 7);
+        }
+        if (ctrl & 1) { /* FPIAR */
+            SRC_EA(env, val, OS_LONG, 0, NULL);
         }
         break;
     case 5: /* fmove from control register.  */
-        switch ((ext >> 10) & 7) {
-        case 4: /* FPCR */
+        ctrl = (ext >> 10) & 7;
+        if (ctrl & 4) { /* FPCR */
             DEST_EA(env, insn, OS_LONG, QEMU_FPCR, NULL);
-            return;
-        case 1: /* FPIAR */
-            cpu_abort(NULL, "Unimplemented: fmove from control FPIAR");
-            goto undef;
-        case 2: /* FPSR */
-            gen_helper_update_fpsr(cpu_env);
+        }
+        if (ctrl & 2) { /* FPSR */
             DEST_EA(env, insn, OS_LONG, QEMU_FPSR, NULL);
-            return;
-        default:
-            cpu_abort(NULL, "Unimplemented: fmove from control %d",
-                      (ext >> 10) & 7);
-            goto undef;
+        }
+        if (ctrl & 1) { /* FPIAR */
+            TCGv tmp = tcg_temp_new_i32();
+            DEST_EA(env, insn, OS_LONG, tmp, NULL);
+            tcg_temp_free_i32(tmp);
         }
         break;
     case 6: /* fmovem */
