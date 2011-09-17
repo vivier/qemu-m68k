@@ -185,6 +185,7 @@ static int print_insn_od_target(bfd_vma pc, disassemble_info *info)
     i386 - 1 means 16 bit code, 2 means 64 bit code
     ppc  - bits 0:15 specify (optionally) the machine instruction set;
            bit 16 indicates little endian.
+    m68k - 1 means 680x0 family, otherwise coldfire
     other targets - unused
  */
 void target_disas(FILE *out, CPUState *cpu, target_ulong code,
@@ -245,6 +246,9 @@ void target_disas(FILE *out, CPUState *cpu, target_ulong code,
     s.info.print_insn = print_insn_ppc;
 #elif defined(TARGET_M68K)
     s.info.print_insn = print_insn_m68k;
+    if (flags) {
+        s.info.mach = bfd_mach_m68040;
+    }
 #elif defined(TARGET_MIPS)
 #ifdef TARGET_WORDS_BIGENDIAN
     s.info.print_insn = print_insn_big_mips;
