@@ -2525,6 +2525,7 @@ uint32_t HELPER(sbcd_cc)(CPUState *env, uint32_t src, uint32_t dest)
     return dest;
 }
 
+#if !defined(CONFIG_USER_ONLY)
 void HELPER(ptest)(CPUState * env, uint32_t addr, uint32_t is_write)
 {
     target_phys_addr_t physical;
@@ -2565,3 +2566,4 @@ void HELPER(pflush)(CPUState * env, uint32_t addr, uint32_t opmode)
         break;
     }
 }
+#endif
