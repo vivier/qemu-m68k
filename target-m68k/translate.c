@@ -3687,6 +3687,7 @@ DISAS_INSN(cinv)
     /* Invalidate cache line.  Implement as no-op.  */
 }
 
+#if !defined(CONFIG_USER_ONLY)
 DISAS_INSN(pflush)
 {
     TCGv reg;
@@ -3713,6 +3714,7 @@ DISAS_INSN(ptest)
     reg = AREG(insn, 0);
     gen_helper_ptest(cpu_env, reg, tcg_const_i32(1 - ((insn >> 5) & 1)));
 }
+#endif
 
 DISAS_INSN(move16)
 {
@@ -4836,8 +4838,10 @@ void register_m68k_insns (CPUM68KState *env)
     INSN(cpushl,    f428, ff38, CF_ISA_A);
     INSN(cpush,     f420, ff20, M68000);
     INSN(cinv,      f400, ff20, M68000);
+#if !defined(CONFIG_USER_ONLY)
     INSN(pflush,    f500, ffe0, M68000);  /* FIXME: 68040 version only*/
     INSN(ptest,     f548, ffd8, M68000);  /* FIXME: 68040 version only*/
+#endif
     INSN(move16,    f600, ffc0, M68000);  /* FIXME: 68040 version only */
     INSN(wddata,    fb00, ff00, CF_ISA_A);
     INSN(wdebug,    fbc0, ffc0, CF_ISA_A);
