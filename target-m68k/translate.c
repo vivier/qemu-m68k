@@ -3854,8 +3854,9 @@ static void gen_op_fmovem(DisasContext *s, uint32_t insn, uint32_t ext)
                     gen_op_load_fpr_FP0(i);
                     gen_store_FP0(s, opsize, addr);
                 }
-               if ((mask & 0xff) != 0x80 || (insn & 070) == 030)
-                   tcg_gen_addi_i32(addr, addr, incr);
+                if ((mask & 0xff) != 0x80) {
+                    tcg_gen_addi_i32(addr, addr, incr);
+                }
             }
         }
         if ((insn & 070) == 030)
@@ -3971,6 +3972,7 @@ DISAS_INSN(fpu)
                 tcg_gen_mov_i32(DREG(insn, 0), QEMU_FPCR);
             }
             if (ctrl & 2) { /* FPSR */
+                gen_helper_update_fpsr(cpu_env);
                 tcg_gen_mov_i32(DREG(insn, 0), QEMU_FPSR);
             }
             if (ctrl & 1) { /* FPIAR */
@@ -4005,6 +4007,7 @@ DISAS_INSN(fpu)
             if ((insn & 070) == 040) {
                 tcg_gen_subi_i32(addr, addr, 4);
             }
+            gen_helper_update_fpsr(cpu_env);
             gen_ldst(s, OS_LONG, addr, QEMU_FPSR, EA_STORE, IS_USER(s));
             if ((insn & 070) != 040) {
                 tcg_gen_addi_i32(addr, addr, 4);
