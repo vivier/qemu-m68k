@@ -3865,8 +3865,9 @@ static void gen_op_fmovem(DisasContext *s, uint32_t insn, uint32_t ext)
                     gen_op_load_fpr_FP0(i);
                     gen_store_FP0(s, opsize, addr);
                 }
-               if ((mask & 0xff) != 0x80 || (insn & 070) == 030)
-                   tcg_gen_addi_i32(addr, addr, incr);
+                if ((mask & 0xff) != 0x80) {
+                    tcg_gen_addi_i32(addr, addr, incr);
+                }
             }
         }
         if ((insn & 070) == 030)
