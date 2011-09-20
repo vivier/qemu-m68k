@@ -3969,6 +3969,8 @@ DISAS_INSN(fpu)
     int set_dest;
     int opsize;
     TCGv val;
+    TCGv addr;
+    TCGv tmp;
 
     ext = read_im16(env, s);
     opmode = ext & 0x7f;
@@ -3994,30 +3996,125 @@ DISAS_INSN(fpu)
         return;
     case 4: /* fmove to control register.  */
         ctrl = (ext >> 10) & 7;
+        if (((insn >> 3) & 7)  == 0) {
+            /* Data register direct.  */
+            if (ctrl & 4) { /* FPCR */
+                tcg_gen_mov_i32(QEMU_FPCR, DREG(insn, 0));
+            }
+            if (ctrl & 2) { /* FPSR */
+                tcg_gen_mov_i32(QEMU_FPSR, DREG(insn, 0));
+            }
+            if (ctrl & 1) { /* FPIAR */
+                /* do nothing */
+            }
+            return;
+        }
+        if (((insn >> 3) & 7)  == 1) {
+            /* Address register direct.  */
+            if (ctrl & 1) { /* FPIAR */
+                /* do nothing */
+            }
+            return;
+        }
+        tmp = gen_lea(env, s, insn, OS_LONG);
+        if (IS_NULL_QREG(tmp)) {
+            gen_addr_fault(s);
+            return;
+        }
+        val = tcg_temp_new();
+        addr = tcg_temp_new();
+        tcg_gen_mov_i32(addr, tmp);
         if (ctrl & 4) { /* FPCR */
-            SRC_EA(env, val, OS_LONG, 0, NULL);
+            if ((insn & 070) == 040) {
+                tcg_gen_subi_i32(addr, addr, 4);
+            }
+            gen_ldst(s, OS_LONG, addr, val, EA_LOADU, IS_USER(s));
+            if ((insn & 070) != 040) {
+                tcg_gen_addi_i32(addr, addr, 4);
+            }
             gen_helper_set_fpcr(cpu_env, val);
         }
         if (ctrl & 2) { /* FPSR */
-            SRC_EA(env, QEMU_FPSR, OS_LONG, 0, NULL);
+            if ((insn & 070) == 040) {
+                tcg_gen_subi_i32(addr, addr, 4);
+            }
+            gen_ldst(s, OS_LONG, addr, QEMU_FPSR, EA_LOADU, IS_USER(s));
+            if ((insn & 070) != 040) {
+                tcg_gen_addi_i32(addr, addr, 4);
+            }
         }
         if (ctrl & 1) { /* FPIAR */
-            SRC_EA(env, val, OS_LONG, 0, NULL);
+            if ((insn & 070) == 040) {
+                tcg_gen_subi_i32(addr, addr, 4);
+            }
+            gen_ldst(s, OS_LONG, addr, val, EA_LOADU, IS_USER(s));
+            if ((insn & 070) != 040) {
+                tcg_gen_addi_i32(addr, addr, 4);
+            }
+            /* do nothing */
+        }
+        if ((insn & 070) == 040 || (insn & 070) == 030) {
+            tcg_gen_mov_i32(AREG(insn, 0), addr);
         }
         return;
     case 5: /* fmove from control register.  */
         ctrl = (ext >> 10) & 7;
-        if (ctrl & 4) { /* FPCR */
-            DEST_EA(env, insn, OS_LONG, QEMU_FPCR, NULL);
+        if (((insn >> 3) & 7)  == 0) {
+            /* Data register direct.  */
+            if (ctrl & 4) { /* FPCR */
+                tcg_gen_mov_i32(DREG(insn, 0), QEMU_FPCR);
+            }
+            if (ctrl & 2) { /* FPSR */
+                tcg_gen_mov_i32(DREG(insn, 0), QEMU_FPSR);
+            }
+            if (ctrl & 1) { /* FPIAR */
+                tcg_gen_movi_i32(DREG(insn, 0), 0);
+            }
+            return;
+        }
+        if (((insn >> 3) & 7)  == 1) {
+            /* Address register direct.  */
+            if (ctrl & 1) { /* FPIAR */
+                tcg_gen_movi_i32(AREG(insn, 0), 0);
+            }
+            return;
+        }
+        tmp = gen_lea(env, s, insn, OS_LONG);
+        if (IS_NULL_QREG(tmp)) {
+            gen_addr_fault(s);
+            return;
+        }
+        addr = tcg_temp_new();
+        tcg_gen_mov_i32(addr, tmp);
+        if (ctrl & 1) { /* FPIAR */
+            if ((insn & 070) == 040) {
+                tcg_gen_subi_i32(addr, addr, 4);
+            }
+            gen_ldst(s, OS_LONG, addr, tcg_const_i32(0), EA_STORE, IS_USER(s));
+            if ((insn & 070) != 040) {
+                tcg_gen_addi_i32(addr, addr, 4);
+            }
         }
         if (ctrl & 2) { /* FPSR */
-            gen_helper_update_fpsr(cpu_env);
-            DEST_EA(env, insn, OS_LONG, QEMU_FPSR, NULL);
+            if ((insn & 070) == 040) {
+                tcg_gen_subi_i32(addr, addr, 4);
+            }
+            gen_ldst(s, OS_LONG, addr, QEMU_FPSR, EA_STORE, IS_USER(s));
+            if ((insn & 070) != 040) {
+                tcg_gen_addi_i32(addr, addr, 4);
+            }
         }
-        if (ctrl & 1) { /* FPIAR */
-            TCGv tmp = tcg_temp_new_i32();
-            DEST_EA(env, insn, OS_LONG, tmp, NULL);
-            tcg_temp_free_i32(tmp);
+        if (ctrl & 4) { /* FPCR */
+            if ((insn & 070) == 040) {
+                tcg_gen_subi_i32(addr, addr, 4);
+            }
+            gen_ldst(s, OS_LONG, addr, QEMU_FPCR, EA_STORE, IS_USER(s));
+            if ((insn & 070) != 040) {
+                tcg_gen_addi_i32(addr, addr, 4);
+            }
+        }
+        if ((insn & 070) == 040 || (insn & 070) == 030) {
+            tcg_gen_mov_i32(AREG(insn, 0), addr);
         }
         return;
     case 6: /* fmovem */
