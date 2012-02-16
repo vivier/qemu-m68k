@@ -2457,6 +2457,7 @@ if compile_prog "" "" ; then
   :
 elif compile_prog "" "-lrt" ; then
   LIBS="-lrt $LIBS"
+  libs_tools="-lrt $libs_tools"
 fi
 
 if test "$darwin" != "yes" -a "$mingw32" != "yes" -a "$solaris" != yes -a \
