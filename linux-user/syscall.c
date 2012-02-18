@@ -6197,7 +6197,7 @@ abi_long do_syscall(void *cpu_env, int num, abi_long arg1,
     case TARGET_NR_mount:
         {
             /* need to look at the data field */
-            void *p2, *p3;
+            void *p2, *p3, *p5;
 
             if (arg1) {
                 p = lock_user_string(arg1);
@@ -6229,14 +6229,12 @@ abi_long do_syscall(void *cpu_env, int num, abi_long arg1,
                 p3 = NULL;
             }
 
-            /* FIXME - arg5 should be locked, but it isn't clear how to
-             * do that since it's not guaranteed to be a NULL-terminated
-             * string.
-             */
             if (!arg5) {
-                ret = mount(p, p2, p3, (unsigned long)arg4, NULL);
+                ret = mount(p, p2, p3, (abi_ulong)arg4, NULL);
             } else {
-                ret = mount(p, p2, p3, (unsigned long)arg4, g2h(arg5));
+                p5 = lock_user_string(arg5);
+                ret = get_errno(mount(p, p2, p3, (abi_ulong)arg4, p5));
+                unlock_user(p5, arg5, 0);
             }
             ret = get_errno(ret);
 
