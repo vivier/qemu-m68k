@@ -4933,21 +4933,19 @@ abi_long do_syscall(void *cpu_env, int num, abi_long arg1,
     case TARGET_NR_mount:
 		{
 			/* need to look at the data field */
-			void *p2, *p3;
+			void *p2, *p3, *p5;
 			p = lock_user_string(arg1);
 			p2 = lock_user_string(arg2);
 			p3 = lock_user_string(arg3);
                         if (!p || !p2 || !p3)
                             ret = -TARGET_EFAULT;
                         else {
-                            /* FIXME - arg5 should be locked, but it isn't clear how to
-                             * do that since it's not guaranteed to be a NULL-terminated
-                             * string.
-                             */
                             if ( ! arg5 )
-                                ret = get_errno(mount(p, p2, p3, (unsigned long)arg4, NULL));
-                            else
-                                ret = get_errno(mount(p, p2, p3, (unsigned long)arg4, g2h(arg5)));
+                                ret = get_errno(mount(p, p2, p3, (abi_ulong)arg4, NULL));
+                            else {
+                                p5 = lock_user_string(arg5);
+                                ret = get_errno(mount(p, p2, p3, (abi_ulong)arg4, p5));
+			     }
                         }
                         unlock_user(p, arg1, 0);
                         unlock_user(p2, arg2, 0);
