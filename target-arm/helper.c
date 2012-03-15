@@ -1880,6 +1880,11 @@ static void arm_cpu_list_entry(gpointer data, gpointer user_data)
 
     typename = object_class_get_name(oc);
     name = g_strndup(typename, strlen(typename) - strlen("-" TYPE_ARM_CPU));
+    if (strcmp(name, TARGET_DEFAULT_CPU) == 0) {
+        (*s->cpu_fprintf)(s->file, " >");
+    } else {
+        (*s->cpu_fprintf)(s->file, "  ");
+    }
     (*s->cpu_fprintf)(s->file, "  %s\n",
                       name);
     g_free(name);
