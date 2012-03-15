@@ -1319,6 +1319,11 @@ static void arm_cpu_list_entry(gpointer data, gpointer user_data)
     ObjectClass *oc = data;
     ARMCPUListState *s = user_data;
 
+    if (strcmp(object_class_get_name(oc), TARGET_DEFAULT_CPU) == 0) {
+        (*s->cpu_fprintf)(s->file, " >");
+    } else {
+        (*s->cpu_fprintf)(s->file, "  ");
+    }
     (*s->cpu_fprintf)(s->file, "  %s\n",
                       object_class_get_name(oc));
 }
