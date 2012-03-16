@@ -4009,7 +4009,7 @@ DISAS_INSN(fpu)
         if (ctrl & 1) { /* FPIAR */
             SRC_EA(env, val, OS_LONG, 0, NULL);
         }
-        break;
+        return;
     case 5: /* fmove from control register.  */
         ctrl = (ext >> 10) & 7;
         if (ctrl & 4) { /* FPCR */
@@ -4023,7 +4023,7 @@ DISAS_INSN(fpu)
             DEST_EA(env, insn, OS_LONG, tmp, NULL);
             tcg_temp_free_i32(tmp);
         }
-        break;
+        return;
     case 6: /* fmovem */
     case 7:
         if ((ext & 0xf00) != 0 || (ext & 0xff) == 0)
