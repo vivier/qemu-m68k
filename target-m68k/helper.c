@@ -2100,6 +2100,39 @@ uint32_t HELPER(compare_FP0)(CPUState *env)
     return res;
 }
 
+void HELPER(update_fpsr)(CPUState *env)
+{
+    int eflags;
+
+    DBG_FPU("update_fpsr");
+
+    env->fpsr &= 0xff00;
+
+    eflags = get_float_exception_flags(&env->fp_status);
+
+    if (eflags & float_flag_invalid) {
+        env->fpsr |= 0x0080; 
+        env->fpsr |= 0x2000; 
+    }
+    if (eflags & float_flag_divbyzero) {
+        env->fpsr |= 0x0010; 
+        env->fpsr |= 0x0400;
+    }
+    if (eflags & float_flag_overflow) {
+        env->fpsr |= 0x0040; 
+        env->fpsr |= 0x1000;
+    }
+    if (eflags & float_flag_underflow) {
+        env->fpsr |= 0x0020; 
+        env->fpsr |= 0x0800;
+    }
+    if (eflags & float_flag_inexact) {
+        env->fpsr |= 0x0008; 
+        env->fpsr |= 0x0200;
+    }
+    set_float_exception_flags(0, &env->fp_status);
+}
+
 void HELPER(fmovem)(CPUState *env, uint32_t opsize, uint32_t mode, uint32_t mask)
 {
     fprintf(stderr, "MISSING HELPER fmovem\n");

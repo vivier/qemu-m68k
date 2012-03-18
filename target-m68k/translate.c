@@ -3930,6 +3930,7 @@ DISAS_INSN(fpu)
             DEST_EA(insn, OS_LONG, QEMU_FPCR, NULL);
         }
         if (ctrl & 2) { /* FPSR */
+            gen_helper_update_fpsr(cpu_env);
             DEST_EA(insn, OS_LONG, QEMU_FPSR, NULL);
         }
         if (ctrl & 1) { /* FPIAR */
