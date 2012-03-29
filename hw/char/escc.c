@@ -103,6 +103,7 @@ typedef struct ESCCState {
 
     struct ChannelState chn[2];
     uint32_t it_shift;
+    uint32_t reg_bit;
     MemoryRegion mmio;
     uint32_t disabled;
     uint32_t frequency;
@@ -475,13 +476,8 @@ static void escc_mem_write(void *opaque, hwaddr addr,
     int newreg, channel;
 
     val &= 0xff;
-#if 0
-    saddr = (addr >> serial->it_shift) & 1;
-    channel = (addr >> (serial->it_shift + 1)) & 1;
-#else
-    saddr = (addr >> 2) & 1;
-    channel = (addr >> 1) & 1;
-#endif
+    saddr = (addr >> (serial->it_shift + serial->reg_bit)) & 1;
+    channel = (addr >> (serial->it_shift + (1 - serial->reg_bit))) & 1;
     s = &serial->chn[channel];
     switch (saddr) {
     case SERIAL_CTRL:
@@ -582,13 +578,8 @@ static uint64_t escc_mem_read(void *opaque, hwaddr addr,
     uint32_t ret;
     int channel;
 
-#if 0
-    saddr = (addr >> serial->it_shift) & 1;
-    channel = (addr >> (serial->it_shift + 1)) & 1;
-#else
-    saddr = (addr >> 2) & 1;
-    channel = (addr >> 1) & 1;
-#endif
+    saddr = (addr >> (serial->it_shift + serial->reg_bit)) & 1;
+    channel = (addr >> (serial->it_shift + (1 - serial->reg_bit))) & 1;
     s = &serial->chn[channel];
     switch (saddr) {
     case SERIAL_CTRL:
@@ -698,7 +689,7 @@ static const VMStateDescription vmstate_escc = {
 
 MemoryRegion *escc_init(hwaddr base, qemu_irq irqA, qemu_irq irqB,
               CharDriverState *chrA, CharDriverState *chrB,
-              int clock, int it_shift)
+              int clock, int it_shift, int reg_bit)
 {
     DeviceState *dev;
     SysBusDevice *s;
@@ -708,6 +699,7 @@ MemoryRegion *escc_init(hwaddr base, qemu_irq irqA, qemu_irq irqB,
     qdev_prop_set_uint32(dev, "disabled", 0);
     qdev_prop_set_uint32(dev, "frequency", clock);
     qdev_prop_set_uint32(dev, "it_shift", it_shift);
+    qdev_prop_set_uint32(dev, "reg_bit", reg_bit);
     qdev_prop_set_chr(dev, "chrB", chrB);
     qdev_prop_set_chr(dev, "chrA", chrA);
     qdev_prop_set_uint32(dev, "chnBtype", ser);
@@ -899,13 +891,8 @@ static int escc_init1(SysBusDevice *dev)
     s->chn[0].otherchn = &s->chn[1];
     s->chn[1].otherchn = &s->chn[0];
 
-#if 0
     memory_region_init_io(&s->mmio, OBJECT(s), &escc_mem_ops, s, "escc",
                           ESCC_SIZE << s->it_shift);
-#else
-    memory_region_init_io(&s->mmio, OBJECT(s), &escc_mem_ops, s, "escc",
-                          6);
-#endif
     sysbus_init_mmio(dev, &s->mmio);
 
     if (s->chn[0].type == mouse) {
@@ -922,6 +909,7 @@ static int escc_init1(SysBusDevice *dev)
 static Property escc_properties[] = {
     DEFINE_PROP_UINT32("frequency", ESCCState, frequency,   0),
     DEFINE_PROP_UINT32("it_shift",  ESCCState, it_shift,    0),
+    DEFINE_PROP_UINT32("reg_bit",  ESCCState, reg_bit,      0),
     DEFINE_PROP_UINT32("disabled",  ESCCState, disabled,    0),
     DEFINE_PROP_UINT32("chnBtype",  ESCCState, chn[0].type, 0),
     DEFINE_PROP_UINT32("chnAtype",  ESCCState, chn[1].type, 0),
