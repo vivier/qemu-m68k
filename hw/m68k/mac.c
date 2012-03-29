@@ -165,7 +165,7 @@ static void q800_init(QEMUMachineInitArgs *args)
     /* SCC */
 
     escc_init(SCC_BASE, pic[3], pic[3], serial_hds[0],
-              serial_hds[1], MAC_CLOCK, 0);
+              serial_hds[1], MAC_CLOCK, 1, 1);
 
     if (linux_boot) {
         uint64_t high;
