@@ -276,7 +276,7 @@ static void ppc_heathrow_init(MachineState *machine)
     pci_vga_init(pci_bus);
 
     escc_mem = escc_init(0, pic[0x0f], pic[0x10], serial_hds[0],
-                               serial_hds[1], ESCC_CLOCK, 4);
+                               serial_hds[1], ESCC_CLOCK, 4, 0);
     memory_region_init_alias(escc_bar, NULL, "escc-bar",
                              escc_mem, 0, memory_region_size(escc_mem));
 
