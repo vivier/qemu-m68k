@@ -330,7 +330,7 @@ static void ppc_core99_init (ram_addr_t ram_size,
     pci_vga_init(pci_bus);
 
     escc_mem = escc_init(0, pic[0x25], pic[0x24],
-                         serial_hds[0], serial_hds[1], ESCC_CLOCK, 4);
+                         serial_hds[0], serial_hds[1], ESCC_CLOCK, 4, 0);
     memory_region_init_alias(escc_bar, "escc-bar",
                              escc_mem, 0, memory_region_size(escc_mem));
 

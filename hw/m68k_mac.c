@@ -404,7 +404,7 @@ static void q800_init(ram_addr_t ram_size,
     pic = qemu_allocate_irqs(q800_glue_set_irq, s, 6);
     mac_via_init(pic[0], pic[1]);
     escc_mem = escc_init(SCC_BASE, pic[3], pic[3], serial_hds[0],
-                         serial_hds[1], MAC_CLOCK, 0);
+                         serial_hds[1], MAC_CLOCK, 1, 1);
 #if 0
     /* cuda also initialize ADB */
     cuda_init(&cuda_mem_index, pic[0x12]);
