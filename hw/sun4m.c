@@ -921,7 +921,7 @@ static void sun4m_hw_init(const struct sun4m_hwdef *hwdef, ram_addr_t RAM_size,
     // Slavio TTYA (base+4, Linux ttyS0) is the first Qemu serial device
     // Slavio TTYB (base+0, Linux ttyS1) is the second Qemu serial device
     escc_init(hwdef->serial_base, slavio_irq[15], slavio_irq[15],
-              serial_hds[0], serial_hds[1], ESCC_CLOCK, 1);
+              serial_hds[0], serial_hds[1], ESCC_CLOCK, 1, 0);
 
     cpu_halt = qemu_allocate_irqs(cpu_halt_signal, NULL, 1);
     slavio_misc_init(hwdef->slavio_base, hwdef->aux1_base, hwdef->aux2_base,
@@ -1570,7 +1570,7 @@ static void sun4d_hw_init(const struct sun4d_hwdef *hwdef, ram_addr_t RAM_size,
     // Slavio TTYA (base+4, Linux ttyS0) is the first Qemu serial device
     // Slavio TTYB (base+0, Linux ttyS1) is the second Qemu serial device
     escc_init(hwdef->serial_base, sbi_irq[12], sbi_irq[12],
-              serial_hds[0], serial_hds[1], ESCC_CLOCK, 1);
+              serial_hds[0], serial_hds[1], ESCC_CLOCK, 1, 0);
 
     if (drive_get_max_bus(IF_SCSI) > 0) {
         fprintf(stderr, "qemu: too many SCSI bus\n");
@@ -1752,7 +1752,7 @@ static void sun4c_hw_init(const struct sun4c_hwdef *hwdef, ram_addr_t RAM_size,
     // Slavio TTYB (base+0, Linux ttyS1) is the second Qemu serial device
     escc_init(hwdef->serial_base, slavio_irq[1],
               slavio_irq[1], serial_hds[0], serial_hds[1],
-              ESCC_CLOCK, 1);
+              ESCC_CLOCK, 1, 0);
 
     slavio_misc_init(0, hwdef->aux1_base, 0, slavio_irq[1], fdc_tc);
 
