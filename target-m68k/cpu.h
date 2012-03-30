@@ -435,4 +435,6 @@ static inline bool cpu_has_work(CPUState *cpu)
 
 #include "exec/exec-all.h"
 
+void dump_mmu(FILE *f, fprintf_function cpu_fprintf, CPUM68KState *env);
+
 #endif
