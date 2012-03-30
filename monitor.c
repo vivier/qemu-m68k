@@ -1953,7 +1953,7 @@ static void tlb_info(Monitor *mon)
 
 #endif
 
-#if defined(TARGET_SPARC) || defined(TARGET_PPC) || defined(TARGET_XTENSA)
+#if defined(TARGET_SPARC) || defined(TARGET_PPC) || defined(TARGET_XTENSA) || defined(TARGET_M68K)
 static void tlb_info(Monitor *mon)
 {
     CPUArchState *env1 = mon_get_cpu();
@@ -2400,7 +2400,7 @@ static mon_cmd_t info_cmds[] = {
         .mhandler.info = hmp_info_pci,
     },
 #if defined(TARGET_I386) || defined(TARGET_SH4) || defined(TARGET_SPARC) || \
-    defined(TARGET_PPC) || defined(TARGET_XTENSA)
+    defined(TARGET_PPC) || defined(TARGET_XTENSA) || defined(TARGET_M68K)
     {
         .name       = "tlb",
         .args_type  = "",
