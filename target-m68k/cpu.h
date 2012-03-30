@@ -423,4 +423,6 @@ static inline void cpu_pc_from_tb(CPUM68KState *env, TranslationBlock *tb)
     env->pc = tb->pc;
 }
 
+void dump_mmu(FILE *f, fprintf_function cpu_fprintf, CPUM68KState *env);
+
 #endif
