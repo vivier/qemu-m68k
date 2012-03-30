@@ -420,4 +420,6 @@ static inline void cpu_pc_from_tb(CPUState *env, TranslationBlock *tb)
     env->pc = tb->pc;
 }
 
+void dump_mmu(FILE *f, fprintf_function cpu_fprintf, CPUState *env);
+
 #endif
