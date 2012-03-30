@@ -517,7 +517,118 @@ int cpu_m68k_handle_mmu_fault (CPUM68KState *env, target_ulong address, int rw,
 
 #else
 
-/* MMU */
+/* MMU: 68040 only */
+
+#define DUMP_CACHEFLAGS(a) \
+    switch (a) { \
+    case 0: /* cachable, write-through */ \
+        cpu_fprintf(f, "T"); \
+        break; \
+    case 1: /* cachable, copyback */ \
+        cpu_fprintf(f, "C"); \
+        break; \
+    case 2: /* noncachable, serialized */ \
+        cpu_fprintf(f, "S"); \
+        break; \
+    case 3: /* noncachable */ \
+        cpu_fprintf(f, "N"); \
+        break; \
+    }
+
+static void dump_ttr(FILE *f, fprintf_function cpu_fprintf, uint32_t ttr)
+{
+    if (((ttr >> 15) & 1) == 0) {
+        cpu_fprintf(f, "disabled\n");
+        return;
+    }
+    cpu_fprintf(f, "Base: 0x%08x Mask: 0x%08x Control: ",
+                ttr & 0xff000000, (ttr << 8) & 0xff000000);
+    switch ((ttr >> 13) & 3) {
+    case 0:
+        cpu_fprintf(f, "U");
+        break;
+    case 1:
+        cpu_fprintf(f, "S");
+        break;
+    default:
+        cpu_fprintf(f, "*");
+        break;
+    }
+    DUMP_CACHEFLAGS(ttr);
+    if ((ttr >> 2) & 1) {
+        cpu_fprintf(f, "R");
+    } else {
+        cpu_fprintf(f, "W");
+    }
+    cpu_fprintf(f, " U: %d\n", (ttr >> 8) & 3);
+}
+
+void dump_mmu(FILE *f, fprintf_function cpu_fprintf, CPUM68KState *env)
+{
+    if ((env->mmu.tcr & 0x8000) == 0) {
+        cpu_fprintf(f, "Translation disabled\n");
+        return;
+    }
+    cpu_fprintf(f, "Page Size: ");
+    if (env->mmu.tcr & 0x4000) {
+        cpu_fprintf(f, "8kB\n");
+    } else {
+        cpu_fprintf(f, "4kB\n");
+    }
+    
+    cpu_fprintf(f, "MMUSR: ");
+    if (env->mmu.mmusr & (1 << 11)) {
+        cpu_fprintf(f, "BUS ERROR\n");
+    } else {
+        cpu_fprintf(f, "Phy=%08x Flags: ", env->mmu.mmusr & 0xfffff000);
+        /* flags found on the page descriptor */
+        if (env->mmu.mmusr & (1 << 11)) {
+            cpu_fprintf(f, "G"); /* Global */
+        } else {
+            cpu_fprintf(f, ".");
+        }
+        if (env->mmu.mmusr & (1 << 7)) {
+            cpu_fprintf(f, "S"); /* Supervisor */
+        } else {
+            cpu_fprintf(f, ".");
+        }
+        if (env->mmu.mmusr & (1 << 4)) {
+            cpu_fprintf(f, "M"); /* Modified */
+        } else {
+            cpu_fprintf(f, ".");
+        }
+        if (env->mmu.mmusr & (1 << 2)) {
+            cpu_fprintf(f, "W"); /* Write protect */
+        } else {
+            cpu_fprintf(f, ".");
+        }
+        if (env->mmu.mmusr & (1 << 1)) {
+            cpu_fprintf(f, "T"); /* Transparent */
+        } else {
+            cpu_fprintf(f, ".");
+        }
+        if (env->mmu.mmusr & 1) {
+            cpu_fprintf(f, "R"); /* Residdent */
+        } else {
+            cpu_fprintf(f, ".");
+        }
+        cpu_fprintf(f, " Cache: ");
+        DUMP_CACHEFLAGS(env->mmu.mmusr);
+        cpu_fprintf(f, " U: %d\n", (env->mmu.mmusr >> 8) & 3);
+        cpu_fprintf(f, "\n");
+    }
+    
+    cpu_fprintf(f, "ITTR0: ");
+    dump_ttr(f, cpu_fprintf, env->mmu.ittr0);
+    cpu_fprintf(f, "ITTR1: ");
+    dump_ttr(f, cpu_fprintf, env->mmu.ittr1);
+    cpu_fprintf(f, "DTTR0: ");
+    dump_ttr(f, cpu_fprintf, env->mmu.dttr0);
+    cpu_fprintf(f, "DTTR1: ");
+    dump_ttr(f, cpu_fprintf, env->mmu.dttr1);
+
+    cpu_fprintf(f, "SRP: 0x%08x\n", env->mmu.srp);
+}
 
 static int check_TTR(uint32_t ttr, hwaddr *physical, int *prot,
                      target_ulong addr, int access_type)
