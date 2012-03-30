@@ -431,4 +431,6 @@ static inline void cpu_get_tb_cpu_state(CPUM68KState *env, target_ulong *pc,
 
 #include "exec/exec-all.h"
 
+void dump_mmu(FILE *f, fprintf_function cpu_fprintf, CPUM68KState *env);
+
 #endif
