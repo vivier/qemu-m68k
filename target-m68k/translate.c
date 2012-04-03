@@ -3607,7 +3607,7 @@ DISAS_INSN(move_from_usp)
     }
 
     reg = AREG(insn, 0);
-    gen_helper_movec_from(reg, cpu_env, tcg_const_i32(M68K_USP));
+    gen_helper_movec_from(reg, cpu_env, tcg_const_i32(M68K_CR_USP));
 }
 
 DISAS_INSN(move_to_usp)
@@ -3620,7 +3620,7 @@ DISAS_INSN(move_to_usp)
     }
 
     reg = AREG(insn, 0);
-    gen_helper_movec_to(cpu_env, tcg_const_i32(M68K_USP), reg);
+    gen_helper_movec_to(cpu_env, tcg_const_i32(M68K_CR_USP), reg);
 }
 
 DISAS_INSN(halt)
