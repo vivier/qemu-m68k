@@ -46,6 +46,8 @@ static char cpu_reg_names[2*8*3 + 5*4];
 static TCGv cpu_dregs[8];
 static TCGv cpu_aregs[8];
 static TCGv_i64 cpu_macc[4];
+static TCGv QEMU_DFC;
+static TCGv QEMU_SFC;
 static TCGv QEMU_FPSR;
 static TCGv QEMU_FPCR;
 
@@ -113,6 +115,10 @@ QREG_##name##L = tcg_global_mem_new_i64(TCG_AREG0, offsetof(CPUM68KState, offset
     QEMU_FPCR = tcg_global_mem_new(TCG_AREG0, offsetof(CPUM68KState, fpcr),
                                    "FPCR");
 
+    QEMU_DFC = tcg_global_mem_new(TCG_AREG0, offsetof(CPUM68KState, dfc),
+                                   "DFC");
+    QEMU_SFC = tcg_global_mem_new(TCG_AREG0, offsetof(CPUM68KState, sfc),
+                                   "SFC");
     NULL_QREG = tcg_global_mem_new(TCG_AREG0, -4, "NULL");
     store_dummy = tcg_global_mem_new(TCG_AREG0, -8, "NULL");
 }
@@ -2003,10 +2009,12 @@ DISAS_INSN(moves)
 {
     int opsize;
     uint16_t ext;
-    int mem_index;
-    /* int data; */
     TCGv reg;
-    TCGv ea_result;
+    TCGv taddr;
+    TCGv addr;
+    TCGv idx;
+    TCGv tmp;
+    int l1, l2;
 
     if (IS_USER(s)) {
         gen_exception(s, s->pc - 2, EXCP_PRIVILEGE);
@@ -2025,27 +2033,53 @@ DISAS_INSN(moves)
         reg = DREG(ext, 12);
     }
 
+    taddr = gen_lea(env, s, insn, opsize);
+    if (IS_NULL_QREG(taddr)) {
+        gen_addr_fault(s);
+        return;
+    }
+    addr = tcg_temp_local_new ();
+    tcg_gen_mov_i32(addr, taddr);
+
+    idx = tcg_temp_new();
+    l1 = gen_new_label();
+    l2 = gen_new_label();
     if (ext & 0x0800) {
         /* from reg to ea */
-        mem_index = (s->env->dfc & 4) ? MMU_KERNEL_IDX : MMU_USER_IDX;
-        /* data = (s->env->dfc & 3) != 2; FIXME: manage data */
-        ea_result = gen_ea(env, s, insn, opsize, reg, NULL, EA_STORE, mem_index);
-        if (IS_NULL_QREG(ea_result)) {
-            gen_addr_fault(s);
-            return;
-        }
-        tcg_gen_mov_i32(ea_result, reg);
+        tcg_gen_andi_i32(idx, QEMU_DFC, 4);
+        tcg_gen_brcondi_i32(TCG_COND_EQ, idx, 4, l1);
+        /* FIXME: manage data  = (s->env->dfc & 3) != 2 */
+        gen_store(s, opsize, addr, reg, MMU_USER_IDX);
+        tcg_gen_br(l2);
+        gen_set_label(l1);
+        gen_store(s, opsize, addr, reg, MMU_KERNEL_IDX);
+        gen_set_label(l2);
     } else {
         /* from ea to reg */
-        mem_index = (s->env->sfc & 4) ? MMU_KERNEL_IDX : MMU_USER_IDX;
-        /* data = (s->env->sfc & 3) != 2; FIXME: manage data */
-        ea_result = gen_ea(env, s, insn, opsize, reg, NULL, EA_LOADS, mem_index);
-        if (IS_NULL_QREG(ea_result)) {
-            gen_addr_fault(s);
-            return;
-        }
-        tcg_gen_mov_i32(reg, ea_result);
+        tcg_gen_andi_i32(idx, QEMU_SFC, 4);
+        tcg_gen_brcondi_i32(TCG_COND_EQ, idx, 4, l1);
+        /* FIXME: manage data  = (s->env->dfc & 3) != 2 */
+
+        tmp = gen_load(s, opsize, addr, 1, MMU_USER_IDX);
+        tcg_gen_mov_i32(reg, tmp);
+        tcg_gen_br(l2);
+        gen_set_label(l1);
+        tmp = gen_load(s, opsize, addr, 1, MMU_KERNEL_IDX);
+        tcg_gen_mov_i32(reg, tmp);
+        gen_set_label(l2);
     }
+    switch ((insn >> 3) & 7) {
+    case 3: /* Indirect postincrement.  */
+        tcg_gen_addi_i32(AREG(insn, 0), addr,
+                         REG(insn, 0) == 7 && opsize == OS_BYTE
+                         ? 2
+                         : opsize_bytes(opsize));
+        break;
+    case 4: /* Indirect predecrememnt.  */
+        tcg_gen_mov_i32(AREG(insn, 0), addr);
+        break;
+    }
+    tcg_temp_free(addr);
 }
 
 DISAS_INSN(move)
