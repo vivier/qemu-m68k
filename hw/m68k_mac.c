@@ -266,7 +266,7 @@ static void q800_init(ram_addr_t ram_size,
     ram_addr_t bios_offset;
     char *filename;
     int bios_size;
-    uint32_t initrd_base;
+    ram_addr_t initrd_base;
     int32_t initrd_size;
     MemoryRegion *escc_mem;
     q800_glue_state_t *s;
@@ -340,14 +340,16 @@ static void q800_init(ram_addr_t ram_size,
 
         /* load initrd */
         if (initrd_filename) {
-            initrd_base = parameters_base + 12 + 4; /* BI_RAMDISK + BI_LAST */
-            initrd_size = load_image_targphys(initrd_filename, initrd_base, 
-                                              ram_size - initrd_base);
+           initrd_size = get_image_size(initrd_filename);
             if (initrd_size < 0) {
                 hw_error("qemu: could not load initial ram disk '%s'\n",
                          initrd_filename);
                 exit(1);
             }
+
+            initrd_base = (ram_size - initrd_size) & TARGET_PAGE_MASK;
+            load_image_targphys(initrd_filename, initrd_base,
+                                ram_size - initrd_base);
             BOOTINFO2(parameters_base, BI_RAMDISK, initrd_base, initrd_size);
         } else {
             initrd_base = 0;
