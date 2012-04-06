@@ -422,7 +422,7 @@ uint32_t HELPER(movec_from)(CPUM68KState * env, uint32_t reg)
     switch (reg) {
     /* MC680[234]0 */
     case M68K_CR_SFC:
-        return env->dfc;
+        return env->sfc;
     case M68K_CR_DFC:
         return env->dfc;
     case M68K_CR_USP:
