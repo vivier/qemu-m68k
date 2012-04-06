@@ -1957,6 +1957,7 @@ DISAS_INSN(moves)
             gen_addr_fault(s);
             return;
         }
+        tcg_gen_mov_i32(ea_result, reg);
     } else {
         /* from ea to reg */
         mem_index = (s->env->sfc & 4) ? MMU_KERNEL_IDX : MMU_USER_IDX;
@@ -1967,6 +1968,7 @@ DISAS_INSN(moves)
             gen_addr_fault(s);
             return;
         }
+        tcg_gen_mov_i32(reg, ea_result);
     }
 }
 
