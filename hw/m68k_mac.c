@@ -31,6 +31,7 @@
 #include "exec-memory.h"
 #include "escc.h"
 #include "mac_via.h"
+#include "sysbus.h"
 
 #define MACROM_ADDR     0x800000
 #define MACROM_SIZE     0x100000
@@ -59,8 +60,9 @@
 
 #define SCC_BASE  0x50f0c020
 #define MAC_ESP_IO_BASE 0x50F00000
-#define VIDEO_BASE 0xf9001000
 #define MAC_CLOCK  3686418 //783300
+#define VIDEO_BASE 0xf9001000
+#define DAFB_BASE  0xf9800000
 
 struct bi_record {
     uint16_t tag;        /* tag ID */
@@ -163,66 +165,9 @@ struct bi_record {
     } while (0)
 
 typedef struct {
-    DisplayState *ds;
-} q800_state_t;
-
-typedef struct {
     CPUM68KState *env;
     uint8_t ipr;
 } q800_glue_state_t;
-
-static q800_state_t q800_state;
-
-static uint8_t palette[256 * 3];
-static void q800fb_draw_line(void *opaque, uint8_t *d, const uint8_t *s,
-                             int width, int pitch)
-{
-    int i, j;
-
-   for (i = 0, j = 0; i < width * ((graphic_depth + 7) / 8); i++) {
-        d[j++] = palette[s[i] * 3];
-        d[j++] = palette[s[i] * 3 + 1];
-        d[j++] = palette[s[i] * 3 + 2];
-        j++;
-    }
-}
-
-static void q800fb_invalidate(void *opaque)
-{
-}
-
-static void q800fb_update(void *opaque)
-{
-    q800_state_t *s = (q800_state_t *)opaque;
-    DisplaySurface *info = s->ds->surface;
-    int first = 0;
-    int last  = 0;
-    int i;
-    for (i = 0; i < 256; i++) {
-        palette[i * 3] = palette[i * 3 + 1] = palette[i * 3 + 2] = 255 - i;
-    }
-
-    framebuffer_update_display(s->ds,
-                               VIDEO_BASE, 640, 480, 640, info->linesize,
-                               0, 1, q800fb_draw_line, NULL, &first, &last);
-    dpy_update(s->ds, 0, 0, 640, 480);
-}
-
-static void q800fb_init(q800_state_t *s)
-{
-    int videomem_index;
-
-    s->ds = graphic_console_init(q800fb_update,
-                                 q800fb_invalidate,
-                                 NULL, NULL, s);
-    qemu_console_resize(s->ds, 640, 480);
-
-
-    videomem_index = qemu_ram_alloc(NULL,"q800-video.ram",640 * 480);
-
-    cpu_register_physical_memory(VIDEO_BASE, 640 * 480,
-                                 videomem_index | IO_MEM_RAM);
-}
 
 static void q800_glue_set_irq(void *opaque, int irq, int level)
 {
@@ -272,6 +217,8 @@ static void q800_init(ram_addr_t ram_size,
     q800_glue_state_t *s;
     qemu_irq *pic;
     target_phys_addr_t parameters_base;
+    DeviceState *dev;
+    SysBusDevice *sysbus;
 #if 0
     qemu_irq **heathrow_irqs;
     int i;
@@ -303,7 +250,14 @@ static void q800_init(ram_addr_t ram_size,
     ram_offset = qemu_ram_alloc(NULL, "m68k_mac.ram", ram_size);
     cpu_register_physical_memory(0, ram_size, ram_offset | IO_MEM_RAM);
 
-    q800fb_init(&q800_state);
+    /* framebuffer */
+
+    dev = qdev_create(NULL, "sysbus-macfb");
+    qdev_init_nofail(dev);
+    sysbus = sysbus_from_qdev(dev);
+    sysbus_mmio_map(sysbus, 0, DAFB_BASE);
+    sysbus_mmio_map(sysbus, 1, VIDEO_BASE);
+
     graphic_depth = 8;
 
     if (linux_boot) {

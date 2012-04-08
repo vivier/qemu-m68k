@@ -262,6 +262,7 @@ hw-obj-$(CONFIG_MAC_NVRAM) += mac_nvram.o
 hw-obj-$(CONFIG_MAC_DBDMA) += mac_dbdma.o
 # Mac 680x0
 hw-obj-$(CONFIG_MAC_VIA) += mac_via.o
+hw-obj-$(CONFIG_MACFB) += macfb.o
 # OldWorld PowerMac
 hw-obj-$(CONFIG_HEATHROW_PIC) += heathrow_pic.o
 hw-obj-$(CONFIG_GRACKLE_PCI) += grackle_pci.o
