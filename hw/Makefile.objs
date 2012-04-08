@@ -45,6 +45,8 @@ hw-obj-$(CONFIG_CUDA) += cuda.o
 hw-obj-$(CONFIG_ADB) += adb.o adb-mouse.o adb-kbd.o
 hw-obj-$(CONFIG_MAC_NVRAM) += mac_nvram.o
 hw-obj-$(CONFIG_MAC_DBDMA) += mac_dbdma.o
+# Mac 680x0
+hw-obj-$(CONFIG_MAC_VIA) += mac_via.o
 # OldWorld PowerMac
 hw-obj-$(CONFIG_HEATHROW_PIC) += heathrow_pic.o
 hw-obj-$(CONFIG_GRACKLE_PCI) += grackle_pci.o
