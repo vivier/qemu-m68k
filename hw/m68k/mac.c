@@ -177,8 +177,6 @@ static void q800_init(QEMUMachineInitArgs *args)
     sysbus_mmio_map(sysbus, 0, DAFB_BASE);
     sysbus_mmio_map(sysbus, 1, VIDEO_BASE);
 
-    graphic_depth = 8;
-
     if (linux_boot) {
         uint64_t high;
         kernel_size = load_elf(kernel_filename, NULL, NULL,
@@ -201,10 +199,10 @@ static void q800_init(QEMUMachineInitArgs *args)
         BOOTINFO1(parameters_base, BI_MAC_MEMSIZE, ram_size >> 20); /* in MB */
         BOOTINFO2(parameters_base, BI_MEMCHUNK, 0, ram_size);
         BOOTINFO1(parameters_base, BI_MAC_VADDR, VIDEO_BASE);
-        BOOTINFO1(parameters_base, BI_MAC_VDEPTH, graphic_depth);
+        BOOTINFO1(parameters_base, BI_MAC_VDEPTH, 8);
         BOOTINFO1(parameters_base, BI_MAC_VDIM, (480 << 16) | 640);
         BOOTINFO1(parameters_base, BI_MAC_VROW,
-                     640 * ((graphic_depth  + 7) / 8));
+                     640 * ((8  + 7) / 8));
         BOOTINFO1(parameters_base, BI_MAC_SCCBASE, SCC_BASE);
 
         if (kernel_cmdline) {
