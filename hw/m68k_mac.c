@@ -31,6 +31,7 @@
 #include "exec-memory.h"
 #include "escc.h"
 #include "mac_via.h"
+#include "macfb.h"
 
 #define MACROM_ADDR     0x800000
 #define MACROM_SIZE     0x100000
@@ -59,7 +60,6 @@
 
 #define SCC_BASE  0x50f0c020
 #define MAC_ESP_IO_BASE 0x50F00000
-#define VIDEO_BASE 0xf9001000
 #define MAC_CLOCK  3686418 //783300
 
 struct bi_record {
@@ -173,57 +173,6 @@ typedef struct {
 
 static q800_state_t q800_state;
 
-static uint8_t palette[256 * 3];
-static void q800fb_draw_line(void *opaque, uint8_t *d, const uint8_t *s,
-                             int width, int pitch)
-{
-    int i, j;
-
-   for (i = 0, j = 0; i < width * ((graphic_depth + 7) / 8); i++) {
-        d[j++] = palette[s[i] * 3];
-        d[j++] = palette[s[i] * 3 + 1];
-        d[j++] = palette[s[i] * 3 + 2];
-        j++;
-    }
-}
-
-static void q800fb_invalidate(void *opaque)
-{
-}
-
-static void q800fb_update(void *opaque)
-{
-    q800_state_t *s = (q800_state_t *)opaque;
-    DisplaySurface *info = s->ds->surface;
-    int first = 0;
-    int last  = 0;
-    int i;
-    for (i = 0; i < 256; i++) {
-        palette[i * 3] = palette[i * 3 + 1] = palette[i * 3 + 2] = 255 - i;
-    }
-
-    framebuffer_update_display(s->ds,
-                               VIDEO_BASE, 640, 480, 640, info->linesize,
-                               0, 1, q800fb_draw_line, NULL, &first, &last);
-    dpy_update(s->ds, 0, 0, 640, 480);
-}
-
-static void q800fb_init(q800_state_t *s)
-{
-    int videomem_index;
-
-    s->ds = graphic_console_init(q800fb_update,
-                                 q800fb_invalidate,
-                                 NULL, NULL, s);
-    qemu_console_resize(s->ds, 640, 480);
-
-
-    videomem_index = qemu_ram_alloc(NULL,"q800-video.ram",640 * 480);
-
-    cpu_register_physical_memory(VIDEO_BASE, 640 * 480,
-                                 videomem_index | IO_MEM_RAM);
-}
-
 static void q800_glue_set_irq(void *opaque, int irq, int level)
 {
     int i;
@@ -303,7 +252,7 @@ static void q800_init(ram_addr_t ram_size,
     ram_offset = qemu_ram_alloc(NULL, "m68k_mac.ram", ram_size);
     cpu_register_physical_memory(0, ram_size, ram_offset | IO_MEM_RAM);
 
-    q800fb_init(&q800_state);
+    macfb_init();
     graphic_depth = 8;
 
     if (linux_boot) {
@@ -327,7 +276,7 @@ static void q800_init(ram_addr_t ram_size,
         BOOTINFO1(parameters_base, BI_MAC_MODEL, Q800_MACHINE_ID);
         BOOTINFO1(parameters_base, BI_MAC_MEMSIZE, ram_size >> 20); /* in MB */
         BOOTINFO2(parameters_base, BI_MEMCHUNK, 0, ram_size);
-        BOOTINFO1(parameters_base, BI_MAC_VADDR, VIDEO_BASE);
+        BOOTINFO1(parameters_base, BI_MAC_VADDR, MACFB_VIDEO_BASE);
         BOOTINFO1(parameters_base, BI_MAC_VDEPTH, graphic_depth);
         BOOTINFO1(parameters_base, BI_MAC_VDIM, (480 << 16) | 640);
         BOOTINFO1(parameters_base, BI_MAC_VROW,
