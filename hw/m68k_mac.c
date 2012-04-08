@@ -33,6 +33,7 @@
 #include "sysbus.h"
 #include "bootinfo.h"
 #include "mac_via.h"
+#include "sysbus.h"
 
 #define MACROM_ADDR     0x800000
 #define MACROM_SIZE     0x100000
@@ -60,8 +61,10 @@
 #define Q800_MAC_CPU_ID 2
 
 #define VIA_BASE   0x50f00000
-#define SCC_BASE   0x50f0c020
+#define SCC_BASE  0x50f0c020
+#define MAC_ESP_IO_BASE 0x50F00000
 #define VIDEO_BASE 0xf9001000
+#define DAFB_BASE  0xf9800000
 
 #define MAC_CLOCK  3686418 //783300
 
@@ -155,6 +158,16 @@ static void q800_init(ram_addr_t ram_size,
 
     escc_mem = escc_init(SCC_BASE, pic[3], pic[3], serial_hds[0],
                          serial_hds[1], MAC_CLOCK, 1, 1);
+
+    /* framebuffer */
+
+    dev = qdev_create(NULL, "sysbus-macfb");
+    qdev_init_nofail(dev);
+    sysbus = sysbus_from_qdev(dev);
+    sysbus_mmio_map(sysbus, 0, DAFB_BASE);
+    sysbus_mmio_map(sysbus, 1, VIDEO_BASE);
+
+    graphic_depth = 8;
 
     if (linux_boot) {
         uint64_t high;
