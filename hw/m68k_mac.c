@@ -62,6 +62,7 @@
 #define MAC_ESP_IO_BASE 0x50F00000
 #define MAC_CLOCK  3686418 //783300
 #define VIDEO_BASE 0xf9001000
+#define DAFB_BASE  0xf9800200
 
 struct bi_record {
     uint16_t tag;        /* tag ID */
@@ -255,6 +256,7 @@ static void q800_init(ram_addr_t ram_size,
     qdev_init_nofail(dev);
     sysbus = sysbus_from_qdev(dev);
     sysbus_mmio_map(sysbus, 0, VIDEO_BASE);
+    sysbus_mmio_map(sysbus, 1, DAFB_BASE);
 
     graphic_depth = 8;
 

@@ -34,16 +34,21 @@
 struct MacfbState {
     SysBusDevice busdev;
     MemoryRegion mem_vram;
+    MemoryRegion mem_ctrl;
     DisplayState *ds;
 
     uint8_t *vram;
-    uint8_t color_palette[256][3];
+    uint32_t palette_current;
+    uint8_t color_palette[256 * 3];
     uint32_t width, height; /* in pixels */
 };
 typedef struct MacfbState MacfbState;
 
 #define MACFB_PAGE_SIZE 4096
 #define VRAM_SIZE (1024 * 1024)
+
+#define DAFB_RESET	0x200
+#define DAFB_LUT	0x213
 
 static inline int check_dirty(MacfbState *s, ram_addr_t page)
 {
@@ -121,9 +126,9 @@ static void macfb_draw_graphic8(MacfbState *s)
                 /* normal area */
                 index = *vram;
                 color = (*rgb_to_pixel)(
-                    s->color_palette[index][0],
-                    s->color_palette[index][1],
-                    s->color_palette[index][2]);
+                    s->color_palette[index * 3],
+                    s->color_palette[index * 3 + 1],
+                    s->color_palette[index * 3 + 2]);
                 memcpy(dd, &color, w);
                 dd += w;
                 x++;
@@ -207,13 +212,47 @@ static void macfb_reset(DeviceState *d)
 
     s->width = 640;
     s->height = 480;
+    s->palette_current = 0;
     for (i = 0; i < 256; i++) {
-        s->color_palette[i][0] = 255 - i;
-        s->color_palette[i][1] = 255 - i;
-        s->color_palette[i][2] = 255 - i;
+        s->color_palette[i * 3] = 255 - i;
+        s->color_palette[i * 3 + 1] = 255 - i;
+        s->color_palette[i * 3 + 2] = 255 - i;
     }
     memset(s->vram, 0, VRAM_SIZE);
 }
+
+static uint64_t macfb_ctrl_read(void *opaque,
+                                target_phys_addr_t addr,
+                                unsigned int size)
+{
+    return 0;
+}
+
+static void macfb_ctrl_write(void *opaque,
+                             target_phys_addr_t addr,
+                             uint64_t val,
+                             unsigned int size)
+{
+    MacfbState *s = opaque;
+    switch(addr) {
+    case DAFB_RESET:
+        s->palette_current = 0;
+        break;
+    case DAFB_LUT:
+        s->color_palette[s->palette_current++] = val;
+        if (s->palette_current % 3)
+            macfb_invalidate(s);
+        break;
+    }
+}
+
+static const MemoryRegionOps macfb_ctrl_ops = {
+    .read = macfb_ctrl_read,
+    .write = macfb_ctrl_write,
+    .endianness = DEVICE_BIG_ENDIAN,
+    .impl.min_access_size = 1,
+    .impl.max_access_size = 4,
+};
 
 static int macfb_init(SysBusDevice *dev)
 {
@@ -228,9 +267,11 @@ static int macfb_init(SysBusDevice *dev)
 
     memory_region_init_ram_ptr(&s->mem_vram, &dev->qdev, "vram", VRAM_SIZE,
                                s->vram);
+    memory_region_init_io(&s->mem_ctrl, &macfb_ctrl_ops, s, "ctrl", 0x1000);
 
     memory_region_set_coalescing(&s->mem_vram);
     sysbus_init_mmio_region(dev, &s->mem_vram);
+    sysbus_init_mmio_region(dev, &s->mem_ctrl);
 
     return 0;
 }
@@ -249,6 +290,7 @@ static const VMStateDescription vmstate_macfb = {
     .post_load = macfb_post_load,
     .fields = (VMStateField[]) {
         VMSTATE_BUFFER_UNSAFE(color_palette, MacfbState, 0, 256 * 3),
+        VMSTATE_UINT32(palette_current, MacfbState),
         VMSTATE_UINT32(width, MacfbState),
         VMSTATE_UINT32(height, MacfbState),
         VMSTATE_END_OF_LIST()
