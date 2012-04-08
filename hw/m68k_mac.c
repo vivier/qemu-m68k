@@ -31,7 +31,7 @@
 #include "exec-memory.h"
 #include "escc.h"
 #include "mac_via.h"
-#include "macfb.h"
+#include "sysbus.h"
 
 #define MACROM_ADDR     0x800000
 #define MACROM_SIZE     0x100000
@@ -61,6 +61,7 @@
 #define SCC_BASE  0x50f0c020
 #define MAC_ESP_IO_BASE 0x50F00000
 #define MAC_CLOCK  3686418 //783300
+#define VIDEO_BASE 0xf9001000
 
 struct bi_record {
     uint16_t tag;        /* tag ID */
@@ -163,15 +164,9 @@ struct bi_record {
     } while (0)
 
 typedef struct {
-    DisplayState *ds;
-} q800_state_t;
-
-typedef struct {
     CPUState *env;
     uint8_t ipr;
 } q800_glue_state_t;
-
-static q800_state_t q800_state;
 
 static void q800_glue_set_irq(void *opaque, int irq, int level)
 {
@@ -221,6 +216,8 @@ static void q800_init(ram_addr_t ram_size,
     q800_glue_state_t *s;
     qemu_irq *pic;
     target_phys_addr_t parameters_base;
+    DeviceState *dev;
+    SysBusDevice *sysbus;
 #if 0
     qemu_irq **heathrow_irqs;
     int i;
@@ -252,7 +249,13 @@ static void q800_init(ram_addr_t ram_size,
     ram_offset = qemu_ram_alloc(NULL, "m68k_mac.ram", ram_size);
     cpu_register_physical_memory(0, ram_size, ram_offset | IO_MEM_RAM);
 
-    macfb_init();
+    /* framebuffer */
+
+    dev = qdev_create(NULL, "macfb");
+    qdev_init_nofail(dev);
+    sysbus = sysbus_from_qdev(dev);
+    sysbus_mmio_map(sysbus, 0, VIDEO_BASE);
+
     graphic_depth = 8;
 
     if (linux_boot) {
@@ -276,7 +279,7 @@ static void q800_init(ram_addr_t ram_size,
         BOOTINFO1(parameters_base, BI_MAC_MODEL, Q800_MACHINE_ID);
         BOOTINFO1(parameters_base, BI_MAC_MEMSIZE, ram_size >> 20); /* in MB */
         BOOTINFO2(parameters_base, BI_MEMCHUNK, 0, ram_size);
-        BOOTINFO1(parameters_base, BI_MAC_VADDR, MACFB_VIDEO_BASE);
+        BOOTINFO1(parameters_base, BI_MAC_VADDR, VIDEO_BASE);
         BOOTINFO1(parameters_base, BI_MAC_VDEPTH, graphic_depth);
         BOOTINFO1(parameters_base, BI_MAC_VDIM, (480 << 16) | 640);
         BOOTINFO1(parameters_base, BI_MAC_VROW,
