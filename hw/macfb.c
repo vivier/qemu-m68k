@@ -210,8 +210,6 @@ static void macfb_reset(DeviceState *d)
     MacfbState *s = container_of(d, MacfbState, busdev.qdev);
     int i;
 
-    s->width = 640;
-    s->height = 480;
     s->palette_current = 0;
     for (i = 0; i < 256; i++) {
         s->color_palette[i * 3] = 255 - i;
@@ -263,7 +261,7 @@ static int macfb_init(SysBusDevice *dev)
     s->ds = graphic_console_init(macfb_update,
                                  macfb_invalidate,
                                  NULL, NULL, s);
-    qemu_console_resize(s->ds, 640, 480);
+    qemu_console_resize(s->ds, s->width, s->height);
 
     memory_region_init_ram_ptr(&s->mem_vram, &dev->qdev, "vram", VRAM_SIZE,
                                s->vram);
@@ -291,8 +289,6 @@ static const VMStateDescription vmstate_macfb = {
     .fields = (VMStateField[]) {
         VMSTATE_BUFFER_UNSAFE(color_palette, MacfbState, 0, 256 * 3),
         VMSTATE_UINT32(palette_current, MacfbState),
-        VMSTATE_UINT32(width, MacfbState),
-        VMSTATE_UINT32(height, MacfbState),
         VMSTATE_END_OF_LIST()
     }
 };
@@ -303,7 +299,12 @@ static SysBusDeviceInfo macfb_info = {
     .qdev.desc = "Macintosh 680x0 framebuffer",
     .qdev.size = sizeof(MacfbState),
     .qdev.vmsd  = &vmstate_macfb,
-    .qdev.reset = macfb_reset
+    .qdev.reset = macfb_reset,
+    .qdev.props = (Property[]) {
+        DEFINE_PROP_UINT32("width", MacfbState, width, 640),
+        DEFINE_PROP_UINT32("height", MacfbState, height, 480),
+        DEFINE_PROP_END_OF_LIST(),
+    }
 };
 
 static void macfb_register(void)
