@@ -219,6 +219,9 @@ static void q800_init(ram_addr_t ram_size,
     target_phys_addr_t parameters_base;
     DeviceState *dev;
     SysBusDevice *sysbus;
+    void *via;
+    qemu_irq *via1_irqs;
+    qemu_irq *via2_irqs;
 #if 0
     qemu_irq **heathrow_irqs;
     int i;
@@ -249,6 +252,15 @@ static void q800_init(ram_addr_t ram_size,
 
     ram_offset = qemu_ram_alloc(NULL, "m68k_mac.ram", ram_size);
     cpu_register_physical_memory(0, ram_size, ram_offset | IO_MEM_RAM);
+
+    /* misc */
+
+    s = (q800_glue_state_t *)g_malloc0(sizeof(q800_glue_state_t));
+    s->env = env;
+    pic = qemu_allocate_irqs(q800_glue_set_irq, s, 6);
+    via = mac_via_init(pic[0], pic[1], &via1_irqs, &via2_irqs);
+    escc_mem = escc_init(SCC_BASE, pic[3], pic[3], serial_hds[0],
+                         serial_hds[1], MAC_CLOCK, 1, 1);
 
     /* framebuffer */
 
@@ -349,15 +361,6 @@ static void q800_init(ram_addr_t ram_size,
             hw_error("Bus model not supported on OldWorld Mac machine\n");
         }
     }
-#endif
-
-    s = (q800_glue_state_t *)g_malloc0(sizeof(q800_glue_state_t));
-    s->env = env;
-    pic = qemu_allocate_irqs(q800_glue_set_irq, s, 6);
-    mac_via_init(pic[0], pic[1]);
-    escc_mem = escc_init(SCC_BASE, pic[3], pic[3], serial_hds[0],
-                         serial_hds[1], MAC_CLOCK, 1, 1);
-#if 0
     /* cuda also initialize ADB */
     cuda_init(&cuda_mem_index, pic[0x12]);
 
