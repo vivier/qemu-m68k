@@ -765,7 +765,7 @@ void mac_via_init(qemu_irq via1_irq, qemu_irq via2_irq)
                                               s, DEVICE_NATIVE_ENDIAN);
     s = &via_state[1];
     s->type = 2;
-    s->irq = via1_irq;
+    s->irq = via2_irq;
     s->timers[0].index = 0;
     s->timers[0].timer = qemu_new_timer_ns(vm_clock, via_timer1, s);
     s->timers[1].index = 1;
