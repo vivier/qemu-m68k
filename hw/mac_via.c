@@ -211,19 +211,19 @@
 
 /* VIA1 */
 
-#define VIA1_IRQ_ADB_CLOCK  0x10
-#define VIA1_IRQ_ADB_DATA   0x08
-#define VIA1_IRQ_ADB_READY  0x04
-#define VIA1_IRQ_VBLANK     0x02
-#define VIA1_IRQ_ONE_SECOND 0x01
+#define VIA1_IRQ_ONE_SECOND (1 << VIA1_IRQ_ONE_SECOND_BIT)
+#define VIA1_IRQ_VBLANK     (1 << VIA1_IRQ_VBLANK_BIT)
+#define VIA1_IRQ_ADB_READY  (1 << VIA1_IRQ_ADB_READY_BIT)
+#define VIA1_IRQ_ADB_DATA   (1 << VIA1_IRQ_ADB_DATA_BIT)
+#define VIA1_IRQ_ADB_CLOCK  (1 << VIA1_IRQ_ADB_CLOCK_BIT)
 
 /* VIA2 */
 
-#define VIA2_IRQ_ASC        0x10
-#define VIA2_IRQ_SCSI       0x08
-#define VIA2_IRQ_UNUSED     0x04
-#define VIA2_IRQ_SLOT       0x02
-#define VIA2_IRQ_SCSI_DATA  0x01
+#define VIA2_IRQ_SCSI_DATA  (1 << VIA2_IRQ_SCSI_DATA_BIT)
+#define VIA2_IRQ_SLOT       (1 << VIA2_IRQ_SLOT_BIT)
+#define VIA2_IRQ_UNUSED     (1 << VIA2_IRQ_SCSI_BIT)
+#define VIA2_IRQ_SCSI       (1 << VIA2_IRQ_UNUSED_BIT)
+#define VIA2_IRQ_ASC        (1 << VIA2_IRQ_ASC_BIT)
 
 /* Apple sez: http://developer.apple.com/technotes/ov/ov_04.html
  * Another example of a valid function that has no ROM support is the use
@@ -381,6 +381,17 @@ static void via1_VBL(void *opaque)
     VIAState *s = opaque;
     via1_VBL_update(s);
     s->ifr |= VIA1_IRQ_VBLANK;
+    via_update_irq(s);
+}
+
+static void via_irq_request(void *opaque, int irq, int level)
+{
+    VIAState *s = opaque;
+    if (level) {
+        s->ifr |= 1 << irq;
+    } else {
+        s->ifr &= ~(1 << irq);
+    }
     via_update_irq(s);
 }
 
@@ -742,19 +753,28 @@ static void via_reset(void *opaque)
     /* FIXME */
 }
 
-void mac_via_init(qemu_irq via1_irq, qemu_irq via2_irq)
+void *mac_via_init(qemu_irq via1_irq, qemu_irq via2_irq,
+                   qemu_irq **via1_irqs, qemu_irq **via2_irqs)
 {
     struct tm tm;
     int via_mem_index[2];
     VIAState *s;
 
+    /* VIA 1 */
+
     s = &via_state[0];
+
+    /* input IRQs */
+
+    *via1_irqs = qemu_allocate_irqs(via_irq_request, s, VIA1_IRQ_NB);
 
     one_second_timer = qemu_new_timer_ms(vm_clock, via1_one_second, s);
     VBL_timer = qemu_new_timer_ns(vm_clock, via1_VBL, s);
 
     qemu_get_timedate(&tm, 0);
     s->tick_offset = (uint32_t)mktimegm(&tm) + RTC_OFFSET;
+
+    /* ouput IRQs */
 
     s->type = 1;
     s->irq = via1_irq;
@@ -763,7 +783,17 @@ void mac_via_init(qemu_irq via1_irq, qemu_irq via2_irq)
     s->timers[1].index = 1;
     via_mem_index[0] = cpu_register_io_memory(via_read, via_write,
                                               s, DEVICE_NATIVE_ENDIAN);
+
+    /* VIA 2 */
+
     s = &via_state[1];
+
+    /* input IRQs */
+
+    *via2_irqs = qemu_allocate_irqs(via_irq_request, s, VIA2_IRQ_NB);
+
+    /* output IRQs */
+
     s->type = 2;
     s->irq = via2_irq;
     s->timers[0].index = 0;
@@ -777,4 +807,6 @@ void mac_via_init(qemu_irq via1_irq, qemu_irq via2_irq)
     /* FIXME: vmstate_register() */
     qemu_register_reset(via_reset, &via_state[0]);
     qemu_register_reset(via_reset, &via_state[1]);
+
+    return s;
 }
