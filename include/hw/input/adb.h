@@ -33,6 +33,30 @@
 #define ADB_MAX_OUT_LEN 16
 
 typedef struct ADBBusState ADBBusState;
+
+/* ADB commands */
+
+#define ADB_BUSRESET            0x00
+#define ADB_FLUSH               0x01
+#define ADB_WRITEREG            0x08
+#define ADB_READREG             0x0c
+
+/* ADB device commands */
+
+#define ADB_CMD_SELF_TEST               0xff
+#define ADB_CMD_CHANGE_ID               0xfe
+#define ADB_CMD_CHANGE_ID_AND_ACT       0xfd
+#define ADB_CMD_CHANGE_ID_AND_ENABLE    0x00
+
+/* ADB default device IDs (upper 4 bits of ADB command byte) */
+
+#define ADB_DEVID_DONGLE      1
+#define ADB_DEVID_KEYBOARD    2
+#define ADB_DEVID_MOUSE       3
+#define ADB_DEVID_TABLET      4
+#define ADB_DEVID_MODEM       5
+#define ADB_DEVID_MISC        7
+
 typedef struct ADBDevice ADBDevice;
 
 /* buf = NULL means polling */
@@ -76,6 +100,8 @@ struct ADBBusState {
     int nb_devices;
     int poll_index;
 };
+
+extern const VMStateDescription vmstate_adb_device;
 
 int adb_request(ADBBusState *s, uint8_t *buf_out,
                 const uint8_t *buf, int len);
