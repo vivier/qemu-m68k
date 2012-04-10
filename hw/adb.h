@@ -30,6 +30,30 @@
 
 #define ADB_MAX_OUT_LEN 16
 
+/* ADB commands */
+
+#define ADB_BUSRESET            0x00
+#define ADB_FLUSH               0x01
+#define ADB_WRITEREG            0x08
+#define ADB_READREG             0x0c
+
+/* ADB device commands */
+
+#define ADB_CMD_SELF_TEST               0xff
+#define ADB_CMD_CHANGE_ID               0xfe
+#define ADB_CMD_CHANGE_ID_AND_ACT       0xfd
+#define ADB_CMD_CHANGE_ID_AND_ENABLE    0x00
+
+/* ADB default device IDs (upper 4 bits of ADB command byte) */
+
+#define ADB_DONGLE      1
+#define ADB_KEYBOARD    2
+#define ADB_MOUSE       3
+#define ADB_TABLET      4
+#define ADB_MODEM       5
+#define ADB_MISC        7
+
+
 typedef struct ADBDevice ADBDevice;
 
 /* buf = NULL means polling */
@@ -56,8 +80,10 @@ int adb_request(ADBBusState *s, uint8_t *buf_out,
                 const uint8_t *buf, int len);
 int adb_poll(ADBBusState *s, uint8_t *buf_out);
 
-void adb_kbd_init(ADBBusState *bus);
-void adb_mouse_init(ADBBusState *bus);
+ADBDevice *adb_register_device(ADBBusState *s, int devaddr,
+                               ADBDeviceRequest *devreq,
+                               ADBDeviceReset *devreset,
+                               void *opaque);
 
 extern ADBBusState adb_bus;
 #endif /* !defined(__ADB_H__) */
