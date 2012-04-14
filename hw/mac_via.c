@@ -34,9 +34,7 @@
 #include "mac_via.h"
 
 /* debug VIA */
-#if 0
-#define DEBUG_VIA
-#endif
+#undef DEBUG_VIA
 
 #ifdef DEBUG_VIA
 #define VIA_DPRINTF(fmt, ...)                                  \
@@ -262,6 +260,21 @@
 #define vIER     0x1c00  /* [VIA/RBV]  Interrupt enable register. */
 #define vBufA    0x1e00  /* [VIA/RBV] register A (no handshake) */
 
+/* from linux 2.6 drivers/macintosh/via-macii.c */
+
+/* Bits in ACR */
+
+#define VIA1ACR_vShiftCtrl         0x1c            /* Shift register control bits */
+#define VIA1ACR_vShiftExtClk       0x0c            /* Shift on external clock */
+#define VIA1ACR_vShiftOut          0x10            /* Shift out if 1 */
+
+/* Apple Macintosh Family Hardware Refenece
+ * Table 19-10 ADB transaction states
+ */
+
+#define VIA1B_vADB_StateMask	(VIA1B_vADBS1 | VIA1B_vADBS2)
+#define VIA1B_vADB_StateShift	4
+
 typedef struct VIATimer {
     int index;
     uint16_t counter; /* Timer counter */
@@ -286,6 +299,9 @@ typedef struct VIAState {
     uint32_t tick_offset;
 
     uint8_t last_b;
+
+    /* RTC */
+
     uint8_t data_out;
     int data_out_cnt;
     uint8_t data_in;
@@ -294,9 +310,16 @@ typedef struct VIAState {
     int wprotect;
     int alt;
 
+    /* ADB */
+
+    void *adb;
+
+    /* Timers */
+
     VIATimer timers[2];
 
     qemu_irq irq;
+
 } VIAState;
 
 static VIAState via_state[2];
@@ -391,6 +414,9 @@ static void via_irq_request(void *opaque, int irq, int level)
         s->ifr |= 1 << irq;
     } else {
         s->ifr &= ~(1 << irq);
+    }
+    if (s->type == 1 && s->ier && (1 << VIA1_IRQ_ADB_READY_BIT) && irq == VIA1_IRQ_ADB_READY_BIT) {
+        s->b &= ~VIA1B_vADBInt;
     }
     via_update_irq(s);
 }
@@ -543,6 +569,23 @@ static void via1_rtc_update(VIAState *s)
     }
 }
 
+static void via1_adb_update(VIAState *s)
+{
+    int state;
+
+    state = (s->b & VIA1B_vADB_StateMask) >> VIA1B_vADB_StateShift;
+
+    if (s->acr & VIA1ACR_vShiftOut) {
+        /* output mode */
+        adb_send(s->adb, state, s->sr);
+    } else {
+	    if (s->b & VIA1B_vADBInt)
+            	return;
+        /* input mode */
+        adb_receive(s->adb, state, &s->sr);
+    }
+}
+
 static void via_writeb(void *opaque, target_phys_addr_t addr, uint32_t val)
 {
     VIAState *s = opaque;
@@ -555,10 +598,10 @@ static void via_writeb(void *opaque, target_phys_addr_t addr, uint32_t val)
         s->a = (s->a & ~s->dira) | (val & s->dira);
         break;
     case vBufB:  /* Register B */
-        VIA_DPRINTF("writeb: vBufB = %02x\n", val);
         s->b = (s->b & ~s->dirb) | (val & s->dirb);
         if (s->type == 1) {
             via1_rtc_update(s);
+            via1_adb_update(s);
             s->last_b = s->b;
         }
         break;
@@ -753,8 +796,9 @@ static void via_reset(void *opaque)
     /* FIXME */
 }
 
-void *mac_via_init(qemu_irq via1_irq, qemu_irq via2_irq,
-                   qemu_irq **via1_irqs, qemu_irq **via2_irqs)
+void mac_via_init(qemu_irq via1_irq, qemu_irq via2_irq,
+                  qemu_irq **via1_irqs, qemu_irq **via2_irqs,
+                  ADBBusState *adb)
 {
     struct tm tm;
     int via_mem_index[2];
@@ -763,6 +807,8 @@ void *mac_via_init(qemu_irq via1_irq, qemu_irq via2_irq,
     /* VIA 1 */
 
     s = &via_state[0];
+
+    s->adb = adb;
 
     /* input IRQs */
 
@@ -783,6 +829,7 @@ void *mac_via_init(qemu_irq via1_irq, qemu_irq via2_irq,
     s->timers[1].index = 1;
     via_mem_index[0] = cpu_register_io_memory(via_read, via_write,
                                               s, DEVICE_NATIVE_ENDIAN);
+    s->b = VIA1B_vADB_StateMask | VIA1B_vADBInt | VIA1B_vRTCEnb; /* 1 = disabled */
 
     /* VIA 2 */
 
@@ -808,5 +855,5 @@ void *mac_via_init(qemu_irq via1_irq, qemu_irq via2_irq,
     qemu_register_reset(via_reset, &via_state[0]);
     qemu_register_reset(via_reset, &via_state[1]);
 
-    return s;
+    adb->data_ready = (*via1_irqs)[VIA1_IRQ_ADB_READY_BIT];
 }
