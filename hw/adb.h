@@ -53,7 +53,6 @@
 #define ADB_MODEM       5
 #define ADB_MISC        7
 
-
 typedef struct ADBDevice ADBDevice;
 
 /* buf = NULL means polling */
@@ -74,6 +73,12 @@ typedef struct ADBBusState {
     ADBDevice devices[MAX_ADB_DEVICES];
     int nb_devices;
     int poll_index;
+    qemu_irq data_ready;
+    int data_in_size;
+    int data_in_index;
+    int data_out_index;
+    uint8_t data_in[128];
+    uint8_t data_out[16];
 } ADBBusState;
 
 int adb_request(ADBBusState *s, uint8_t *buf_out,
@@ -84,6 +89,8 @@ ADBDevice *adb_register_device(ADBBusState *s, int devaddr,
                                ADBDeviceRequest *devreq,
                                ADBDeviceReset *devreset,
                                void *opaque);
+ADBBusState *adb_init(void);
 
-extern ADBBusState adb_bus;
+void adb_send(ADBBusState *adb, int state, uint8_t data);
+void adb_receive(ADBBusState *adb, int state, uint8_t *data);
 #endif /* !defined(__ADB_H__) */

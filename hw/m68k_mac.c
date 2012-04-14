@@ -32,6 +32,9 @@
 #include "escc.h"
 #include "mac_via.h"
 #include "sysbus.h"
+#include "adb.h"
+#include "adb-kbd.h"
+#include "adb-mouse.h"
 
 #define MACROM_ADDR     0x800000
 #define MACROM_SIZE     0x100000
@@ -219,9 +222,9 @@ static void q800_init(ram_addr_t ram_size,
     target_phys_addr_t parameters_base;
     DeviceState *dev;
     SysBusDevice *sysbus;
-    void *via;
     qemu_irq *via1_irqs;
     qemu_irq *via2_irqs;
+    ADBBusState *adb;
 #if 0
     qemu_irq **heathrow_irqs;
     int i;
@@ -253,12 +256,21 @@ static void q800_init(ram_addr_t ram_size,
     ram_offset = qemu_ram_alloc(NULL, "m68k_mac.ram", ram_size);
     cpu_register_physical_memory(0, ram_size, ram_offset | IO_MEM_RAM);
 
-    /* misc */
+    /* ADB bus */
+
+    adb = adb_init();
+    adb_kbd_init(adb);
+    adb_mouse_init(adb);
+
+    /* VIA */
 
     s = (q800_glue_state_t *)g_malloc0(sizeof(q800_glue_state_t));
     s->env = env;
     pic = qemu_allocate_irqs(q800_glue_set_irq, s, 6);
-    via = mac_via_init(pic[0], pic[1], &via1_irqs, &via2_irqs);
+    mac_via_init(pic[0], pic[1], &via1_irqs, &via2_irqs, adb);
+
+    /* SCC */
+
     escc_mem = escc_init(SCC_BASE, pic[3], pic[3], serial_hds[0],
                          serial_hds[1], MAC_CLOCK, 1, 1);
 
@@ -363,9 +375,6 @@ static void q800_init(ram_addr_t ram_size,
     }
     /* cuda also initialize ADB */
     cuda_init(&cuda_mem_index, pic[0x12]);
-
-    adb_kbd_init(&adb_bus);
-    adb_mouse_init(&adb_bus);
 
     macio_init(pci_bus, PCI_DEVICE_ID_APPLE_343S1201, 1, pic_mem_index,
                dbdma_mem_index, cuda_mem_index, nvr, 2, ide_mem_index,
