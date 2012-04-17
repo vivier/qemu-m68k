@@ -30,6 +30,12 @@ void do_interrupt_m68k_hardirq(CPUM68KState *env)
 {
 }
 
+#define ldub_data ldub
+#define lduw_data lduw
+#define ldl_data ldl
+#define stb_data stb
+#define stw_data stw
+#define stl_data stl
 #else
 
 extern int semihosting_enabled;
@@ -306,6 +312,74 @@ static void raise_exception(CPUM68KState *env, int tt)
 
     cs->exception_index = tt;
     cpu_loop_exit(cs);
+}
+
+/* load from a bitfield */
+
+uint64_t HELPER(bitfield_load)(CPUM68KState *env, uint32_t addr, uint32_t offset,
+                               uint32_t width)
+{
+    uint64_t bitfield = 0;
+    int size;
+
+    size = (offset + width + 7) >> 3;
+    switch(size) {
+    case 1:
+        bitfield = cpu_ldub_data(env, addr);
+        bitfield <<= 56;
+        break;
+    case 2:
+        bitfield = cpu_lduw_data(env, addr);
+        bitfield <<= 48;
+        break;
+    case 3:
+        bitfield = cpu_lduw_data(env, addr);
+        bitfield <<= 8;
+        bitfield |= cpu_ldub_data(env, addr + 2);
+        bitfield <<= 40;
+        break;
+    case 4:
+        bitfield = cpu_ldl_data(env, addr);
+        bitfield <<= 32;
+        break;
+    case 5:
+        bitfield = cpu_ldl_data(env, addr);
+        bitfield <<= 8;
+        bitfield |= cpu_ldub_data(env, addr + 4);
+        bitfield <<= 24;
+        break;
+    }
+
+    return bitfield;
+}
+
+/* store to a bitfield */
+
+void HELPER(bitfield_store)(CPUM68KState *env, uint32_t addr, uint32_t offset,
+                            uint32_t width, uint64_t bitfield)
+{
+    int size;
+
+    size = (offset + width + 7) >> 3;
+    switch(size) {
+    case 1:
+        cpu_stb_data(env, addr, bitfield >> 56);
+        break;
+    case 2:
+        cpu_stw_data(env, addr, bitfield >> 48);
+        break;
+    case 3:
+        cpu_stw_data(env, addr, bitfield >> 48);
+        cpu_stb_data(env, addr + 2, bitfield >> 40);
+        break;
+    case 4:
+        cpu_stl_data(env, addr, bitfield >> 32);
+        break;
+    case 5:
+        cpu_stl_data(env, addr, bitfield >> 32);
+        cpu_stb_data(env, addr + 4, bitfield >> 24);
+        break;
+    }
 }
 
 void HELPER(raise_exception)(CPUM68KState *env, uint32_t tt)
