@@ -117,8 +117,8 @@ DEF_HELPER_3(set_mac_extu, void, env, i32, i32)
 DEF_HELPER_2(flush_flags, void, env, i32)
 DEF_HELPER_2(raise_exception, void, env, i32)
 
-DEF_HELPER_3(bitfield_load, i64, i32, i32, i32)
-DEF_HELPER_4(bitfield_store, void, i32, i32, i32, i64)
+DEF_HELPER_4(bitfield_load, i64, env, i32, i32, i32)
+DEF_HELPER_5(bitfield_store, void, env, i32, i32, i32, i64)
 
 DEF_HELPER_3(abcd_cc, i32, env, i32, i32)
 DEF_HELPER_3(sbcd_cc, i32, env, i32, i32)
