@@ -31,6 +31,12 @@ void do_interrupt_m68k_hardirq(CPUState *env1)
 {
 }
 
+#define ldub_data ldub
+#define lduw_data lduw
+#define ldl_data ldl
+#define stb_data stb
+#define stw_data stw
+#define stl_data stl
 #else
 
 extern int semihosting_enabled;
@@ -323,6 +329,73 @@ static void raise_exception(int tt)
 {
     env->exception_index = tt;
     cpu_loop_exit(env);
+}
+
+/* load from a bitfield */
+
+uint64_t HELPER(bitfield_load)(uint32_t addr, uint32_t offset, uint32_t width)
+{
+    uint64_t bitfield = 0;
+    int size;
+
+    size = (offset + width + 7) >> 3;
+    switch(size) {
+    case 1:
+        bitfield = ldub_data(addr);
+        bitfield <<= 56;
+        break;
+    case 2:
+        bitfield = lduw_data(addr);
+        bitfield <<= 48;
+        break;
+    case 3:
+        bitfield = lduw_data(addr);
+        bitfield <<= 8;
+        bitfield |= ldub_data(addr + 2);
+        bitfield <<= 40;
+        break;
+    case 4:
+        bitfield = ldl_data(addr);
+        bitfield <<= 32;
+        break;
+    case 5:
+        bitfield = ldl_data(addr);
+        bitfield <<= 8;
+        bitfield |= ldub_data(addr + 4);
+        bitfield <<= 24;
+        break;
+    }
+
+    return bitfield;
+}
+
+/* store to a bitfield */
+
+void HELPER(bitfield_store)(uint32_t addr, uint32_t offset, uint32_t width,
+                            uint64_t bitfield)
+{
+    int size;
+
+    size = (offset + width + 7) >> 3;
+    switch(size) {
+    case 1:
+        stb_data(addr, bitfield >> 56);
+        break;
+    case 2:
+        stw_data(addr, bitfield >> 48);
+        break;
+    case 3:
+        stw_data(addr, bitfield >> 48);
+        stb_data(addr + 2, bitfield >> 40);
+        break;
+    case 4:
+        stl_data(addr, bitfield >> 32);
+        break;
+    case 5:
+        stl_data(addr, bitfield >> 32);
+        stb_data(addr + 4, bitfield >> 24);
+        break;
+    }
 }
 
 void HELPER(raise_exception)(uint32_t tt)
