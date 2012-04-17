@@ -3709,7 +3709,7 @@ DISAS_INSN(bitfield_mem)
     /* load */
 
     bitfield = tcg_temp_new_i64();
-    gen_helper_bitfield_load(bitfield, src, offset, width);
+    gen_helper_bitfield_load(bitfield, cpu_env, src, offset, width);
 
     /* compute CC and move bitfield into a 32bit */
 
@@ -3744,7 +3744,7 @@ DISAS_INSN(bitfield_mem)
     case 2: /* bfchg */
         mask_bitfield = gen_bitfield_mask(offset, width);
         tcg_gen_xor_i64(bitfield, bitfield, mask_bitfield);
-        gen_helper_bitfield_store(src, offset, width, bitfield);
+        gen_helper_bitfield_store(cpu_env, src, offset, width, bitfield);
         break;
     case 3: /* bfexts */
         shift = tcg_temp_new_i32();
@@ -3755,7 +3755,7 @@ DISAS_INSN(bitfield_mem)
         mask_bitfield = gen_bitfield_mask(offset, width);
         tcg_gen_not_i64(mask_bitfield, mask_bitfield);
         tcg_gen_and_i64(bitfield, bitfield, mask_bitfield);
-        gen_helper_bitfield_store(src, offset, width, bitfield);
+        gen_helper_bitfield_store(cpu_env, src, offset, width, bitfield);
         break;
     case 5: /* bfffo */
         gen_helper_bfffo(val, val, width);
@@ -3764,7 +3764,7 @@ DISAS_INSN(bitfield_mem)
     case 6: /* bfset */
         mask_bitfield = gen_bitfield_mask(offset, width);
         tcg_gen_or_i64(bitfield, bitfield, mask_bitfield);
-        gen_helper_bitfield_store(src, offset, width, bitfield);
+        gen_helper_bitfield_store(cpu_env, src, offset, width, bitfield);
         break;
     case 7: /* bfins */
         /* clear */
@@ -3773,7 +3773,7 @@ DISAS_INSN(bitfield_mem)
         tcg_gen_and_i64(bitfield, bitfield, mask_bitfield);
         /* insert */
         gen_bitfield_ins(offset, width, reg, bitfield);
-        gen_helper_bitfield_store(src, offset, width, bitfield);
+        gen_helper_bitfield_store(cpu_env, src, offset, width, bitfield);
         break;
     }
 }
