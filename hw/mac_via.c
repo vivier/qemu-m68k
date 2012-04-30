@@ -30,9 +30,9 @@
  */
 
 #include "hw.h"
+#include "sysbus.h"
 #include "memory.h"
 #include "qemu-timer.h"
-#include "mac_via.h"
 #include "adb.h"
 #include "adb-kbd.h"
 #include "adb-mouse.h"
@@ -327,6 +327,7 @@ typedef struct VIAState {
 } VIAState;
 
 typedef struct MacVIAState {
+    SysBusDevice busdev;
 
     /* MMIO */
 
@@ -830,15 +831,15 @@ static MemoryRegionOps via_ops = {
     },
 };
 
-static void via_reset(void *opaque)
+static void mac_via_reset(DeviceState *d)
 {
     /* FIXME */
 }
 
-MemoryRegion *mac_via_init(qemu_irq via1_irq, qemu_irq via2_irq)
+static int mac_via_init(SysBusDevice *dev)
 {
+    MacVIAState *m = FROM_SYSBUS(MacVIAState, dev);
     struct tm tm;
-    MacVIAState *m = g_malloc0(sizeof(*m));
 
     /* VIA 1 */
 
@@ -855,7 +856,7 @@ MemoryRegion *mac_via_init(qemu_irq via1_irq, qemu_irq via2_irq)
 
     /* ouput IRQs */
 
-    m->via[0].out_irq = via1_irq;
+    sysbus_init_irq(dev, &m->via[0].out_irq);
     m->via[0].timers[0].index = 0;
     m->via[0].timers[0].timer = qemu_new_timer_ns(vm_clock, via_timer1, &m->via[0]);
     m->via[0].timers[1].index = 1;
@@ -870,12 +871,13 @@ MemoryRegion *mac_via_init(qemu_irq via1_irq, qemu_irq via2_irq)
 
     /* output IRQs */
 
-    m->via[1].out_irq = via2_irq;
+    sysbus_init_irq(dev, &m->via[1].out_irq);
     m->via[1].timers[0].index = 0;
     m->via[1].timers[0].timer = qemu_new_timer_ns(vm_clock, via_timer1, &m->via[1]);
     m->via[1].timers[1].index = 1;
 
     memory_region_init_io(&m->mmio, &via_ops, m, "mac via", 2 * VIA_SIZE);
+    sysbus_init_mmio_region(dev, &m->mmio);
 
     /* ADB */
 
@@ -885,8 +887,20 @@ MemoryRegion *mac_via_init(qemu_irq via1_irq, qemu_irq via2_irq)
 
     m->adb->data_ready = m->via[0].in_irqs[VIA1_IRQ_ADB_READY_BIT];
 
-    /* FIXME: vmstate_register() */
-    qemu_register_reset(via_reset, m);
-
-    return &m->mmio;
+    return 0;
 }
+
+static SysBusDeviceInfo mac_via_info = {
+    .init = mac_via_init,
+    .qdev.name = "mac_via",
+    /* FIXME: .qdev.vmsd */
+    .qdev.size = sizeof(MacVIAState),
+    .qdev.reset = mac_via_reset,
+};
+
+static void mac_via_register_devices(void)
+{
+    sysbus_register_withprop(&mac_via_info);
+}
+
+device_init(mac_via_register_devices);

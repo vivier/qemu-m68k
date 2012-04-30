@@ -30,7 +30,6 @@
 #include "console.h"
 #include "exec-memory.h"
 #include "escc.h"
-#include "mac_via.h"
 #include "sysbus.h"
 
 #define MACROM_ADDR     0x800000
@@ -215,7 +214,6 @@ static void q800_init(ram_addr_t ram_size,
     MemoryRegion *rom;
     MemoryRegion *ram;
     MemoryRegion *escc_mem;
-    MemoryRegion *via_mem;
     q800_glue_state_t *s;
     qemu_irq *pic;
     target_phys_addr_t parameters_base;
@@ -247,8 +245,12 @@ static void q800_init(ram_addr_t ram_size,
 
     /* VIA */
 
-    via_mem = mac_via_init(pic[0], pic[1]);
-    memory_region_add_subregion(get_system_memory(), VIA_BASE, via_mem);
+    dev = qdev_create(NULL, "mac_via");
+    qdev_init_nofail(dev);
+    sysbus = sysbus_from_qdev(dev);
+    sysbus_mmio_map(sysbus, 0, VIA_BASE);
+    sysbus_connect_irq(sysbus, 0, pic[0]);
+    sysbus_connect_irq(sysbus, 1, pic[1]);
 
     /* SCC */
 
