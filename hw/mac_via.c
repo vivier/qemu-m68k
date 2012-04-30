@@ -47,9 +47,8 @@
  * Base addresses for the VIAs. There are two in every machine,
  */
 
-#define VIA1_BASE (0x50F00000)
-#define VIA2_BASE (0x50F02000)
-#define VIA_SIZE  (0x00001FFF)
+#define VIA_BASE (0x50F00000)
+#define VIA_SIZE (0x2000)
 
 /*
  * Not all of these are true post MacII I think.
@@ -589,8 +588,12 @@ static void via1_adb_update(VIAState *s)
 static void via_writeb(void *opaque, target_phys_addr_t addr, uint32_t val)
 {
     VIAState *s = opaque;
+    int via;
 
-    addr &= VIA_SIZE;
+    via = addr / VIA_SIZE;
+    addr &= VIA_SIZE - 1;
+
+    s = &s[via];
 
     switch (addr) {
     case vBufA: /* Buffer A */
@@ -689,8 +692,12 @@ static uint32_t via_readb(void *opaque, target_phys_addr_t addr)
 {
     VIAState *s = opaque;
     uint32_t val;
+    int via;
 
-    addr &= VIA_SIZE;
+    via = addr / VIA_SIZE;
+    addr &= VIA_SIZE - 1;
+
+    s = &s[via];
 
     switch (addr) {
     case vBufA: /* Buffer A */
@@ -801,7 +808,7 @@ void mac_via_init(qemu_irq via1_irq, qemu_irq via2_irq,
                   ADBBusState *adb)
 {
     struct tm tm;
-    int via_mem_index[2];
+    int via_mem_index;
     VIAState *s;
 
     /* VIA 1 */
@@ -827,8 +834,6 @@ void mac_via_init(qemu_irq via1_irq, qemu_irq via2_irq,
     s->timers[0].index = 0;
     s->timers[0].timer = qemu_new_timer_ns(vm_clock, via_timer1, s);
     s->timers[1].index = 1;
-    via_mem_index[0] = cpu_register_io_memory(via_read, via_write,
-                                              s, DEVICE_NATIVE_ENDIAN);
     s->b = VIA1B_vADB_StateMask | VIA1B_vADBInt | VIA1B_vRTCEnb; /* 1 = disabled */
 
     /* VIA 2 */
@@ -846,14 +851,12 @@ void mac_via_init(qemu_irq via1_irq, qemu_irq via2_irq,
     s->timers[0].index = 0;
     s->timers[0].timer = qemu_new_timer_ns(vm_clock, via_timer1, s);
     s->timers[1].index = 1;
-    via_mem_index[1] = cpu_register_io_memory(via_read, via_write,
-                                              s, DEVICE_NATIVE_ENDIAN);
 
-    cpu_register_physical_memory(VIA1_BASE, VIA_SIZE, via_mem_index[0]);
-    cpu_register_physical_memory(VIA2_BASE, VIA_SIZE, via_mem_index[1]);
+    via_mem_index = cpu_register_io_memory(via_read, via_write,
+                                           via_state, DEVICE_NATIVE_ENDIAN);
+    cpu_register_physical_memory(VIA_BASE, 2 * VIA_SIZE, via_mem_index);
     /* FIXME: vmstate_register() */
-    qemu_register_reset(via_reset, &via_state[0]);
-    qemu_register_reset(via_reset, &via_state[1]);
+    qemu_register_reset(via_reset, via_state);
 
     adb->data_ready = (*via1_irqs)[VIA1_IRQ_ADB_READY_BIT];
 }
