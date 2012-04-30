@@ -30,8 +30,13 @@
  */
 
 #include "hw.h"
+#include "sysbus.h"
+#include "memory.h"
 #include "qemu-timer.h"
 #include "mac_via.h"
+#include "adb.h"
+#include "adb-kbd.h"
+#include "adb-mouse.h"
 
 /* debug VIA */
 #undef DEBUG_VIA
@@ -44,12 +49,10 @@
 #endif
 
 /*
- * Base addresses for the VIAs. There are two in every machine,
+ * VIAs: There are two in every machine,
  */
 
-#define VIA1_BASE (0x50F00000)
-#define VIA2_BASE (0x50F02000)
-#define VIA_SIZE  (0x00001FFF)
+#define VIA_SIZE (0x2000)
 
 /*
  * Not all of these are true post MacII I think.
@@ -207,22 +210,6 @@
 #define VIA_IRQ_TIMER1      0x40
 #define VIA_IRQ_TIMER2      0x20
 
-/* VIA1 */
-
-#define VIA1_IRQ_ONE_SECOND (1 << VIA1_IRQ_ONE_SECOND_BIT)
-#define VIA1_IRQ_VBLANK     (1 << VIA1_IRQ_VBLANK_BIT)
-#define VIA1_IRQ_ADB_READY  (1 << VIA1_IRQ_ADB_READY_BIT)
-#define VIA1_IRQ_ADB_DATA   (1 << VIA1_IRQ_ADB_DATA_BIT)
-#define VIA1_IRQ_ADB_CLOCK  (1 << VIA1_IRQ_ADB_CLOCK_BIT)
-
-/* VIA2 */
-
-#define VIA2_IRQ_SCSI_DATA  (1 << VIA2_IRQ_SCSI_DATA_BIT)
-#define VIA2_IRQ_SLOT       (1 << VIA2_IRQ_SLOT_BIT)
-#define VIA2_IRQ_UNUSED     (1 << VIA2_IRQ_SCSI_BIT)
-#define VIA2_IRQ_SCSI       (1 << VIA2_IRQ_UNUSED_BIT)
-#define VIA2_IRQ_ASC        (1 << VIA2_IRQ_ASC_BIT)
-
 /* Apple sez: http://developer.apple.com/technotes/ov/ov_04.html
  * Another example of a valid function that has no ROM support is the use
  * of the alternate video page for page-flipping animation. Since there
@@ -284,7 +271,6 @@ typedef struct VIATimer {
 } VIATimer;
 
 typedef struct VIAState {
-    int type; /* is VIA1 (1) or VIA2 (2) */
     /* VIA registers */
     uint8_t a;    /* data register A */
     uint8_t b;    /* data register B */
@@ -296,11 +282,32 @@ typedef struct VIAState {
     uint8_t ier;  /* interrupt enable register */
     uint8_t sr;   /* shift register */
 
-    uint32_t tick_offset;
-
     uint8_t last_b;
 
+    /* Timers */
+
+    VIATimer timers[2];
+
+    /* IRQs */
+
+    qemu_irq out_irq;
+
+} VIAState;
+
+typedef struct MacVIAState {
+    SysBusDevice busdev;
+
+    /* MMIO */
+
+    MemoryRegion mmio;
+
+    /* VIAs */
+
+    VIAState via[2];
+
     /* RTC */
+
+    uint32_t tick_offset;
 
     uint8_t data_out;
     int data_out_cnt;
@@ -312,20 +319,14 @@ typedef struct VIAState {
 
     /* ADB */
 
-    void *adb;
+    ADBBusState *adb;
 
-    /* Timers */
+    /* external timers */
 
-    VIATimer timers[2];
+    QEMUTimer *one_second_timer;
+    QEMUTimer *VBL_timer;
 
-    qemu_irq irq;
-
-} VIAState;
-
-static VIAState via_state[2];
-
-QEMUTimer *one_second_timer;
-QEMUTimer *VBL_timer;
+} MacVIAState;
 
 #define VIA_TIMER_FREQ (783360)
 
@@ -373,9 +374,9 @@ static void via_timer_update(VIAState *s, VIATimer *ti,
 static void via_update_irq(VIAState *s)
 {
     if (s->ifr & s->ier) {
-        qemu_irq_raise(s->irq);
+        qemu_irq_raise(s->out_irq);
     } else {
-        qemu_irq_lower(s->irq);
+        qemu_irq_lower(s->out_irq);
     }
 }
 
@@ -389,64 +390,88 @@ static void via_timer1(void *opaque)
     via_update_irq(s);
 }
 
-static void via1_VBL_update(VIAState *s)
+static void via1_VBL_update(MacVIAState *m)
 {
-    if (s->ifr & s->ier & VIA1_IRQ_VBLANK) { /* 60 Hz irq */
-        qemu_mod_timer(VBL_timer,
+    if (m->via[0].ifr & m->via[0].ier & VIA1_IRQ_VBLANK) { /* 60 Hz irq */
+        qemu_mod_timer(m->VBL_timer,
                        (qemu_get_clock_ns(vm_clock) + 16630) / 16630 * 16630);
     } else {
-        qemu_del_timer(VBL_timer);
+        qemu_del_timer(m->VBL_timer);
     }
 }
 
 static void via1_VBL(void *opaque)
 {
-    VIAState *s = opaque;
-    via1_VBL_update(s);
-    s->ifr |= VIA1_IRQ_VBLANK;
-    via_update_irq(s);
+    MacVIAState *m = opaque;
+    via1_VBL_update(m);
+    m->via[0].ifr |= VIA1_IRQ_VBLANK;
+    via_update_irq(&m->via[0]);
 }
 
-static void via_irq_request(void *opaque, int irq, int level)
+static void via1_irq_request(VIAState *s, int irq, int level)
 {
-    VIAState *s = opaque;
     if (level) {
         s->ifr |= 1 << irq;
     } else {
         s->ifr &= ~(1 << irq);
     }
-    if (s->type == 1 && s->ier && (1 << VIA1_IRQ_ADB_READY_BIT) && irq == VIA1_IRQ_ADB_READY_BIT) {
+    if ((s->ier & (1 << VIA1_IRQ_ADB_READY_BIT)) &&
+        irq == VIA1_IRQ_ADB_READY_BIT) {
         s->b &= ~VIA1B_vADBInt;
     }
     via_update_irq(s);
 }
 
-static void via1_one_second_update(VIAState *s)
+static void via2_irq_request(VIAState *s, int irq, int level)
 {
-    if (s->ifr & s->ier & VIA1_IRQ_ONE_SECOND) {
-        qemu_mod_timer(one_second_timer,
+    if (level) {
+        s->ifr |= 1 << irq;
+    } else {
+        s->ifr &= ~(1 << irq);
+    }
+    via_update_irq(s);
+}
+
+static void via_irq_request(void *opaque, int irq, int level)
+{
+    MacVIAState *s = opaque;
+    if (irq < VIA1_IRQ_NB) {
+        via1_irq_request(&s->via[0], irq, level);
+        return;
+    }
+    irq -= VIA1_IRQ_NB;
+    if (irq < VIA2_IRQ_NB) {
+        via2_irq_request(&s->via[1], irq, level);
+        return;
+    }
+}
+
+static void via1_one_second_update(MacVIAState *m)
+{
+    if (m->via[0].ifr & m->via[0].ier & VIA1_IRQ_ONE_SECOND) {
+        qemu_mod_timer(m->one_second_timer,
                       (qemu_get_clock_ms(vm_clock) + 1000) / 1000 * 1000);
     } else {
-        qemu_del_timer(one_second_timer);
+        qemu_del_timer(m->one_second_timer);
     }
 }
 
 static void via1_one_second(void *opaque)
 {
-    VIAState *s = opaque;
-    via1_one_second_update(s);
-    s->ifr |= VIA1_IRQ_ONE_SECOND;
-    via_update_irq(s);
+    MacVIAState *m = opaque;
+    via1_one_second_update(m);
+    m->via[0].ifr |= VIA1_IRQ_ONE_SECOND;
+    via_update_irq(&m->via[0]);
 }
 
-static void via_irq_update(VIAState *s)
+static void via_irq_update(MacVIAState *m, int via)
 {
-    switch (s->type) {
-    case 1:
-        via1_one_second_update(s);
-        via1_VBL(s);
+    switch (via) {
+    case 0:
+        via1_one_second_update(m);
+        via1_VBL(m);
         break;
-    case 2:
+    case 1:
         break;
     }
 }
@@ -454,8 +479,10 @@ static void via_irq_update(VIAState *s)
 #define RTC_OFFSET 2082844800
 static uint8_t PRAM[256];
 
-static void via1_rtc_update(VIAState *s)
+static void via1_rtc_update(MacVIAState *m)
 {
+    VIAState *s = &m->via[0];
+
     if (s->b & VIA1B_vRTCEnb) {
         return;
     }
@@ -463,134 +490,141 @@ static void via1_rtc_update(VIAState *s)
     if (s->dirb & VIA1B_vRTCData) {
         /* send bits to the RTC */
         if (!(s->last_b & VIA1B_vRTCClk) && (s->b & VIA1B_vRTCClk)) {
-            s->data_out <<= 1;
-            s->data_out |= s->b & VIA1B_vRTCData;
-            s->data_out_cnt++;
+            m->data_out <<= 1;
+            m->data_out |= s->b & VIA1B_vRTCData;
+            m->data_out_cnt++;
         }
     } else {
         /* receive bits from the RTC */
         if ((s->last_b & VIA1B_vRTCClk) &&
             !(s->b & VIA1B_vRTCClk) &&
-            s->data_in_cnt) {
+            m->data_in_cnt) {
             s->b = (s->b & ~VIA1B_vRTCData) |
-                   ((s->data_in >> 8) & VIA1B_vRTCData);
-            s->data_in <<= 1;
-            s->data_in_cnt--;
+                   ((m->data_in >> 8) & VIA1B_vRTCData);
+            m->data_in <<= 1;
+            m->data_in_cnt--;
         }
     }
 
-    if (s->data_out_cnt == 8) {
-        s->data_out_cnt = 0;
+    if (m->data_out_cnt == 8) {
+        m->data_out_cnt = 0;
 
-        if (s->cmd == 0) {
-            if (s->data_out & 0x80) {
+        if (m->cmd == 0) {
+            if (m->data_out & 0x80) {
                 /* this is a read command */
-                uint32_t time = s->tick_offset +
+                uint32_t time = m->tick_offset +
                                (qemu_get_clock_ns(vm_clock) /
                                get_ticks_per_sec());
-                if (s->data_out == 0x81) {        /* seconds register 0 */
-                    s->data_in = time & 0xff;
-                    s->data_in_cnt = 8;
-                } else if (s->data_out == 0x85) { /* seconds register 1 */
-                    s->data_in = (time >> 8) & 0xff;
-                    s->data_in_cnt = 8;
-                } else if (s->data_out == 0x89) { /* seconds register 2 */
-                    s->data_in = (time >> 16) & 0xff;
-                    s->data_in_cnt = 8;
-                } else if (s->data_out == 0x8d) { /* seconds register 3 */
-                    s->data_in = (time >> 24) & 0xff;
-                    s->data_in_cnt = 8;
-                } else if ((s->data_out & 0xf3) == 0xa1) {
+                if (m->data_out == 0x81) {        /* seconds register 0 */
+                    m->data_in = time & 0xff;
+                    m->data_in_cnt = 8;
+                } else if (m->data_out == 0x85) { /* seconds register 1 */
+                    m->data_in = (time >> 8) & 0xff;
+                    m->data_in_cnt = 8;
+                } else if (m->data_out == 0x89) { /* seconds register 2 */
+                    m->data_in = (time >> 16) & 0xff;
+                    m->data_in_cnt = 8;
+                } else if (m->data_out == 0x8d) { /* seconds register 3 */
+                    m->data_in = (time >> 24) & 0xff;
+                    m->data_in_cnt = 8;
+                } else if ((m->data_out & 0xf3) == 0xa1) {
                     /* PRAM address 0x10 -> 0x13 */
-                    int addr = (s->data_out >> 2) & 0x03;
-                    s->data_in = PRAM[addr];
-                    s->data_in_cnt = 8;
-                } else if ((s->data_out & 0xf3) == 0xa1) {
+                    int addr = (m->data_out >> 2) & 0x03;
+                    m->data_in = PRAM[addr];
+                    m->data_in_cnt = 8;
+                } else if ((m->data_out & 0xf3) == 0xa1) {
                     /* PRAM address 0x00 -> 0x0f */
-                    int addr = (s->data_out >> 2) & 0x0f;
-                    s->data_in = PRAM[addr];
-                    s->data_in_cnt = 8;
-                } else if ((s->data_out & 0xf8) == 0xb8) {
+                    int addr = (m->data_out >> 2) & 0x0f;
+                    m->data_in = PRAM[addr];
+                    m->data_in_cnt = 8;
+                } else if ((m->data_out & 0xf8) == 0xb8) {
                     /* extended memory designator and sector number */
-                    s->cmd = s->data_out;
+                    m->cmd = m->data_out;
                 }
             } else {
                 /* this is a write command */
-                s->cmd = s->data_out;
+                m->cmd = m->data_out;
             }
         } else {
-            if (s->cmd & 0x80) {
-                if ((s->cmd & 0xf8) == 0xb8) {
+            if (m->cmd & 0x80) {
+                if ((m->cmd & 0xf8) == 0xb8) {
                     /* extended memory designator and sector number */
-                    int sector = s->cmd & 0x07;
-                    int addr = (s->data_out >> 2) & 0x1f;
+                    int sector = m->cmd & 0x07;
+                    int addr = (m->data_out >> 2) & 0x1f;
 
-                    s->data_in = PRAM[sector * 8 + addr];
-                    s->data_in_cnt = 8;
+                    m->data_in = PRAM[sector * 8 + addr];
+                    m->data_in_cnt = 8;
                 }
-            } else if (!s->wprotect) {
+            } else if (!m->wprotect) {
                 /* this is a write command */
-                if (s->alt != 0) {
+                if (m->alt != 0) {
                     /* extended memory designator and sector number */
-                    int sector = s->cmd & 0x07;
-                    int addr = (s->alt >> 2) & 0x1f;
+                    int sector = m->cmd & 0x07;
+                    int addr = (m->alt >> 2) & 0x1f;
 
-                    PRAM[sector * 8 + addr] = s->data_out;
+                    PRAM[sector * 8 + addr] = m->data_out;
 
-                    s->alt = 0;
-                } else if (s->cmd == 0x01) { /* seconds register 0 */
+                    m->alt = 0;
+                } else if (m->cmd == 0x01) { /* seconds register 0 */
                     /* FIXME */
-                } else if (s->cmd == 0x05) { /* seconds register 1 */
+                } else if (m->cmd == 0x05) { /* seconds register 1 */
                     /* FIXME */
-                } else if (s->cmd == 0x09) { /* seconds register 2 */
+                } else if (m->cmd == 0x09) { /* seconds register 2 */
                     /* FIXME */
-                } else if (s->cmd == 0x0d) { /* seconds register 3 */
+                } else if (m->cmd == 0x0d) { /* seconds register 3 */
                     /* FIXME */
-                } else if (s->cmd == 0x31) {
+                } else if (m->cmd == 0x31) {
                     /* Test Register */
-                } else if (s->cmd == 0x35) {
+                } else if (m->cmd == 0x35) {
                     /* Write Protect register */
-                    s->wprotect = s->data_out & 1;
-                } else if ((s->cmd & 0xf3) == 0xa1) {
+                    m->wprotect = m->data_out & 1;
+                } else if ((m->cmd & 0xf3) == 0xa1) {
                     /* PRAM address 0x10 -> 0x13 */
-                    int addr = (s->cmd >> 2) & 0x03;
-                    PRAM[addr] = s->data_out;
-                } else if ((s->cmd & 0xf3) == 0xa1) {
+                    int addr = (m->cmd >> 2) & 0x03;
+                    PRAM[addr] = m->data_out;
+                } else if ((m->cmd & 0xf3) == 0xa1) {
                     /* PRAM address 0x00 -> 0x0f */
-                    int addr = (s->cmd >> 2) & 0x0f;
-                    PRAM[addr] = s->data_out;
-                } else if ((s->cmd & 0xf8) == 0xb8) {
+                    int addr = (m->cmd >> 2) & 0x0f;
+                    PRAM[addr] = m->data_out;
+                } else if ((m->cmd & 0xf8) == 0xb8) {
                     /* extended memory designator and sector number */
-                    s->alt = s->cmd;
+                    m->alt = m->cmd;
                 }
             }
         }
-        s->data_out = 0;
+        m->data_out = 0;
     }
 }
 
-static void via1_adb_update(VIAState *s)
+static void via1_adb_update(MacVIAState *m)
 {
+    VIAState *s = &m->via[0];
     int state;
 
     state = (s->b & VIA1B_vADB_StateMask) >> VIA1B_vADB_StateShift;
 
     if (s->acr & VIA1ACR_vShiftOut) {
         /* output mode */
-        adb_send(s->adb, state, s->sr);
+        adb_send(m->adb, state, s->sr);
     } else {
 	    if (s->b & VIA1B_vADBInt)
             	return;
         /* input mode */
-        adb_receive(s->adb, state, &s->sr);
+        adb_receive(m->adb, state, &s->sr);
     }
 }
 
-static void via_writeb(void *opaque, target_phys_addr_t addr, uint32_t val)
+static void via_write(void *opaque, target_phys_addr_t addr,
+                       uint64_t val, unsigned int size)
 {
-    VIAState *s = opaque;
+    MacVIAState *m = opaque;
+    VIAState *s;
+    int via;
 
-    addr &= VIA_SIZE;
+    via = addr / VIA_SIZE;
+    addr &= VIA_SIZE - 1;
+
+    s = &m->via[via];
 
     switch (addr) {
     case vBufA: /* Buffer A */
@@ -599,9 +633,9 @@ static void via_writeb(void *opaque, target_phys_addr_t addr, uint32_t val)
         break;
     case vBufB:  /* Register B */
         s->b = (s->b & ~s->dirb) | (val & s->dirb);
-        if (s->type == 1) {
-            via1_rtc_update(s);
-            via1_adb_update(s);
+        if (via == 0) {
+            via1_rtc_update(m);
+            via1_adb_update(m);
             s->last_b = s->b;
         }
         break;
@@ -664,7 +698,7 @@ static void via_writeb(void *opaque, target_phys_addr_t addr, uint32_t val)
         }
         VIA_DPRINTF("            -> %02x\n", s->ifr);
         via_timer_update(s, &s->timers[0], qemu_get_clock_ns(vm_clock));
-        via_irq_update(s);
+        via_irq_update(m, via);
         break;
     case vIER:   /* Interrupt enable register. */
         VIA_DPRINTF("writeb: vIER = %02x\n", val);
@@ -677,7 +711,7 @@ static void via_writeb(void *opaque, target_phys_addr_t addr, uint32_t val)
         }
         VIA_DPRINTF("            -> %02x\n", s->ier);
         via_timer_update(s, &s->timers[0], qemu_get_clock_ns(vm_clock));
-        via_irq_update(s);
+        via_irq_update(m, via);
         break;
     default:
         VIA_DPRINTF("writeb: addr 0x%08x val %02x\n", addr, val);
@@ -685,12 +719,18 @@ static void via_writeb(void *opaque, target_phys_addr_t addr, uint32_t val)
     }
 }
 
-static uint32_t via_readb(void *opaque, target_phys_addr_t addr)
+static uint64_t via_read(void *opaque, target_phys_addr_t addr,
+                         unsigned int size)
 {
-    VIAState *s = opaque;
+    MacVIAState *m = opaque;
+    VIAState *s;
     uint32_t val;
+    int via;
 
-    addr &= VIA_SIZE;
+    via = addr / VIA_SIZE;
+    addr &= VIA_SIZE - 1;
+
+    s = &m->via[via];
 
     switch (addr) {
     case vBufA: /* Buffer A */
@@ -761,99 +801,85 @@ static uint32_t via_readb(void *opaque, target_phys_addr_t addr)
     return val;
 }
 
-static void via_writew(void *opaque, target_phys_addr_t addr, uint32_t val)
-{
-}
-
-static void via_writel(void *opaque, target_phys_addr_t addr, uint32_t val)
-{
-}
-
-static uint32_t via_readw(void *opaque, target_phys_addr_t addr)
-{
-    return 0;
-}
-
-static uint32_t via_readl(void *opaque, target_phys_addr_t addr)
-{
-    return 0;
-}
-
-static CPUWriteMemoryFunc * const via_write[] = {
-    &via_writeb,
-    &via_writew,
-    &via_writel,
+static MemoryRegionOps via_ops = {
+    .read = via_read,
+    .write = via_write,
+    .endianness = DEVICE_NATIVE_ENDIAN,
+    .valid = {
+        .min_access_size = 1,
+        .max_access_size = 1,
+    },
 };
 
-static CPUReadMemoryFunc * const via_read[] = {
-    &via_readb,
-    &via_readw,
-    &via_readl,
-};
-
-static void via_reset(void *opaque)
+static int mac_via_init(SysBusDevice *dev)
 {
-    /* FIXME */
-}
-
-void mac_via_init(qemu_irq via1_irq, qemu_irq via2_irq,
-                  qemu_irq **via1_irqs, qemu_irq **via2_irqs,
-                  ADBBusState *adb)
-{
+    MacVIAState *m = FROM_SYSBUS(MacVIAState, dev);
     struct tm tm;
-    int via_mem_index[2];
-    VIAState *s;
+
+    /* input IRQs */
+
+    qdev_init_gpio_in(&dev->qdev, via_irq_request, VIA1_IRQ_NB + VIA2_IRQ_NB);
 
     /* VIA 1 */
 
-    s = &via_state[0];
-
-    s->adb = adb;
-
-    /* input IRQs */
-
-    *via1_irqs = qemu_allocate_irqs(via_irq_request, s, VIA1_IRQ_NB);
-
-    one_second_timer = qemu_new_timer_ms(vm_clock, via1_one_second, s);
-    VBL_timer = qemu_new_timer_ns(vm_clock, via1_VBL, s);
+    m->one_second_timer = qemu_new_timer_ms(vm_clock, via1_one_second, m);
+    m->VBL_timer = qemu_new_timer_ns(vm_clock, via1_VBL, m);
 
     qemu_get_timedate(&tm, 0);
-    s->tick_offset = (uint32_t)mktimegm(&tm) + RTC_OFFSET;
+    m->tick_offset = (uint32_t)mktimegm(&tm) + RTC_OFFSET;
 
     /* ouput IRQs */
 
-    s->type = 1;
-    s->irq = via1_irq;
-    s->timers[0].index = 0;
-    s->timers[0].timer = qemu_new_timer_ns(vm_clock, via_timer1, s);
-    s->timers[1].index = 1;
-    via_mem_index[0] = cpu_register_io_memory(via_read, via_write,
-                                              s, DEVICE_NATIVE_ENDIAN);
-    s->b = VIA1B_vADB_StateMask | VIA1B_vADBInt | VIA1B_vRTCEnb; /* 1 = disabled */
+    sysbus_init_irq(dev, &m->via[0].out_irq);
+    m->via[0].timers[0].index = 0;
+    m->via[0].timers[0].timer = qemu_new_timer_ns(vm_clock, via_timer1, &m->via[0]);
+    m->via[0].timers[1].index = 1;
+    m->via[0].b = VIA1B_vADB_StateMask | VIA1B_vADBInt | VIA1B_vRTCEnb; /* 1 = disabled */
 
     /* VIA 2 */
 
-    s = &via_state[1];
-
-    /* input IRQs */
-
-    *via2_irqs = qemu_allocate_irqs(via_irq_request, s, VIA2_IRQ_NB);
-
     /* output IRQs */
 
-    s->type = 2;
-    s->irq = via2_irq;
-    s->timers[0].index = 0;
-    s->timers[0].timer = qemu_new_timer_ns(vm_clock, via_timer1, s);
-    s->timers[1].index = 1;
-    via_mem_index[1] = cpu_register_io_memory(via_read, via_write,
-                                              s, DEVICE_NATIVE_ENDIAN);
+    sysbus_init_irq(dev, &m->via[1].out_irq);
+    m->via[1].timers[0].index = 0;
+    m->via[1].timers[0].timer = qemu_new_timer_ns(vm_clock, via_timer1, &m->via[1]);
+    m->via[1].timers[1].index = 1;
 
-    cpu_register_physical_memory(VIA1_BASE, VIA_SIZE, via_mem_index[0]);
-    cpu_register_physical_memory(VIA2_BASE, VIA_SIZE, via_mem_index[1]);
-    /* FIXME: vmstate_register() */
-    qemu_register_reset(via_reset, &via_state[0]);
-    qemu_register_reset(via_reset, &via_state[1]);
+    memory_region_init_io(&m->mmio, &via_ops, m, "mac via", 2 * VIA_SIZE);
+    sysbus_init_mmio(dev, &m->mmio);
 
-    adb->data_ready = (*via1_irqs)[VIA1_IRQ_ADB_READY_BIT];
+    /* ADB */
+
+    m->adb = adb_init();
+    adb_kbd_init(m->adb);
+    adb_mouse_init(m->adb);
+
+    m->adb->data_ready = qdev_get_gpio_in(&dev->qdev, VIA1_IRQ_ADB_READY_BIT);
+
+    return 0;
 }
+
+static void mac_via_class_init(ObjectClass *klass, void *data)
+{
+    //DeviceClass *dc = DEVICE_CLASS(klass);
+    SysBusDeviceClass *k = SYS_BUS_DEVICE_CLASS(klass);
+
+    k->init = mac_via_init;
+    //dc->reset = mac_via_reset;
+    //dc->vmsd = &vmstate_mac_via;
+    //dc->props = mac_via_properties;
+}
+
+static TypeInfo mac_via_info = {
+    .name = "mac_via",
+    .parent = TYPE_SYS_BUS_DEVICE,
+    .class_init = mac_via_class_init,
+    .instance_size = sizeof(MacVIAState),
+};
+
+static void mac_via_register_types(void)
+{
+    type_register_static(&mac_via_info);
+}
+
+type_init(mac_via_register_types);

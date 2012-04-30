@@ -30,11 +30,7 @@
 #include "console.h"
 #include "exec-memory.h"
 #include "escc.h"
-#include "mac_via.h"
 #include "sysbus.h"
-#include "adb.h"
-#include "adb-kbd.h"
-#include "adb-mouse.h"
 
 #define MACROM_ADDR     0x800000
 #define MACROM_SIZE     0x100000
@@ -61,11 +57,12 @@
 #define MACH_MAC        3
 #define Q800_MAC_CPU_ID 2
 
-#define SCC_BASE  0x50f0c020
-#define MAC_ESP_IO_BASE 0x50F00000
-#define MAC_CLOCK  3686418 //783300
+#define VIA_BASE   0x50f00000
+#define SCC_BASE   0x50f0c020
 #define VIDEO_BASE 0xf9001000
 #define DAFB_BASE  0xf9800000
+
+#define MAC_CLOCK  3686418 //783300
 
 struct bi_record {
     uint16_t tag;        /* tag ID */
@@ -208,23 +205,20 @@ static void q800_init(ram_addr_t ram_size,
 {
     CPUM68KState *env = NULL;
     int linux_boot;
-    ram_addr_t ram_offset;
     int32_t kernel_size;
     uint64_t elf_entry;
-    ram_addr_t bios_offset;
     char *filename;
     int bios_size;
     ram_addr_t initrd_base;
     int32_t initrd_size;
+    MemoryRegion *rom;
+    MemoryRegion *ram;
     MemoryRegion *escc_mem;
     q800_glue_state_t *s;
     qemu_irq *pic;
     target_phys_addr_t parameters_base;
     DeviceState *dev;
     SysBusDevice *sysbus;
-    qemu_irq *via1_irqs;
-    qemu_irq *via2_irqs;
-    ADBBusState *adb;
 #if 0
     qemu_irq **heathrow_irqs;
     int i;
@@ -253,21 +247,24 @@ static void q800_init(ram_addr_t ram_size,
     }
     qemu_register_reset(main_cpu_reset, env);
 
-    ram_offset = qemu_ram_alloc(NULL, "m68k_mac.ram", ram_size);
-    cpu_register_physical_memory(0, ram_size, ram_offset | IO_MEM_RAM);
+    ram = g_malloc(sizeof (*ram));
+    memory_region_init_ram(ram, "m68k_mac.ram", ram_size);
+    memory_region_add_subregion(get_system_memory(), 0, ram);
 
-    /* ADB bus */
-
-    adb = adb_init();
-    adb_kbd_init(adb);
-    adb_mouse_init(adb);
-
-    /* VIA */
+    /* Glue */
 
     s = (q800_glue_state_t *)g_malloc0(sizeof(q800_glue_state_t));
     s->env = env;
     pic = qemu_allocate_irqs(q800_glue_set_irq, s, 6);
-    mac_via_init(pic[0], pic[1], &via1_irqs, &via2_irqs, adb);
+
+    /* VIA */
+
+    dev = qdev_create(NULL, "mac_via");
+    qdev_init_nofail(dev);
+    sysbus = sysbus_from_qdev(dev);
+    sysbus_mmio_map(sysbus, 0, VIA_BASE);
+    sysbus_connect_irq(sysbus, 0, pic[0]);
+    sysbus_connect_irq(sysbus, 1, pic[1]);
 
     /* SCC */
 
@@ -334,13 +331,14 @@ static void q800_init(ram_addr_t ram_size,
         BOOTINFO0(parameters_base, BI_LAST);
     } else {
         /* allocate and load BIOS */
-        bios_offset = qemu_ram_alloc(NULL, "m68k_mac.rom", MACROM_SIZE);
+        rom = g_malloc(sizeof(*rom));
+        memory_region_init_ram(rom, "m68k_mac.rom", MACROM_SIZE);
         if (bios_name == NULL) {
             bios_name = MACROM_FILENAME;
         }
         filename = qemu_find_file(QEMU_FILE_TYPE_BIOS, bios_name);
-        cpu_register_physical_memory(MACROM_ADDR, MACROM_SIZE,
-                                     bios_offset | IO_MEM_ROM);
+        memory_region_set_readonly(rom, true);
+        memory_region_add_subregion(get_system_memory(), MACROM_ADDR, rom);
 
         /* Load MacROM binary */
         if (filename) {
@@ -354,8 +352,6 @@ static void q800_init(ram_addr_t ram_size,
             exit(1);
         }
     }
-
-
 #if 0
     /* XXX: we register only 1 output pin for heathrow PIC */
     heathrow_irqs = qemu_mallocz(smp_cpus * sizeof(qemu_irq *));
