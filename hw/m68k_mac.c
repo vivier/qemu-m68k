@@ -32,9 +32,6 @@
 #include "escc.h"
 #include "mac_via.h"
 #include "sysbus.h"
-#include "adb.h"
-#include "adb-kbd.h"
-#include "adb-mouse.h"
 
 #define MACROM_ADDR     0x800000
 #define MACROM_SIZE     0x100000
@@ -224,9 +221,6 @@ static void q800_init(ram_addr_t ram_size,
     target_phys_addr_t parameters_base;
     DeviceState *dev;
     SysBusDevice *sysbus;
-    qemu_irq *via1_irqs;
-    qemu_irq *via2_irqs;
-    ADBBusState *adb;
 #if 0
     qemu_irq **heathrow_irqs;
     int i;
@@ -259,18 +253,15 @@ static void q800_init(ram_addr_t ram_size,
     memory_region_init_ram(ram, NULL, "m68k_mac.ram", ram_size);
     memory_region_add_subregion(get_system_memory(), 0, ram);
 
-    /* ADB bus */
-
-    adb = adb_init();
-    adb_kbd_init(adb);
-    adb_mouse_init(adb);
-
-    /* VIA */
+    /* Glue */
 
     s = (q800_glue_state_t *)g_malloc0(sizeof(q800_glue_state_t));
     s->env = env;
     pic = qemu_allocate_irqs(q800_glue_set_irq, s, 6);
-    via_mem = mac_via_init(pic[0], pic[1], &via1_irqs, &via2_irqs, adb);
+
+    /* VIA */
+
+    via_mem = mac_via_init(pic[0], pic[1]);
     memory_region_add_subregion(get_system_memory(), VIA_BASE, via_mem);
 
     /* SCC */
@@ -359,8 +350,6 @@ static void q800_init(ram_addr_t ram_size,
             exit(1);
         }
     }
-
-
 #if 0
     /* XXX: we register only 1 output pin for heathrow PIC */
     heathrow_irqs = qemu_mallocz(smp_cpus * sizeof(qemu_irq *));

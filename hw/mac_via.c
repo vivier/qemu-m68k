@@ -33,6 +33,9 @@
 #include "memory.h"
 #include "qemu-timer.h"
 #include "mac_via.h"
+#include "adb.h"
+#include "adb-kbd.h"
+#include "adb-mouse.h"
 
 /* debug VIA */
 #undef DEBUG_VIA
@@ -208,6 +211,14 @@
 
 /* VIA1 */
 
+#define VIA1_IRQ_ONE_SECOND_BIT 0
+#define VIA1_IRQ_VBLANK_BIT     1
+#define VIA1_IRQ_ADB_READY_BIT  2
+#define VIA1_IRQ_ADB_DATA_BIT   3
+#define VIA1_IRQ_ADB_CLOCK_BIT  4
+
+#define VIA1_IRQ_NB             5
+
 #define VIA1_IRQ_ONE_SECOND (1 << VIA1_IRQ_ONE_SECOND_BIT)
 #define VIA1_IRQ_VBLANK     (1 << VIA1_IRQ_VBLANK_BIT)
 #define VIA1_IRQ_ADB_READY  (1 << VIA1_IRQ_ADB_READY_BIT)
@@ -215,6 +226,14 @@
 #define VIA1_IRQ_ADB_CLOCK  (1 << VIA1_IRQ_ADB_CLOCK_BIT)
 
 /* VIA2 */
+
+#define VIA2_IRQ_SCSI_DATA_BIT  0
+#define VIA2_IRQ_SLOT_BIT       1
+#define VIA2_IRQ_UNUSED_BIT     2
+#define VIA2_IRQ_SCSI_BIT       3
+#define VIA2_IRQ_ASC_BIT        4 
+
+#define VIA2_IRQ_NB             5
 
 #define VIA2_IRQ_SCSI_DATA  (1 << VIA2_IRQ_SCSI_DATA_BIT)
 #define VIA2_IRQ_SLOT       (1 << VIA2_IRQ_SLOT_BIT)
@@ -301,7 +320,10 @@ typedef struct VIAState {
 
     VIATimer timers[2];
 
-    qemu_irq irq;
+    /* IRQs */
+
+    qemu_irq out_irq;
+    qemu_irq *in_irqs;
 
 } VIAState;
 
@@ -329,7 +351,7 @@ typedef struct MacVIAState {
 
     /* ADB */
 
-    void *adb;
+    ADBBusState *adb;
 
     /* external timers */
 
@@ -384,9 +406,9 @@ static void via_timer_update(VIAState *s, VIATimer *ti,
 static void via_update_irq(VIAState *s)
 {
     if (s->ifr & s->ier) {
-        qemu_irq_raise(s->irq);
+        qemu_irq_raise(s->out_irq);
     } else {
-        qemu_irq_lower(s->irq);
+        qemu_irq_lower(s->out_irq);
     }
 }
 
@@ -802,14 +824,10 @@ static void via_reset(void *opaque)
     /* FIXME */
 }
 
-MemoryRegion *mac_via_init(qemu_irq via1_irq, qemu_irq via2_irq,
-                           qemu_irq **via1_irqs, qemu_irq **via2_irqs,
-                           ADBBusState *adb)
+MemoryRegion *mac_via_init(qemu_irq via1_irq, qemu_irq via2_irq)
 {
     struct tm tm;
     MacVIAState *m = g_malloc0(sizeof(*m));
-
-    m->adb = adb;
 
     /* VIA 1 */
 
@@ -821,12 +839,13 @@ MemoryRegion *mac_via_init(qemu_irq via1_irq, qemu_irq via2_irq,
 
     /* input IRQs */
 
-    *via1_irqs = qemu_allocate_irqs(via_irq_request, &m->via[0], VIA1_IRQ_NB);
+    m->via[0].in_irqs = qemu_allocate_irqs(via_irq_request,
+                                           &m->via[0], VIA1_IRQ_NB);
 
     /* ouput IRQs */
 
     m->via[0].type = 1;
-    m->via[0].irq = via1_irq;
+    m->via[0].out_irq = via1_irq;
     m->via[0].timers[0].index = 0;
     m->via[0].timers[0].timer = qemu_new_timer_ns(vm_clock, via_timer1, &m->via[0]);
     m->via[0].timers[1].index = 1;
@@ -836,22 +855,29 @@ MemoryRegion *mac_via_init(qemu_irq via1_irq, qemu_irq via2_irq,
 
     /* input IRQs */
 
-    *via2_irqs = qemu_allocate_irqs(via_irq_request, &m->via[1], VIA2_IRQ_NB);
+    m->via[1].in_irqs = qemu_allocate_irqs(via_irq_request,
+                                           &m->via[1],VIA2_IRQ_NB);
 
     /* output IRQs */
 
     m->via[1].type = 2;
-    m->via[1].irq = via2_irq;
+    m->via[1].out_irq = via2_irq;
     m->via[1].timers[0].index = 0;
     m->via[1].timers[0].timer = qemu_new_timer_ns(vm_clock, via_timer1, &m->via[1]);
     m->via[1].timers[1].index = 1;
 
     memory_region_init_io(&m->mmio, &via_ops, m, "mac via", 2 * VIA_SIZE);
 
+    /* ADB */
+
+    m->adb = adb_init();
+    adb_kbd_init(m->adb);
+    adb_mouse_init(m->adb);
+
+    m->adb->data_ready = m->via[0].in_irqs[VIA1_IRQ_ADB_READY_BIT];
+
     /* FIXME: vmstate_register() */
     qemu_register_reset(via_reset, m);
-
-    adb->data_ready = (*via1_irqs)[VIA1_IRQ_ADB_READY_BIT];
 
     return &m->mmio;
 }
