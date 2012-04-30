@@ -302,7 +302,6 @@ typedef struct VIATimer {
 } VIATimer;
 
 typedef struct VIAState {
-    int type; /* is VIA1 (1) or VIA2 (2) */
     /* VIA registers */
     uint8_t a;    /* data register A */
     uint8_t b;    /* data register B */
@@ -440,7 +439,7 @@ static void via1_VBL(void *opaque)
     via_update_irq(&m->via[0]);
 }
 
-static void via_irq_request(void *opaque, int irq, int level)
+static void via1_irq_request(void *opaque, int irq, int level)
 {
     VIAState *s = opaque;
     if (level) {
@@ -448,8 +447,20 @@ static void via_irq_request(void *opaque, int irq, int level)
     } else {
         s->ifr &= ~(1 << irq);
     }
-    if (s->type == 1 && s->ier && (1 << VIA1_IRQ_ADB_READY_BIT) && irq == VIA1_IRQ_ADB_READY_BIT) {
+    if ((s->ier & (1 << VIA1_IRQ_ADB_READY_BIT)) &&
+        irq == VIA1_IRQ_ADB_READY_BIT) {
         s->b &= ~VIA1B_vADBInt;
+    }
+    via_update_irq(s);
+}
+
+static void via2_irq_request(void *opaque, int irq, int level)
+{
+    VIAState *s = opaque;
+    if (level) {
+        s->ifr |= 1 << irq;
+    } else {
+        s->ifr &= ~(1 << irq);
     }
     via_update_irq(s);
 }
@@ -641,7 +652,7 @@ static void via_write(void *opaque, target_phys_addr_t addr,
         break;
     case vBufB:  /* Register B */
         s->b = (s->b & ~s->dirb) | (val & s->dirb);
-        if (s->type == 1) {
+        if (via == 0) {
             via1_rtc_update(m);
             via1_adb_update(m);
             s->last_b = s->b;
@@ -839,12 +850,11 @@ MemoryRegion *mac_via_init(qemu_irq via1_irq, qemu_irq via2_irq)
 
     /* input IRQs */
 
-    m->via[0].in_irqs = qemu_allocate_irqs(via_irq_request,
+    m->via[0].in_irqs = qemu_allocate_irqs(via1_irq_request,
                                            &m->via[0], VIA1_IRQ_NB);
 
     /* ouput IRQs */
 
-    m->via[0].type = 1;
     m->via[0].out_irq = via1_irq;
     m->via[0].timers[0].index = 0;
     m->via[0].timers[0].timer = qemu_new_timer_ns(vm_clock, via_timer1, &m->via[0]);
@@ -855,12 +865,11 @@ MemoryRegion *mac_via_init(qemu_irq via1_irq, qemu_irq via2_irq)
 
     /* input IRQs */
 
-    m->via[1].in_irqs = qemu_allocate_irqs(via_irq_request,
+    m->via[1].in_irqs = qemu_allocate_irqs(via2_irq_request,
                                            &m->via[1],VIA2_IRQ_NB);
 
     /* output IRQs */
 
-    m->via[1].type = 2;
     m->via[1].out_irq = via2_irq;
     m->via[1].timers[0].index = 0;
     m->via[1].timers[0].timer = qemu_new_timer_ns(vm_clock, via_timer1, &m->via[1]);
