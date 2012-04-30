@@ -30,6 +30,7 @@
  */
 
 #include "hw.h"
+#include "memory.h"
 #include "qemu-timer.h"
 #include "mac_via.h"
 
@@ -44,10 +45,9 @@
 #endif
 
 /*
- * Base addresses for the VIAs. There are two in every machine,
+ * VIAs: There are two in every machine,
  */
 
-#define VIA_BASE (0x50F00000)
 #define VIA_SIZE (0x2000)
 
 /*
@@ -307,6 +307,10 @@ typedef struct VIAState {
 
 typedef struct MacVIAState {
 
+    /* MMIO */
+
+    MemoryRegion mmio;
+
     /* VIAs */
 
     VIAState via[2];
@@ -333,8 +337,6 @@ typedef struct MacVIAState {
     QEMUTimer *VBL_timer;
 
 } MacVIAState;
-
-static MacVIAState mac_via_state;
 
 #define VIA_TIMER_FREQ (783360)
 
@@ -598,7 +600,8 @@ static void via1_adb_update(MacVIAState *m)
     }
 }
 
-static void via_writeb(void *opaque, target_phys_addr_t addr, uint32_t val)
+static void via_write(void *opaque, target_phys_addr_t addr,
+                       uint64_t val, unsigned int size)
 {
     MacVIAState *m = opaque;
     VIAState *s;
@@ -702,7 +705,8 @@ static void via_writeb(void *opaque, target_phys_addr_t addr, uint32_t val)
     }
 }
 
-static uint32_t via_readb(void *opaque, target_phys_addr_t addr)
+static uint64_t via_read(void *opaque, target_phys_addr_t addr,
+                         unsigned int size)
 {
     MacVIAState *m = opaque;
     VIAState *s;
@@ -783,34 +787,14 @@ static uint32_t via_readb(void *opaque, target_phys_addr_t addr)
     return val;
 }
 
-static void via_writew(void *opaque, target_phys_addr_t addr, uint32_t val)
-{
-}
-
-static void via_writel(void *opaque, target_phys_addr_t addr, uint32_t val)
-{
-}
-
-static uint32_t via_readw(void *opaque, target_phys_addr_t addr)
-{
-    return 0;
-}
-
-static uint32_t via_readl(void *opaque, target_phys_addr_t addr)
-{
-    return 0;
-}
-
-static CPUWriteMemoryFunc * const via_write[] = {
-    &via_writeb,
-    &via_writew,
-    &via_writel,
-};
-
-static CPUReadMemoryFunc * const via_read[] = {
-    &via_readb,
-    &via_readw,
-    &via_readl,
+static MemoryRegionOps via_ops = {
+    .read = via_read,
+    .write = via_write,
+    .endianness = DEVICE_NATIVE_ENDIAN,
+    .valid = {
+        .min_access_size = 1,
+        .max_access_size = 1,
+    },
 };
 
 static void via_reset(void *opaque)
@@ -818,13 +802,12 @@ static void via_reset(void *opaque)
     /* FIXME */
 }
 
-void mac_via_init(qemu_irq via1_irq, qemu_irq via2_irq,
-                  qemu_irq **via1_irqs, qemu_irq **via2_irqs,
-                  ADBBusState *adb)
+MemoryRegion *mac_via_init(qemu_irq via1_irq, qemu_irq via2_irq,
+                           qemu_irq **via1_irqs, qemu_irq **via2_irqs,
+                           ADBBusState *adb)
 {
     struct tm tm;
-    int via_mem_index;
-    MacVIAState *m = &mac_via_state;
+    MacVIAState *m = g_malloc0(sizeof(*m));
 
     m->adb = adb;
 
@@ -863,11 +846,12 @@ void mac_via_init(qemu_irq via1_irq, qemu_irq via2_irq,
     m->via[1].timers[0].timer = qemu_new_timer_ns(vm_clock, via_timer1, &m->via[1]);
     m->via[1].timers[1].index = 1;
 
-    via_mem_index = cpu_register_io_memory(via_read, via_write,
-                                           &mac_via_state, DEVICE_NATIVE_ENDIAN);
-    cpu_register_physical_memory(VIA_BASE, 2 * VIA_SIZE, via_mem_index);
+    memory_region_init_io(&m->mmio, &via_ops, m, "mac via", 2 * VIA_SIZE);
+
     /* FIXME: vmstate_register() */
-    qemu_register_reset(via_reset, &mac_via_state);
+    qemu_register_reset(via_reset, m);
 
     adb->data_ready = (*via1_irqs)[VIA1_IRQ_ADB_READY_BIT];
+
+    return &m->mmio;
 }

@@ -22,6 +22,6 @@
 
 #define VIA2_IRQ_NB             5
 
-void mac_via_init(qemu_irq via1_irq, qemu_irq via2_irq,
-                  qemu_irq **via1_irqs, qemu_irq **via2_irqs,
-                  ADBBusState *adb);
+MemoryRegion *mac_via_init(qemu_irq via1_irq, qemu_irq via2_irq,
+                           qemu_irq **via1_irqs, qemu_irq **via2_irqs,
+                           ADBBusState *adb);
