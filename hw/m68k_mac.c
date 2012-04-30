@@ -221,20 +221,6 @@ static void q800_init(ram_addr_t ram_size,
     target_phys_addr_t parameters_base;
     DeviceState *dev;
     SysBusDevice *sysbus;
-#if 0
-    qemu_irq **heathrow_irqs;
-    int i;
-    uint32_t kernel_base;
-    int32_t initrd_size;
-    PCIBus *pci_bus;
-    MacIONVRAMState *nvr;
-    int pic_mem_index, nvram_mem_index, dbdma_mem_index, cuda_mem_index;
-    int ide_mem_index[2];
-    uint16_t ppc_boot_device;
-    DriveInfo * hd[MAX_IDE_BUS * MAX_IDE_DEVS];
-    void *fw_cfg;
-    void *dbdma;
-#endif
 
     linux_boot = (kernel_filename != NULL);
 
@@ -350,30 +336,6 @@ static void q800_init(ram_addr_t ram_size,
             exit(1);
         }
     }
-#if 0
-    /* XXX: we register only 1 output pin for heathrow PIC */
-    heathrow_irqs = qemu_mallocz(smp_cpus * sizeof(qemu_irq *));
-    heathrow_irqs[0] =
-        qemu_mallocz(smp_cpus * sizeof(qemu_irq)*1);
-    /* Connect the heathrow PIC outputs to the 6xx bus */
-    for (i = 0; i < smp_cpus; i++) {
-        switch (PPC_INPUT(env)) {
-        case PPC_FLAGS_INPUT_6xx:
-            heathrow_irqs[i] = heathrow_irqs[0] + (i * 1);
-            heathrow_irqs[i][0] =
-                ((qemu_irq *)env->irq_inputs)[PPC6xx_INPUT_INT];
-            break;
-        default:
-            hw_error("Bus model not supported on OldWorld Mac machine\n");
-        }
-    }
-    /* cuda also initialize ADB */
-    cuda_init(&cuda_mem_index, pic[0x12]);
-
-    macio_init(pci_bus, PCI_DEVICE_ID_APPLE_343S1201, 1, pic_mem_index,
-               dbdma_mem_index, cuda_mem_index, nvr, 2, ide_mem_index,
-               escc_mem_index);
-#endif
 }
 
 static QEMUMachine q800_machine = {
