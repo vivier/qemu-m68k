@@ -196,7 +196,6 @@ static void do_interrupt_all(CPUM68KState *env, int is_hw)
 
     sp = env->aregs[7];
 
-
     /*
      * MC68040UM/AD,  chapter 9.3.10
      */
@@ -215,12 +214,9 @@ static void do_interrupt_all(CPUM68KState *env, int is_hw)
     m68k_switch_sp(env);
     sp = env->aregs[7];
 
-    /* ??? This could cause MMU faults.  */
-
     if (m68k_feature(env, M68K_FEATURE_M68000)) {
         sp &= ~1;
         if (cs->exception_index == 2) {
-            /* FIXME */
             sp -= 4;
             cpu_stl_kernel(env, sp, 0); /* push data 3 */
             sp -= 4;
@@ -251,15 +247,15 @@ static void do_interrupt_all(CPUM68KState *env, int is_hw)
             cpu_stw_kernel(env, sp, env->mmu.ssw); /* special status word */
             sp -= 4;
             cpu_stl_kernel(env, sp, env->mmu.ar); /* effective address */
-            do_stack_frame(env, &sp, 7, env->sr, 0, retaddr);
+            do_stack_frame(env, &sp, 7, oldsr, 0, retaddr);
         } else if (cs->exception_index == 3) {
-            do_stack_frame(env, &sp, 2, env->sr, 0, retaddr);
+            do_stack_frame(env, &sp, 2, oldsr, 0, retaddr);
         } else if (cs->exception_index == 5 ||
                    cs->exception_index == 6 ||
                    cs->exception_index == 7 ||
                    cs->exception_index == 9) {
             /* FIXME: addr is not only env->pc */
-            do_stack_frame(env, &sp, 2, env->sr, env->pc, retaddr);
+            do_stack_frame(env, &sp, 2, oldsr, env->pc, retaddr);
         } else if (is_hw && cs->exception_index >= 24 &&
                    cs->exception_index < 32) {
             do_stack_frame(env, &sp, 0, oldsr, 0, retaddr);
@@ -272,13 +268,13 @@ static void do_interrupt_all(CPUM68KState *env, int is_hw)
                 do_stack_frame(env, &sp, 1, oldsr, 0, retaddr);
             }
         } else {
-            do_stack_frame(env, &sp, 0, env->sr, 0, retaddr);
+            do_stack_frame(env, &sp, 0, oldsr, 0, retaddr);
         }
     } else {
         fmt |= 0x40000000;
         fmt |= (sp & 3) << 28;
         fmt |= vector << 16;
-        fmt |= env->sr;
+        fmt |= oldsr;
 
         sp &= ~3;
         sp -= 4;
