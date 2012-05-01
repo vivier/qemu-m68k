@@ -831,14 +831,18 @@ hwaddr m68k_cpu_get_phys_page_debug(CPUState *cs, vaddr addr)
     CPUM68KState *env = &cpu->env;
     hwaddr phys_addr;
     int prot;
+    int access_type;
 
     if ((env->mmu.tcr & (1 << 15)) == 0) {
         /* MMU disabled */
         return addr;
     }
 
+    access_type = ACCESS_INT;
+    if (env->sr & SR_S)
+        access_type |= ACCESS_SUPER;
     if (get_physical_address(env, &phys_addr, &prot,
-                             addr, ACCESS_SUPER | ACCESS_INT) != 0) {
+                             addr, access_type) != 0) {
         return -1;
     }
     return phys_addr;
