@@ -683,13 +683,14 @@ static int check_TTR(uint32_t ttr, hwaddr *physical, int *prot,
 #define GET_ENTRY() \
 do { \
     next = ldl_phys(cs->as, entry); \
-    if ((next & 3) == 0 || (next & 3) == 1) { \
+    if ((next & 2) == 0) { \
         env->mmu.ssw |= M68K_ATC_040; \
         env->mmu.ssw |= access_type & ACCESS_STORE ? 0 : M68K_RW_040; \
         return -1; /* INVALID */ \
     } \
-    next |= 1 << 3; /* USED */ \
-    stl_phys(cs->as, entry, next); \
+    if ((next & (1 << 3)) == 0) { \
+        stl_phys(cs->as, entry, next | (1 << 3)); \
+    } \
     if (next & (1 << 2)) { \
         /* WRITE PROTECTED */ \
         if (access_type & ACCESS_PTEST) { \
@@ -746,92 +747,77 @@ TTR_exit:
         next = env->mmu.urp;
     }
 
-    tia = (address >> 25) & 0x7f;
-    entry = (next & ~0x1ff) + (tia << 2);
+    tia = (address >> 23) & 0x1fc;
+    entry = (next & ~0x1ff) | tia;
     GET_ENTRY();
 
-    tib = (address >> 18) & 0x7f;
-    entry = (next & ~0x1ff) + (tib << 2);
+    tib = (address >> 16) & 0x1fc;
+    entry = (next & ~0x1ff) | tib;
     GET_ENTRY();
 
     if (env->mmu.tcr & 0x4000) {
         /* 8 kB page */
-        tic = (address >> 13) & 0x1f;
+        tic = (address >> 11) & 0x7c;
+        entry = (next & ~0x7f) | tic;
+    } else {
+        /* 4 kB page */
+        tic = (address >> 10) & 0xfc;
+        entry = (next & ~0xff) | tic;
+    }
 
-        entry = (next & ~0x7f) + (tic << 2);
+     next = ldl_phys(cs->as, entry);
+
+    if ((next & 3) == 0) {
+        env->mmu.ssw |= M68K_ATC_040;
+        env->mmu.ssw |= access_type & ACCESS_STORE ? 0 : M68K_RW_040;
+        return -1;
+    }
+    if ((next & 3) == 2) {
+        /* INDIRECT */
+        entry = next & ~3;
         next = ldl_phys(cs->as, entry);
-        if ((next & 3) == 2) {
-            /* INDIRECT */
-            entry = next;
-            next = ldl_phys(cs->as, entry);
-        }
-        if (!(access_type & ACCESS_PTEST)) {
-            next |= 1 << 3; /* USED */
-            if (access_type & ACCESS_STORE) {
-                next |= (1 << 4); /* MODIFIED */
+    }
+    if (!(access_type & ACCESS_PTEST)) {
+        if (access_type & ACCESS_STORE) {
+            if (next & (1 << 2)) { /* WRITE PROTECTED */
+                if ((next & (1 << 3)) == 0) {
+                    stl_phys(cs->as, entry, next | (1 << 3));
+                }
+            } else if ((next & ((1 << 4) | (1 << 3))) != ((1 << 4) | (1 << 3))) {
+                    stl_phys(cs->as, entry, next | (1 << 4) | (1 << 3));
+            }
+        } else {
+            if ((next & (1 << 3)) == 0) {
+                stl_phys(cs->as, entry, next | (1 << 3));
             }
         }
-        stl_phys(cs->as, entry, next);
+    } else {
+        env->mmu.mmusr |= next & 0x0000007f;
+    }
+    if (next & (1 << 2)) {
         /* WRITE PROTECTED */
-        if (next & (1 << 2)) {
-            if (access_type & ACCESS_PTEST) {
-                env->mmu.mmusr |= 1 << 2;
-            }
-            *prot &= ~PAGE_WRITE;
-            if (access_type & ACCESS_STORE) {
-                env->mmu.ssw |= M68K_ATC_040;
-                return -1;
-            }
+        if (access_type & ACCESS_PTEST) {
+            env->mmu.mmusr |= 1 << 2;
         }
-        if (next & (1 << 7)) {
-            /* SUPERVISOR */
-            if ((access_type & ACCESS_SUPER) == 0) {
-                env->mmu.ssw |= M68K_ATC_040;
-                env->mmu.ssw |= access_type & ACCESS_STORE ? 0 : M68K_RW_040;
-                return -1;
-            }
+        *prot &= ~PAGE_WRITE;
+        if (access_type & ACCESS_STORE) {
+            env->mmu.ssw |= M68K_ATC_040;
+            return -1;
         }
+    }
+    if (next & (1 << 7)) {
+        /* SUPERVISOR */
+        if ((access_type & ACCESS_SUPER) == 0) {
+            env->mmu.ssw |= M68K_ATC_040;
+            env->mmu.ssw |= access_type & ACCESS_STORE ? 0 : M68K_RW_040;
+            return -1;
+        }
+    }
+
+    if (env->mmu.tcr & 0x4000) {
         page_offset = address & 0x1fff;
         *physical = (next & ~0x1fff) + page_offset;
     } else {
-        /* 4 kB page */
-        tic = (address >> 12) & 0x3f;
-
-        entry = (next & ~0xff) + (tic << 2);
-        next = ldl_phys(cs->as, entry);
-        if ((next & 3) == 2) {
-            /* INDIRECT */
-            entry = next;
-            next = ldl_phys(cs->as, entry);
-        }
-        if (!(access_type & ACCESS_PTEST)) {
-            next |= 1 << 3; /* USED */
-            if (access_type & ACCESS_STORE) {
-                next |= (1 << 4); /* MODIFIED */
-            }
-        } else {
-            env->mmu.mmusr |= next & 0x0000007f;
-        }
-        stl_phys(cs->as, entry, next);
-        /* WRITE PROTECTED */
-        if (next & (1 << 2)) {
-            if (access_type & ACCESS_PTEST) {
-                env->mmu.mmusr |= 1 << 2;
-            }
-            *prot &= ~PAGE_WRITE;
-            if (access_type & ACCESS_STORE) {
-                env->mmu.ssw |= M68K_ATC_040;
-                return -1;
-            }
-        }
-        if (next & (1 << 7)) {
-            /* SUPERVISOR */
-            if ((access_type & ACCESS_SUPER) == 0) {
-                env->mmu.ssw |= M68K_ATC_040;
-                env->mmu.ssw |= access_type & ACCESS_STORE ? 0 : M68K_RW_040;
-                return -1;
-            }
-        }
         page_offset = address & 0x0fff;
         *physical = (next & ~0x0fff) + page_offset;
     }
