@@ -218,8 +218,13 @@ static void do_interrupt_all(CPUM68KState *env, int is_hw)
     sp = env->aregs[7];
 
     if (m68k_feature(env, M68K_FEATURE_M68000)) {
+        static int mmu_fault = 0;
         sp &= ~1;
         if (env->exception_index == 2) {
+            if (mmu_fault) {
+                cpu_abort(env, "DOUBLE MMU FAULT\n");
+            }
+            mmu_fault = 1;
             sp -= 4;
             cpu_stl_kernel(env, sp, 0); /* push data 3 */
             sp -= 4;
@@ -251,6 +256,7 @@ static void do_interrupt_all(CPUM68KState *env, int is_hw)
             sp -= 4;
             cpu_stl_kernel(env, sp, env->mmu.ar); /* effective address */
             do_stack_frame(env, &sp, 7, oldsr, 0, retaddr);
+            mmu_fault = 0;
         } else if (env->exception_index == 3) {
             do_stack_frame(env, &sp, 2, oldsr, 0, retaddr);
         } else if (env->exception_index == 5 ||
