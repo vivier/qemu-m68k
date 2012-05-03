@@ -199,6 +199,72 @@ static void do_interrupt_all(CPUM68KState *env, int is_hw)
 
     sp = env->aregs[7];
 
+    if (qemu_loglevel_mask(CPU_LOG_INT)) {
+        static int count = 0;
+        static const char *name;
+        name = "Unassigned";
+        switch(env->exception_index) {
+        case 0: name = "Reset Interrupt SP"; break;
+        case 1: name = "Reset PC"; break;
+        case 2: name = "Access Fault"; break;
+        case 3: name = "Address Error"; break;
+        case 4: name = "Illegal Instruction"; break;
+        case 5: name = "Divide by Zero"; break;
+        case 6: name = "CHK/CHK2"; break;
+        case 7: name = "FTRAPcc, TRAPcc, TRAPV"; break;
+        case 8: name = "Privilege Violation"; break;
+        case 9: name = "Trace"; break;
+        case 10: name = "A-Line"; break;
+        case 11: name = "F-Line"; break;
+        case 13: name = "Copro Protocol Violation"; break; /* 68020/030 only */
+        case 14: name = "Format Error"; break;
+        case 15: name = "Unitialized Interruot"; break;
+
+        case 24: name = "Spurious Interrupt"; break;
+        case 25: name = "Level 1 Interrupt"; break;
+        case 26: name = "Level 2 Interrupt"; break;
+        case 27: name = "Level 3 Interrupt"; break;
+        case 28: name = "Level 4 Interrupt"; break;
+        case 29: name = "Level 5 Interrupt"; break;
+        case 30: name = "Level 6 Interrupt"; break;
+        case 31: name = "Level 7 Interrupt"; break;
+
+        case 32: name = "TRAP #0"; break;
+        case 33: name = "TRAP #1"; break;
+        case 34: name = "TRAP #2"; break;
+        case 35: name = "TRAP #3"; break;
+        case 36: name = "TRAP #4"; break;
+        case 37: name = "TRAP #5"; break;
+        case 38: name = "TRAP #6"; break;
+        case 39: name = "TRAP #7"; break;
+        case 40: name = "TRAP #8"; break;
+        case 41: name = "TRAP #9"; break;
+        case 42: name = "TRAP #10"; break;
+        case 43: name = "TRAP #11"; break;
+        case 44: name = "TRAP #12"; break;
+        case 45: name = "TRAP #13"; break;
+        case 46: name = "TRAP #14"; break;
+        case 47: name = "TRAP #15"; break;
+
+        case 48: name = "FP Branch/Set on unordered condition"; break;
+        case 49: name = "FP Inexact Result"; break;
+        case 50: name = "FP Divide by Zero"; break;
+        case 51: name = "FP Underflow"; break;
+        case 52: name = "FP Operand Error"; break;
+        case 53: name = "FP Overflow"; break;
+        case 54: name = "FP Signaling NAN"; break;
+        case 55: name = "FP Unimplemented Data Type"; break;
+
+        case 56: name = "MMU Configuration Error"; break; /* 68030/68851 only */
+        case 57: name = "MMU Illegal Operation"; break; /* 68851 only */
+        case 58: name = "MMU Access Level Violation"; break; /* 68851 only */
+
+        case 64 ... 255: name = "User Defined Vector"; break;
+        }
+        qemu_log("INT %6d: %s(%#x) pc=%08x sp=%08x sr=%04x\n",
+                 ++count, name, vector, env->pc, sp, env->sr);
+    }
+
     /*
      * MC68040UM/AD,  chapter 9.3.10
      */
@@ -257,6 +323,12 @@ static void do_interrupt_all(CPUM68KState *env, int is_hw)
             cpu_stl_kernel(env, sp, env->mmu.ar); /* effective address */
             do_stack_frame(env, &sp, 7, oldsr, 0, retaddr);
             mmu_fault = 0;
+            if (qemu_loglevel_mask(CPU_LOG_INT)) {
+                qemu_log("            wb3d: %08x wb3a: %08x wb3s: %04x\n"
+                         "            ssw:  %08x ea:   %08x sfc:  %d    dfc: %d\n",
+                         env->mmu.wb3_data, env->mmu.ar, env->mmu.wb3_status,
+                         env->mmu.ssw, env->mmu.ar, env->sfc, env->dfc);
+            }
         } else if (env->exception_index == 3) {
             do_stack_frame(env, &sp, 2, oldsr, 0, retaddr);
         } else if (env->exception_index == 5 ||
