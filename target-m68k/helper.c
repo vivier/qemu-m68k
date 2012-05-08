@@ -365,10 +365,10 @@ void HELPER(movec_to)(CPUM68KState * env, uint32_t reg, uint32_t val)
     switch (reg) {
     /* MC680[234]0 */
     case M68K_CR_SFC:
-        env->sfc = val;
+        env->sfc = val & 7;
         return;
     case M68K_CR_DFC:
-        env->dfc = val;
+        env->dfc = val & 7;
         return;
     case M68K_CR_USP:
         env->sp[M68K_USP] = val;
