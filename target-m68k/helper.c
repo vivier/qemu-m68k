@@ -684,8 +684,6 @@ static int check_TTR(uint32_t ttr, target_phys_addr_t *physical, int *prot,
 do { \
     next = ldl_phys(entry); \
     if ((next & 2) == 0) { \
-        env->mmu.ssw |= M68K_ATC_040; \
-        env->mmu.ssw |= access_type & ACCESS_STORE ? 0 : M68K_RW_040; \
         return -1; /* INVALID */ \
     } \
     if ((next & (1 << 3)) == 0) { \
@@ -698,7 +696,6 @@ do { \
         } \
         *prot &= ~PAGE_WRITE; \
         if (access_type & ACCESS_STORE) { \
-            env->mmu.ssw |= M68K_ATC_040; \
             return -1; \
         } \
     } \
@@ -767,8 +764,6 @@ TTR_exit:
      next = ldl_phys(entry);
 
     if ((next & 3) == 0) {
-        env->mmu.ssw |= M68K_ATC_040;
-        env->mmu.ssw |= access_type & ACCESS_STORE ? 0 : M68K_RW_040;
         return -1;
     }
     if ((next & 3) == 2) {
@@ -800,15 +795,12 @@ TTR_exit:
         }
         *prot &= ~PAGE_WRITE;
         if (access_type & ACCESS_STORE) {
-            env->mmu.ssw |= M68K_ATC_040;
             return -1;
         }
     }
     if (next & (1 << 7)) {
         /* SUPERVISOR */
         if ((access_type & ACCESS_SUPER) == 0) {
-            env->mmu.ssw |= M68K_ATC_040;
-            env->mmu.ssw |= access_type & ACCESS_STORE ? 0 : M68K_RW_040;
             return -1;
         }
     }
@@ -888,10 +880,20 @@ int cpu_m68k_handle_mmu_fault (CPUM68KState *env, target_ulong address, int rw,
                      prot, mmu_idx, page_size);
         return 0;
     }
+    /* page fault */
+    env->mmu.ssw |= M68K_ATC_040;
+    if (access_type & ACCESS_SUPER) {
+        env->mmu.ssw |= 4;
+    }
+    if ((access_type & ACCESS_CODE) == 0) {
+        env->mmu.ssw |= 1;
+    }
     env->mmu.wb3_status = 0;
     if (access_type & ACCESS_STORE) {
         env->mmu.wb3_status = env->mmu.ssw & 0x7f;
         env->mmu.wb3_status |= 0x80; /* valid */
+    } else {
+        env->mmu.ssw |= M68K_RW_040;
     }
     env->mmu.ar = address;
     env->exception_index = EXCP_ACCESS;
