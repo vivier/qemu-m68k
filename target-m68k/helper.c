@@ -362,15 +362,12 @@ set_x:
 void HELPER(movec_to)(CPUM68KState * env, uint32_t reg, uint32_t val)
 {
     switch (reg) {
-    /* MC680[234]0 */
+    /* MC680[1234]0 */
     case M68K_CR_SFC:
         env->sfc = val & 7;
         return;
     case M68K_CR_DFC:
         env->dfc = val & 7;
-        return;
-    case M68K_CR_USP:
-        env->sp[M68K_USP] = val;
         return;
     case M68K_CR_VBR:
         env->vbr = val;
@@ -380,34 +377,40 @@ void HELPER(movec_to)(CPUM68KState * env, uint32_t reg, uint32_t val)
         env->cacr = val;
         m68k_switch_sp(env);
         return;
-    case M68K_CR_CAAR:
-    case M68K_CR_MSP:
-    case M68K_CR_ISP:
-        break;
-    /* MC68040/MC68LC040 */
+    /* MC680[34]0 */
     case M68K_CR_TC:
         env->mmu.tcr = val;
         return;
+    case M68K_CR_MMUSR:
+        env->mmu.mmusr = val;
+        return;
+    case M68K_CR_SRP:
+        env->mmu.srp = val;
+        return;
+    case M68K_CR_URP:
+        env->mmu.urp = val;
+        return;
+    case M68K_CR_USP:
+        env->sp[M68K_USP] = val;
+        return;
+    case M68K_CR_MSP:
+        env->sp[M68K_SSP] = val;
+        return;
+    case M68K_CR_ISP:
+        env->sp[M68K_ISP] = val;
+        return;
+    /* MC68040/MC68LC040 */
     case M68K_CR_ITT0:
         env->mmu.ittr0 = val;
         return;
     case M68K_CR_ITT1:
-        env->mmu.ittr1 = val;
+         env->mmu.ittr1 = val;
         return;
     case M68K_CR_DTT0:
         env->mmu.dttr0 = val;
         return;
     case M68K_CR_DTT1:
         env->mmu.dttr1 = val;
-        return;
-    case M68K_CR_MMUSR:
-        env->mmu.mmusr = val;
-        return;
-    case M68K_CR_URP:
-        env->mmu.urp = val;
-        return;
-    case M68K_CR_SRP:
-        env->mmu.srp = val;
         return;
     }
     cpu_abort(env, "Unimplemented control register write 0x%x = 0x%x\n",
@@ -417,25 +420,32 @@ void HELPER(movec_to)(CPUM68KState * env, uint32_t reg, uint32_t val)
 uint32_t HELPER(movec_from)(CPUM68KState * env, uint32_t reg)
 {
     switch (reg) {
-    /* MC680[234]0 */
+    /* MC680[1234]0 */
     case M68K_CR_SFC:
         return env->sfc;
     case M68K_CR_DFC:
         return env->dfc;
-    case M68K_CR_USP:
-        return env->sp[M68K_USP];
     case M68K_CR_VBR:
         return env->vbr;
     /* MC680[234]0 */
     case M68K_CR_CACR:
         return env->cacr;
-    case M68K_CR_CAAR:
-    case M68K_CR_MSP:
-    case M68K_CR_ISP:
-        break;
-    /* MC68040/MC68LC040 */
+    /* MC680[34]0 */
     case M68K_CR_TC:
         return env->mmu.tcr;
+    case M68K_CR_MMUSR:
+        return env->mmu.mmusr;
+    case M68K_CR_SRP:
+        return env->mmu.srp;
+    case M68K_CR_USP:
+        return env->sp[M68K_USP];
+    case M68K_CR_MSP:
+        return env->sp[M68K_SSP];
+    case M68K_CR_ISP:
+        return env->sp[M68K_ISP];
+    /* MC68040/MC68LC040 */
+    case M68K_CR_URP:
+        return env->mmu.urp;
     case M68K_CR_ITT0:
         return env->mmu.ittr0;
     case M68K_CR_ITT1:
@@ -444,12 +454,6 @@ uint32_t HELPER(movec_from)(CPUM68KState * env, uint32_t reg)
         return env->mmu.dttr0;
     case M68K_CR_DTT1:
         return env->mmu.dttr1;
-    case M68K_CR_MMUSR:
-        return env->mmu.mmusr;
-    case M68K_CR_URP:
-        return env->mmu.urp;
-    case M68K_CR_SRP:
-        return env->mmu.srp;
     }
     cpu_abort(env, "Unimplemented control register read 0x%x\n",
               reg);
