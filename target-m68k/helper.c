@@ -710,7 +710,7 @@ do { \
 
 static int get_physical_address(CPUM68KState *env, hwaddr *physical,
                                 int *prot, target_ulong address,
-                                int access_type)
+                                int access_type, target_ulong *page_size)
 {
     M68kCPU *cpu = m68k_env_get_cpu(env);
     CPUState *cs = CPU(cpu);
@@ -740,6 +740,7 @@ TTR_exit:
                 /* Transparent Translation Register bit */
                 env->mmu.mmusr |= 1 << 1;
             }
+            *page_size = TARGET_PAGE_SIZE;
             return 0;
         }
     }
@@ -819,9 +820,11 @@ TTR_exit:
     }
 
     if (env->mmu.tcr & 0x4000) {
+        *page_size = 8192;
         page_offset = address & 0x1fff;
         *physical = (next & ~0x1fff) + page_offset;
     } else {
+        *page_size = 4096;
         page_offset = address & 0x0fff;
         *physical = (next & ~0x0fff) + page_offset;
     }
@@ -836,6 +839,7 @@ hwaddr m68k_cpu_get_phys_page_debug(CPUState *cs, vaddr addr)
     hwaddr phys_addr;
     int prot;
     int access_type;
+    target_ulong page_size;
 
     if ((env->mmu.tcr & (1 << 15)) == 0) {
         /* MMU disabled */
@@ -846,7 +850,7 @@ hwaddr m68k_cpu_get_phys_page_debug(CPUState *cs, vaddr addr)
     if (env->sr & SR_S)
         access_type |= ACCESS_SUPER;
     if (get_physical_address(env, &phys_addr, &prot,
-                             addr, access_type) != 0) {
+                             addr, access_type, &page_size) != 0) {
         return -1;
     }
     return phys_addr;
@@ -861,6 +865,7 @@ int m68k_cpu_handle_mmu_fault(CPUState *cs, vaddr address, int rw,
     int prot;
     int access_type;
     int ret;
+    target_ulong page_size;
 
     if ((env->mmu.tcr & (1 << 15)) == 0) {
         /* MMU disabled */
@@ -886,11 +891,11 @@ int m68k_cpu_handle_mmu_fault(CPUState *cs, vaddr address, int rw,
     }
 
     ret = get_physical_address(&cpu->env, &physical, &prot,
-                               address, access_type);
+                               address, access_type, &page_size);
     if (ret == 0) {
         tlb_set_page(cs, address & TARGET_PAGE_MASK,
                      physical & TARGET_PAGE_MASK,
-                     prot, mmu_idx, TARGET_PAGE_SIZE);
+                     prot, mmu_idx, page_size);
         return 0;
     }
     env->mmu.wb3_status = 0;
@@ -2559,6 +2564,7 @@ void HELPER(ptest)(CPUM68KState * env, uint32_t addr, uint32_t is_write)
     int ret;
     int access_type;
     int prot;
+    target_ulong page_size;
 
     access_type = ACCESS_PTEST;
     access_type |= (env->dfc & 4) ? ACCESS_SUPER : 0;
@@ -2568,7 +2574,8 @@ void HELPER(ptest)(CPUM68KState * env, uint32_t addr, uint32_t is_write)
 
     env->mmu.mmusr = 0;
     env->mmu.ssw = 0;
-    ret = get_physical_address(env, &physical, &prot, addr, access_type);
+    ret = get_physical_address(env, &physical, &prot, addr,
+                               access_type, &page_size);
     if (ret == 0) {
         env->mmu.mmusr |= 1; /* RESIDENT */
         env->mmu.mmusr |= physical & 0xfffff000;
