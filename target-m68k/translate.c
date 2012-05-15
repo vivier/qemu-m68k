@@ -128,7 +128,6 @@ typedef struct DisasContext {
     uint32_t fpcr;
     struct TranslationBlock *tb;
     int singlestep_enabled;
-    int is_mem;
     TCGv_i64 mactmp;
     int done_mac;
 } DisasContext;
@@ -288,7 +287,6 @@ static inline TCGv gen_load(DisasContext *s, int opsize, TCGv addr,
                             int sign, int index)
 {
     TCGv tmp;
-    s->is_mem = 1;
     tmp = tcg_temp_new_i32();
     switch(opsize) {
     case OS_BYTE:
@@ -317,7 +315,6 @@ static inline TCGv gen_load(DisasContext *s, int opsize, TCGv addr,
 static inline void gen_store(DisasContext *s, int opsize, TCGv addr, TCGv val,
                              int index)
 {
-    s->is_mem = 1;
     switch(opsize) {
     case OS_BYTE:
         tcg_gen_qemu_st8(val, addr, index);
@@ -897,7 +894,6 @@ static inline void gen_load_FP0(DisasContext * s, int opsize, TCGv addr)
 {
     TCGv tmp;
     int index = IS_USER(s);
-    s->is_mem = 1;
     switch(opsize) {
     case OS_BYTE:
         tcg_gen_qemu_ld8s(QREG_FP0H, addr, index);
@@ -945,7 +941,6 @@ static inline void gen_store_FP0(DisasContext *s, int opsize, TCGv addr)
 {
     TCGv tmp;
     int index = IS_USER(s);
-    s->is_mem = 1;
     switch(opsize) {
     case OS_BYTE:
         gen_helper_reds32_FP0(cpu_env);
@@ -5045,7 +5040,6 @@ gen_intermediate_code_internal(M68kCPU *cpu, TranslationBlock *tb,
     dc->singlestep_enabled = cs->singlestep_enabled;
     dc->fpcr = env->fpcr;
     dc->user = (env->sr & SR_S) == 0;
-    dc->is_mem = 0;
     dc->done_mac = 0;
     lj = -1;
     num_insns = 0;
