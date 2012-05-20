@@ -155,9 +155,15 @@ static int cf_fpu_gdb_set_reg(CPUM68KState *env, uint8_t *mem_buf, int n)
         env->fregs[n].d = float64_to_floatx80(ldfq_p(mem_buf), &s);
         return 8;
     }
-    if (n < 11) {
-        /* FP control registers (not implemented)  */
-        return 4;
+    switch (n) {
+        case 8:
+            env->fpcr = ldl_be_p(mem_buf);
+            return 4;
+        case 9:
+            env->fpsr = ldl_be_p(mem_buf);
+            return 4;
+        case 10:
+            return 4;
     }
     return 0;
 }
@@ -170,10 +176,16 @@ static int m68k_fpu_gdb_get_reg(CPUM68KState *env, uint8_t *mem_buf, int n)
         stq_be_p(mem_buf + 4, env->fregs[n].l.lower);
         return 12;
     }
-    if (n < 11) {
-        /* FP control registers (not implemented)  */
-        memset(mem_buf, 0, 4);
-        return 4;
+    switch (n) {
+        case 8:
+            stl_be_p(mem_buf, env->fpcr);
+            return 4;
+        case 9:
+            stl_be_p(mem_buf, env->fpsr);
+            return 4;
+        case 10:
+            memset(mem_buf, 0, 4);
+            return 4;
     }
     return 0;
 }
