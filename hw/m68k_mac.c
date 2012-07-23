@@ -115,7 +115,6 @@ static void q800_init(ram_addr_t ram_size,
     int32_t initrd_size;
     MemoryRegion *rom;
     MemoryRegion *ram;
-    MemoryRegion *escc_mem;
     q800_glue_state_t *s;
     qemu_irq *pic;
     target_phys_addr_t parameters_base;
@@ -156,8 +155,8 @@ static void q800_init(ram_addr_t ram_size,
 
     /* SCC */
 
-    escc_mem = escc_init(SCC_BASE, pic[3], pic[3], serial_hds[0],
-                         serial_hds[1], MAC_CLOCK, 1, 1);
+    escc_init(SCC_BASE, pic[3], pic[3], serial_hds[0],
+                        serial_hds[1], MAC_CLOCK, 1, 1);
 
     /* framebuffer */
 
