@@ -41,6 +41,7 @@ struct MacfbState {
     uint32_t palette_current;
     uint8_t color_palette[256 * 3];
     uint32_t width, height; /* in pixels */
+    uint8_t depth;
 };
 typedef struct MacfbState MacfbState;
 
@@ -207,7 +208,9 @@ static void macfb_update_display(void *opaque)
         qemu_console_resize(s->con, s->width, s->height);
     }
 
-    macfb_draw_graphic8(s);
+    if (s->depth == 8) {
+        macfb_draw_graphic8(s);
+    }
 }
 
 static void macfb_reset(MacfbState *s)
@@ -318,6 +321,7 @@ static void macfb_sysbus_reset(DeviceState *d)
 static Property macfb_sysbus_properties[] = {
     DEFINE_PROP_UINT32("width", MacfbSysBusState, macfb.width, 640),
     DEFINE_PROP_UINT32("height", MacfbSysBusState, macfb.height, 480),
+    DEFINE_PROP_UINT8("depth", MacfbSysBusState, macfb.depth, 8),
     DEFINE_PROP_END_OF_LIST(),
 };
 
