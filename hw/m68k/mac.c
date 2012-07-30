@@ -129,6 +129,11 @@ static void q800_init(QEMUMachineInitArgs *args)
     SysBusDevice *sysbus;
     BusState *adb_bus;
 
+    if (graphic_depth != 8) {
+            hw_error("qemu: unknown guest depth %d\n", graphic_depth);
+            exit(1);
+    }
+
     linux_boot = (kernel_filename != NULL);
 
     /* init CPUs */
@@ -175,6 +180,9 @@ static void q800_init(QEMUMachineInitArgs *args)
     /* framebuffer */
 
     dev = qdev_create(NULL, "sysbus-macfb");
+    qdev_prop_set_uint32(dev, "width", graphic_width);
+    qdev_prop_set_uint32(dev, "height", graphic_height);
+    qdev_prop_set_uint8(dev, "depth", graphic_depth);
     qdev_init_nofail(dev);
     sysbus = SYS_BUS_DEVICE(dev);
     sysbus_mmio_map(sysbus, 0, DAFB_BASE);
@@ -204,10 +212,11 @@ static void q800_init(QEMUMachineInitArgs *args)
                   BI_MAC_MEMSIZE, ram_size >> 20); /* in MB */
         BOOTINFO2(cs->as, parameters_base, BI_MEMCHUNK, 0, ram_size);
         BOOTINFO1(cs->as, parameters_base, BI_MAC_VADDR, VIDEO_BASE);
-        BOOTINFO1(cs->as, parameters_base, BI_MAC_VDEPTH, 8);
-        BOOTINFO1(cs->as, parameters_base, BI_MAC_VDIM, (480 << 16) | 640);
+        BOOTINFO1(cs->as, parameters_base, BI_MAC_VDEPTH, graphic_depth);
+        BOOTINFO1(cs->as, parameters_base, BI_MAC_VDIM,
+                  (graphic_height << 16) | graphic_width);
         BOOTINFO1(cs->as, parameters_base, BI_MAC_VROW,
-                     640 * ((graphic_depth  + 7) / 8));
+                  graphic_width * ((graphic_depth + 7) / 8));
         BOOTINFO1(cs->as, parameters_base, BI_MAC_SCCBASE, SCC_BASE);
 
         if (kernel_cmdline) {
