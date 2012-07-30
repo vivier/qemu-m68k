@@ -29,7 +29,6 @@
 #include "framebuffer.h"
 #include "console.h"
 #include "exec-memory.h"
-#include "escc.h"
 #include "sysbus.h"
 #include "bootinfo.h"
 #include "mac_via.h"
@@ -160,8 +159,20 @@ static void q800_init(ram_addr_t ram_size,
 
     /* SCC */
 
-    escc_init(SCC_BASE, pic[3], pic[3], serial_hds[0],
-                        serial_hds[1], MAC_CLOCK, 1, 1);
+    dev = qdev_create(NULL, "escc");
+    qdev_prop_set_uint32(dev, "disabled", 0);
+    qdev_prop_set_uint32(dev, "frequency", MAC_CLOCK);
+    qdev_prop_set_uint32(dev, "it_shift", 1);
+    qdev_prop_set_uint32(dev, "reg_bit", 1);
+    qdev_prop_set_chr(dev, "chrA", serial_hds[0]);
+    qdev_prop_set_chr(dev, "chrB", serial_hds[1]);
+    qdev_prop_set_uint32(dev, "chnBtype", 0);
+    qdev_prop_set_uint32(dev, "chnAtype", 0);
+    qdev_init_nofail(dev);
+    sysbus = sysbus_from_qdev(dev);
+    sysbus_connect_irq(sysbus, 0, pic[3]);
+    sysbus_connect_irq(sysbus, 1, pic[3]);
+    sysbus_mmio_map(sysbus, 0, SCC_BASE);
 
     /* framebuffer */
 
