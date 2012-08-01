@@ -339,6 +339,7 @@ static void access_with_adjusted_size(hwaddr addr,
                                       unsigned size,
                                       unsigned access_size_min,
                                       unsigned access_size_max,
+                                      enum device_endian endianness,
                                       void (*access)(void *opaque,
                                                      hwaddr addr,
                                                      uint64_t *value,
@@ -359,10 +360,37 @@ static void access_with_adjusted_size(hwaddr addr,
     }
     access_size = MAX(MIN(size, access_size_max), access_size_min);
     access_mask = -1ULL >> (64 - access_size * 8);
-    for (i = 0; i < size; i += access_size) {
-        /* FIXME: big-endian support */
-        access(opaque, addr + i, value, access_size, i * 8, access_mask);
+#ifdef HOST_WORDS_BIGENDIAN
+    if (endianness == DEVICE_LITTLE_ENDIAN
+#ifdef TARGET_WORDS_LITTLEENDIAN
+        || endianness == DEVICE_NATIVE_ENDIAN
+#endif
+       ) {
+        for (i = 0; i < size; i += access_size) {
+            access(opaque, addr + i, value, access_size,
+                   (size - access_size - i) * 8, access_mask);
+        }
+    } else {
+        for (i = 0; i < size; i += access_size) {
+            access(opaque, addr + i, value, access_size, i * 8, access_mask);
+        }
     }
+#else
+    if (endianness == DEVICE_BIG_ENDIAN
+#ifdef TARGET_WORDS_BIGENDIAN
+        || endianness == DEVICE_NATIVE_ENDIAN
+#endif
+       ) {
+        for (i = 0; i < size; i += access_size) {
+            access(opaque, addr + i, value, access_size,
+                   (size - access_size - i) * 8, access_mask);
+        }
+    } else {
+        for (i = 0; i < size; i += access_size) {
+            access(opaque, addr + i, value, access_size, i * 8, access_mask);
+        }
+    }
+#endif
 }
 
 static const MemoryRegionPortio *find_portio(MemoryRegion *mr, uint64_t offset,
@@ -409,6 +437,7 @@ static void memory_region_iorange_read(IORange *iorange,
     access_with_adjusted_size(offset, data, width,
                               mr->ops->impl.min_access_size,
                               mr->ops->impl.max_access_size,
+                              mr->ops->endianness,
                               memory_region_read_accessor, mr);
 }
 
@@ -439,6 +468,7 @@ static void memory_region_iorange_write(IORange *iorange,
     access_with_adjusted_size(offset, &data, width,
                               mr->ops->impl.min_access_size,
                               mr->ops->impl.max_access_size,
+                              mr->ops->endianness,
                               memory_region_write_accessor, mr);
 }
 
@@ -862,6 +892,7 @@ static uint64_t memory_region_dispatch_read1(MemoryRegion *mr,
     access_with_adjusted_size(addr, &data, size,
                               mr->ops->impl.min_access_size,
                               mr->ops->impl.max_access_size,
+                              mr->ops->endianness,
                               memory_region_read_accessor, mr);
 
     return data;
@@ -916,6 +947,7 @@ static void memory_region_dispatch_write(MemoryRegion *mr,
     access_with_adjusted_size(addr, &data, size,
                               mr->ops->impl.min_access_size,
                               mr->ops->impl.max_access_size,
+                              mr->ops->endianness,
                               memory_region_write_accessor, mr);
 }
 
