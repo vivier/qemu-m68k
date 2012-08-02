@@ -2598,4 +2598,9 @@ void HELPER(pflush)(CPUM68KState * env, uint32_t addr, uint32_t opmode)
         break;
     }
 }
+
+void HELPER(reset)(CPUM68KState * env)
+{
+    /* FIXME: reset all except CPU */
+}
 #endif
