@@ -29,6 +29,8 @@
 #include "framebuffer.h"
 #include "console.h"
 #include "exec-memory.h"
+#include "mac_via.h"
+#include "asc.h"
 #include "sysbus.h"
 #include "bootinfo.h"
 
@@ -59,6 +61,7 @@
 
 #define VIA_BASE   0x50f00000
 #define SCC_BASE   0x50f0c020
+#define ASC_BASE   0x50F14000
 #define VIDEO_BASE 0xf9001000
 #define DAFB_BASE  0xf9800000
 
@@ -118,6 +121,7 @@ static void q800_init(ram_addr_t ram_size,
     qemu_irq *pic;
     target_phys_addr_t parameters_base;
     DeviceState *dev;
+    DeviceState *via_dev;
     SysBusDevice *sysbus;
 
     if (graphic_depth != 8) {
@@ -150,9 +154,9 @@ static void q800_init(ram_addr_t ram_size,
 
     /* VIA */
 
-    dev = qdev_create(NULL, "mac_via");
-    qdev_init_nofail(dev);
-    sysbus = sysbus_from_qdev(dev);
+    via_dev = qdev_create(NULL, "mac_via");
+    qdev_init_nofail(via_dev);
+    sysbus = sysbus_from_qdev(via_dev);
     sysbus_mmio_map(sysbus, 0, VIA_BASE);
     sysbus_connect_irq(sysbus, 0, pic[0]);
     sysbus_connect_irq(sysbus, 1, pic[1]);
@@ -173,6 +177,15 @@ static void q800_init(ram_addr_t ram_size,
     sysbus_connect_irq(sysbus, 0, pic[3]);
     sysbus_connect_irq(sysbus, 1, pic[3]);
     sysbus_mmio_map(sysbus, 0, SCC_BASE);
+
+    /* Apple Sound Chip */
+
+    dev = qdev_create(NULL, "apple-sound-chip");
+    qdev_prop_set_uint8(dev, "type", ASC_TYPE_ASC);
+    qdev_init_nofail(dev);
+    sysbus_mmio_map(sysbus_from_qdev(dev), 0, ASC_BASE);
+    sysbus_connect_irq(sysbus_from_qdev(dev), 0,
+                       qdev_get_gpio_in(via_dev, VIA2_IRQ_ASC_BIT));
 
     /* framebuffer */
 
