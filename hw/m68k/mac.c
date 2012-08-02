@@ -34,6 +34,7 @@
 #include "bootinfo.h"
 #include "hw/misc/mac_via.h"
 #include "hw/input/adb.h"
+#include "hw/audio/asc.h"
 
 #define MACROM_ADDR     0x800000
 #define MACROM_SIZE     0x100000
@@ -61,8 +62,8 @@
 #define Q800_MAC_CPU_ID 2
 
 #define VIA_BASE   0x50f00000
-#define SCC_BASE  0x50f0c020
-#define MAC_ESP_IO_BASE 0x50F00000
+#define SCC_BASE   0x50f0c020
+#define ASC_BASE   0x50F14000
 #define VIDEO_BASE 0xf9001000
 #define DAFB_BASE  0xf9800000
 
@@ -126,6 +127,7 @@ static void q800_init(QEMUMachineInitArgs *args)
     hwaddr parameters_base;
     CPUState *cs;
     DeviceState *dev;
+    DeviceState *via_dev;
     SysBusDevice *sysbus;
     BusState *adb_bus;
 
@@ -159,14 +161,14 @@ static void q800_init(QEMUMachineInitArgs *args)
 
     /* VIA */
 
-    dev = qdev_create(NULL, TYPE_MAC_VIA);
-    qdev_init_nofail(dev);
-    sysbus = SYS_BUS_DEVICE(dev);
+    via_dev = qdev_create(NULL, TYPE_MAC_VIA);
+    qdev_init_nofail(via_dev);
+    sysbus = SYS_BUS_DEVICE(via_dev);
     sysbus_mmio_map(sysbus, 0, VIA_BASE);
     sysbus_connect_irq(sysbus, 0, pic[0]);
     sysbus_connect_irq(sysbus, 1, pic[1]);
 
-    adb_bus = qdev_get_child_bus(dev, "adb.0");
+    adb_bus = qdev_get_child_bus(via_dev, "adb.0");
     dev = qdev_create(adb_bus, TYPE_ADB_KEYBOARD);
     qdev_init_nofail(dev);
     dev = qdev_create(adb_bus, TYPE_ADB_MOUSE);
@@ -188,6 +190,15 @@ static void q800_init(QEMUMachineInitArgs *args)
     sysbus_connect_irq(sysbus, 0, pic[3]);
     sysbus_connect_irq(sysbus, 1, pic[3]);
     sysbus_mmio_map(sysbus, 0, SCC_BASE);
+
+    /* Apple Sound Chip */
+
+    dev = qdev_create(NULL, "apple-sound-chip");
+    qdev_prop_set_uint8(dev, "asctype", ASC_TYPE_ASC);
+    qdev_init_nofail(dev);
+    sysbus_mmio_map(SYS_BUS_DEVICE(dev), 0, ASC_BASE);
+    sysbus_connect_irq(SYS_BUS_DEVICE(dev), 0,
+                       qdev_get_gpio_in(via_dev, VIA2_IRQ_ASC_BIT));
 
     /* framebuffer */
 
