@@ -36,9 +36,8 @@
 #include "hw/input/adb.h"
 #include "hw/audio/asc.h"
 
-#define MACROM_ADDR     0x800000
-#define MACROM_SIZE     0x100000
-
+#define MACROM_ADDR     0x40000000
+#define MACROM_SIZE     0x00100000
 
 /*
  *              .ident          = MAC_MODEL_Q800,
@@ -259,6 +258,7 @@ static void q800_init(QEMUMachineInitArgs *args)
         }
         BOOTINFO0(parameters_base, BI_LAST);
     } else {
+        uint8_t *ptr;
         /* allocate and load BIOS */
         rom = g_malloc(sizeof(*rom));
         memory_region_init_ram(rom, NULL, "m68k_mac.rom", MACROM_SIZE);
@@ -280,6 +280,9 @@ static void q800_init(QEMUMachineInitArgs *args)
             hw_error("qemu: could not load MacROM '%s'\n", bios_name);
             exit(1);
         }
+        ptr = rom_ptr(MACROM_ADDR);
+        stl_phys(0, ldl_p(ptr));    /* reset initial SP */
+        stl_phys(4, MACROM_ADDR + ldl_p(ptr + 4)); /* reset initial PC */
     }
 }
 
