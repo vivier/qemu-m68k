@@ -24,7 +24,9 @@
  */
 
 #include "sysbus.h"
+#ifdef CONFIG_PCI
 #include "pci.h"
+#endif
 #include "scsi.h"
 #include "esp.h"
 #include "trace.h"
@@ -504,6 +506,7 @@ static uint64_t esp_reg_read(ESPState *s, uint32_t saddr)
             s->ti_size--;
             if ((s->rregs[ESP_RSTAT] & STAT_PIO_MASK) == 0) {
                 /* Data out.  */
+                //qemu_log_mask(LOG_UNIMP, "esp: PIO data read not implemented\n");
                 s->rregs[ESP_FIFO] = 0;
             } else {
                 s->rregs[ESP_FIFO] = s->ti_buf[s->ti_rptr++];
@@ -821,6 +824,7 @@ static TypeInfo sysbus_esp_info = {
     .class_init    = sysbus_esp_class_init,
 };
 
+#ifdef CONFIG_PCI
 #define DMA_CMD   0x0
 #define DMA_STC   0x1
 #define DMA_SPA   0x2
@@ -1182,11 +1186,14 @@ static TypeInfo esp_pci_info = {
     .instance_size = sizeof(PCIESPState),
     .class_init = esp_pci_class_init,
 };
+#endif
 
 static void esp_register_types(void)
 {
     type_register_static(&sysbus_esp_info);
+#ifdef CONFIG_PCI
     type_register_static(&esp_pci_info);
+#endif
 }
 
 type_init(esp_register_types)
