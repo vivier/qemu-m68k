@@ -51,9 +51,9 @@ extern int loglevel;
 /* Special cases: */
 
 /* cpu_dump_state() logging functions: */
-#define log_cpu_state(env, f) cpu_dump_state((env), logfile, fprintf, (f));
-#define log_cpu_state_mask(b, env, f) do {           \
-      if (loglevel & (b)) log_cpu_state((env), (f)); \
+#define log_cpu_state(e, f) cpu_dump_state((e), logfile, fprintf, (f));
+#define log_cpu_state_mask(b, e, f) do {           \
+      if (loglevel & (b)) log_cpu_state((e), (f)); \
   } while (0)
 
 /* disas() and target_disas() to logfile: */
