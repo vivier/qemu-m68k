@@ -863,7 +863,7 @@ static void esp_pci_handle_idle(PCIESPState *pci, uint32_t val)
 static void esp_pci_handle_blast(PCIESPState *pci, uint32_t val)
 {
     trace_esp_pci_dma_blast(val);
-    qemu_log_mask(LOG_UNIMP, "am53c974: cmd BLAST not implemented\n");
+    //qemu_log_mask(LOG_UNIMP, "am53c974: cmd BLAST not implemented\n");
 }
 
 static void esp_pci_handle_abort(PCIESPState *pci, uint32_t val)
@@ -1039,7 +1039,7 @@ static void esp_pci_dma_memory_rw(PCIESPState *pci, uint8_t *buf, int len,
     }
 
     if (pci->dma_regs[DMA_STAT] & DMA_CMD_MDL) {
-        qemu_log_mask(LOG_UNIMP, "am53c974: MDL transfer not implemented\n");
+        //qemu_log_mask(LOG_UNIMP, "am53c974: MDL transfer not implemented\n");
     }
 
     addr = pci->dma_regs[DMA_SPA];
