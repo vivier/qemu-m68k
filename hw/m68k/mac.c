@@ -31,6 +31,7 @@
 #include "exec/address-spaces.h"
 #include "hw/char/escc.h"
 #include "hw/sysbus.h"
+#include "hw/scsi/esp.h"
 #include "bootinfo.h"
 #include "hw/misc/mac_via.h"
 #include "hw/input/adb.h"
@@ -62,6 +63,8 @@
 
 #define VIA_BASE   0x50f00000
 #define SCC_BASE   0x50f0c020
+#define ESP_BASE   0x50f10000
+#define ESP_PDMA   0x50f10100
 #define ASC_BASE   0x50F14000
 #define VIDEO_BASE 0xf9001000
 #define DAFB_BASE  0xf9800000
@@ -126,6 +129,7 @@ static void q800_init(QEMUMachineInitArgs *args)
     DeviceState *via_dev;
     SysBusDevice *sysbus;
     BusState *adb_bus;
+    qemu_irq  esp_reset_irq, esp_dma_enable;
 
     if (graphic_depth != 8) {
             hw_error("qemu: unknown guest depth %d\n", graphic_depth);
@@ -207,6 +211,12 @@ static void q800_init(QEMUMachineInitArgs *args)
     sysbus_mmio_map(sysbus, 0, DAFB_BASE);
     sysbus_mmio_map(sysbus, 1, VIDEO_BASE);
 
+    /* SCSI */
+
+    esp_init_pdma(ESP_BASE, 4, ESP_PDMA,
+                  qdev_get_gpio_in(via_dev, VIA2_IRQ_SCSI_BIT),
+                  qdev_get_gpio_in(via_dev, VIA2_IRQ_SCSI_DATA_BIT),
+                  &esp_reset_irq, &esp_dma_enable);
     if (linux_boot) {
         uint64_t high;
         kernel_size = load_elf(kernel_filename, NULL, NULL,
