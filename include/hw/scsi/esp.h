@@ -10,8 +10,12 @@ typedef void (*ESPDMAMemoryReadWriteFunc)(void *opaque, uint8_t *buf, int len);
 void esp_init(hwaddr espaddr, int it_shift,
               ESPDMAMemoryReadWriteFunc dma_memory_read,
               ESPDMAMemoryReadWriteFunc dma_memory_write,
-              void *dma_opaque, qemu_irq irq, qemu_irq *reset,
-              qemu_irq *dma_enable);
+              void *dma_opaque, qemu_irq irq, qemu_irq irq_data,
+              qemu_irq *reset, qemu_irq *dma_enable);
+void esp_init_pdma(hwaddr espaddr, int it_shift,
+              hwaddr pdmaaddr,
+              qemu_irq irq, qemu_irq irq_data,
+              qemu_irq *reset, qemu_irq *dma_enable);
 
 #define ESP_REGS 16
 #define TI_BUFSZ 16
@@ -23,6 +27,7 @@ struct ESPState {
     uint8_t rregs[ESP_REGS];
     uint8_t wregs[ESP_REGS];
     qemu_irq irq;
+    qemu_irq irq_data;
     uint8_t chip_id;
     bool tchi_written;
     int32_t ti_size;
@@ -51,6 +56,11 @@ struct ESPState {
     ESPDMAMemoryReadWriteFunc dma_memory_write;
     void *dma_opaque;
     void (*dma_cb)(ESPState *s);
+    uint8_t pdma_buf[32];
+    uint32_t pdma_len;
+    uint8_t *pdma_start;
+    uint8_t *pdma_cur;
+    void (*pdma_cb)(ESPState *s);
 };
 
 #define TYPE_ESP "esp"
@@ -62,6 +72,7 @@ typedef struct {
     /*< public >*/
 
     MemoryRegion iomem;
+    MemoryRegion pdma;
     uint32_t it_shift;
     ESPState esp;
 } SysBusESPState;
