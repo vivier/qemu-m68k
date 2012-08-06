@@ -44,6 +44,7 @@
 #include "exec/address-spaces.h"
 #include "sysemu/qtest.h"
 #include "qemu/error-report.h"
+#include "hw/net/dp8393x.h"
 
 enum jazz_model_e
 {
@@ -265,7 +266,7 @@ static void mips_jazz_init(MemoryRegion *address_space,
         if (!nd->model)
             nd->model = g_strdup("dp83932");
         if (strcmp(nd->model, "dp83932") == 0) {
-            dp83932_init(nd, 0x80001000, 2, get_system_memory(), rc4030[4],
+            dp83932_init(nd, 0x80001000, 2, 0, get_system_memory(), rc4030[4],
                          rc4030_opaque, rc4030_dma_memory_rw);
             break;
         } else if (is_help_option(nd->model)) {
