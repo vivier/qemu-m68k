@@ -35,6 +35,7 @@
 #include "net.h"
 #include "esp.h"
 #include "mips-bios.h"
+#include "dp8393x.h"
 #include "loader.h"
 #include "mc146818rtc.h"
 #include "i8254.h"
