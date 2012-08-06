@@ -21,6 +21,7 @@
 #include "qemu/timer.h"
 #include "net/net.h"
 #include "hw/mips/mips.h"
+#include "hw/net/dp8393x.h"
 
 //#define DEBUG_SONIC
 
@@ -148,6 +149,7 @@ do { printf("sonic ERROR: %s: " fmt, __func__ , ## __VA_ARGS__); } while (0)
 typedef struct dp8393xState {
     /* Hardware */
     int it_shift;
+    int regs_offset;
     qemu_irq irq;
 #ifdef DEBUG_SONIC
     int irq_level;
@@ -609,6 +611,7 @@ static uint32_t dp8393x_readw(void *opaque, hwaddr addr)
     dp8393xState *s = opaque;
     int reg;
 
+    addr -= s->regs_offset;
     if ((addr & ((1 << s->it_shift) - 1)) != 0) {
         return 0;
     }
@@ -619,7 +622,8 @@ static uint32_t dp8393x_readw(void *opaque, hwaddr addr)
 
 static uint32_t dp8393x_readb(void *opaque, hwaddr addr)
 {
-    uint16_t v = dp8393x_readw(opaque, addr & ~0x1);
+    uint16_t v;
+    v = dp8393x_readw(opaque, addr & ~0x1);
     return (v >> (8 * (addr & 0x1))) & 0xff;
 }
 
@@ -636,6 +640,7 @@ static void dp8393x_writew(void *opaque, hwaddr addr, uint32_t val)
     dp8393xState *s = opaque;
     int reg;
 
+    addr -= s->regs_offset;
     if ((addr & ((1 << s->it_shift) - 1)) != 0) {
         return;
     }
@@ -880,7 +885,7 @@ static NetClientInfo net_dp83932_info = {
     .cleanup = nic_cleanup,
 };
 
-void dp83932_init(NICInfo *nd, hwaddr base, int it_shift,
+void dp83932_init(NICInfo *nd, hwaddr base, int it_shift, int regs_offset,
                   MemoryRegion *address_space,
                   qemu_irq irq, void* mem_opaque,
                   void (*memory_rw)(void *opaque, hwaddr addr, uint8_t *buf, int len, int is_write))
@@ -895,6 +900,7 @@ void dp83932_init(NICInfo *nd, hwaddr base, int it_shift,
     s->mem_opaque = mem_opaque;
     s->memory_rw = memory_rw;
     s->it_shift = it_shift;
+    s->regs_offset = regs_offset;
     s->irq = irq;
     s->watchdog = timer_new_ns(QEMU_CLOCK_VIRTUAL, dp8393x_watchdog, s);
     s->regs[SONIC_SR] = 0x0004; /* only revision recognized by Linux */
