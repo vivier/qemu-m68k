@@ -148,6 +148,7 @@ typedef struct dp8393xState {
 
     /* Hardware */
     uint8_t it_shift;
+    uint32_t regs_offset;
     qemu_irq irq;
 #ifdef DEBUG_SONIC
     int irq_level;
@@ -488,9 +489,11 @@ static void dp8393x_do_command(dp8393xState *s, uint16_t command)
 static uint64_t dp8393x_read(void *opaque, hwaddr addr, unsigned int size)
 {
     dp8393xState *s = opaque;
-    int reg = addr >> s->it_shift;
+    int reg;
     uint16_t val = 0;
 
+    addr -= s->regs_offset;
+    reg = addr >> s->it_shift;
     switch (reg) {
         /* Update data before reading it */
         case SONIC_WT0:
@@ -521,7 +524,10 @@ static void dp8393x_write(void *opaque, hwaddr addr, uint64_t data,
                           unsigned int size)
 {
     dp8393xState *s = opaque;
-    int reg = addr >> s->it_shift;
+    int reg;
+
+    addr -= s->regs_offset;
+    reg = addr >> s->it_shift;
 
     DPRINTF("write 0x%04x to reg %s\n", (uint16_t)data, reg_names[reg]);
 
@@ -878,6 +884,7 @@ static Property dp8393x_properties[] = {
     DEFINE_NIC_PROPERTIES(dp8393xState, conf),
     DEFINE_PROP_PTR("dma_mr", dp8393xState, dma_mr),
     DEFINE_PROP_UINT8("it_shift", dp8393xState, it_shift, 0),
+    DEFINE_PROP_UINT32("regs_offset", dp8393xState, regs_offset, 0),
     DEFINE_PROP_END_OF_LIST(),
 };
 
