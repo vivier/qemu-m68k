@@ -21,6 +21,7 @@
 #include "qemu-timer.h"
 #include "net.h"
 #include "mips.h"
+#include "dp8393x.h"
 
 //#define DEBUG_SONIC
 
