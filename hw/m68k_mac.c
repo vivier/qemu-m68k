@@ -97,6 +97,8 @@ static void q800_glue_set_irq(void *opaque, int irq, int level)
 
 static void main_cpu_reset(void *opaque)
 {
+    M68kCPU *cpu = opaque;
+    cpu_reset(CPU(cpu));
 }
 
 static void q800_init(ram_addr_t ram_size,
@@ -106,7 +108,7 @@ static void q800_init(ram_addr_t ram_size,
                        const char *initrd_filename,
                        const char *cpu_model)
 {
-    CPUM68KState *env = NULL;
+    M68kCPU *cpu = NULL;
     int linux_boot;
     int32_t kernel_size;
     uint64_t elf_entry;
@@ -135,12 +137,12 @@ static void q800_init(ram_addr_t ram_size,
     if (cpu_model == NULL) {
         cpu_model = "m68040";
     }
-    env = cpu_init(cpu_model);
-    if (!env) {
+    cpu = cpu_m68k_init(cpu_model);
+    if (!cpu) {
             hw_error("qemu: unable to find m68k CPU definition\n");
             exit(1);
     }
-    qemu_register_reset(main_cpu_reset, env);
+    qemu_register_reset(main_cpu_reset, cpu);
 
     ram = g_malloc(sizeof (*ram));
     memory_region_init_ram(ram, "m68k_mac.ram", ram_size);
@@ -149,7 +151,7 @@ static void q800_init(ram_addr_t ram_size,
     /* Glue */
 
     s = (q800_glue_state_t *)g_malloc0(sizeof(q800_glue_state_t));
-    s->env = env;
+    s->env = &cpu->env;
     pic = qemu_allocate_irqs(q800_glue_set_irq, s, 6);
 
     /* VIA */

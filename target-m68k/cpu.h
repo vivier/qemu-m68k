@@ -191,7 +191,7 @@ typedef struct CPUM68KState {
 #include "cpu-qom.h"
 
 void m68k_tcg_init(void);
-CPUM68KState *cpu_m68k_init(const char *cpu_model);
+M68kCPU *cpu_m68k_init(const char *cpu_model);
 int cpu_m68k_exec(CPUM68KState *s);
 void do_interrupt(CPUM68KState *env1);
 void do_interrupt_m68k_hardirq(CPUM68KState *env1);
@@ -329,6 +329,7 @@ enum {
 #define MACSR_V     0x002
 #define MACSR_EV    0x001
 
+void cpu_m68k_register_internal(CPUM68KState *env, const char *cpu_model);
 void m68k_set_irq_level(CPUM68KState *env, int level, uint8_t vector);
 void m68k_set_macsr(CPUM68KState *env, uint32_t val);
 void m68k_switch_sp(CPUM68KState *env);
@@ -372,7 +373,14 @@ void m68k_cpu_list(FILE *f, fprintf_function cpu_fprintf);
 
 void register_m68k_insns (CPUM68KState *env);
 
-#define cpu_init cpu_m68k_init
+static inline CPUM68KState *cpu_init(const char *cpu_model)
+{
+    M68kCPU *cpu = cpu_m68k_init(cpu_model);
+    if (cpu) {
+        return &cpu->env;
+    }
+    return NULL;
+}
 #define cpu_exec cpu_m68k_exec
 #define cpu_gen_code cpu_m68k_gen_code
 #define cpu_signal_handler cpu_m68k_signal_handler
