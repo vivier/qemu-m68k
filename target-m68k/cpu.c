@@ -58,8 +58,6 @@ static void m68k_cpu_reset(CPUState *s)
     env->sr = 0x2700;
     env->vbr = 0;
     env->current_sp = M68K_ISP;
-    env->aregs[7] = ldl_phys(s->as, 0);
-    env->pc = ldl_phys(s->as, 4);
 #endif
 
     for (i = 0; i < 8; i++) {

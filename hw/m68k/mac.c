@@ -40,6 +40,12 @@
 
 static void main_cpu_reset(void *opaque)
 {
+    M68kCPU *cpu = opaque;
+    CPUState *cs = CPU(cpu);
+
+    cpu_reset(cs);
+    cpu->env.aregs[7] = ldl_phys(cs->as, 0);
+    cpu->env.pc = ldl_phys(cs->as, 4);
 }
 
 static void q800_init(QEMUMachineInitArgs *args)
