@@ -199,39 +199,15 @@ static int m68k_fpu_gdb_set_reg(CPUM68KState *env, uint8_t *mem_buf, int n)
     return 0;
 }
 
-CPUM68KState *cpu_m68k_init(const char *cpu_model)
+void cpu_m68k_register_internal(CPUM68KState *env, const char *cpu_model)
 {
-    M68kCPU *cpu;
-    CPUM68KState *env;
-    static int inited;
-
-    if (object_class_by_name(cpu_model) == NULL) {
-        return NULL;
+    if (m68k_feature (env, M68K_FEATURE_CF_FPU)) {
+        gdb_register_coprocessor(env, cf_fpu_gdb_get_reg, cf_fpu_gdb_set_reg,
+                                 11, "cf-fp.xml", 18);
+    } else if (m68k_feature (env, M68K_FEATURE_FPU)) {
+        gdb_register_coprocessor(env, m68k_fpu_gdb_get_reg,
+                                 m68k_fpu_gdb_set_reg, 11, "m68k-fp.xml", 18);
     }
-    cpu = M68K_CPU(object_new(cpu_model));
-    env = &cpu->env;
-
-    if (!inited) {
-        m68k_tcg_init();
-    }
-
-    env->cpu_model_str = cpu_model;
-
-    register_m68k_insns(env);
-    /* TODO: Add [E]MAC registers.  */
-
-    if (!inited) {
-        if (m68k_feature (env, M68K_FEATURE_CF_FPU)) {
-            gdb_register_coprocessor(env, cf_fpu_gdb_get_reg, cf_fpu_gdb_set_reg,
-                                     11, "cf-fp.xml", 18);
-        } else if (m68k_feature (env, M68K_FEATURE_FPU)) {
-            gdb_register_coprocessor(env, m68k_fpu_gdb_get_reg,
-				     m68k_fpu_gdb_set_reg, 11, "m68k-fp.xml", 18);
-        }
-    }
-    qemu_init_vcpu(env);
-    inited = 1;
-    return env;
 }
 
 void cpu_m68k_flush_flags(CPUM68KState *env, int cc_op)

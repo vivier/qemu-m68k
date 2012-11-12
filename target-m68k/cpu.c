@@ -20,6 +20,7 @@
 
 #include "cpu.h"
 #include "qemu-common.h"
+#include "gdbstub.h"
 
 
 static void m68k_set_feature(CPUM68KState *env, int feature)
@@ -233,6 +234,33 @@ static void m68k_cpu_register_types(void)
     for (i = 0; i < ARRAY_SIZE(m68k_cpus); i++) {
         register_cpu_type(&m68k_cpus[i]);
     }
+}
+
+M68kCPU *cpu_m68k_init(const char *cpu_model)
+{
+    M68kCPU *cpu;
+    static int inited;
+
+    if (object_class_by_name(cpu_model) == NULL) {
+        return NULL;
+    }
+    cpu = M68K_CPU(object_new(cpu_model));
+
+    if (!inited) {
+        m68k_tcg_init();
+    }
+
+    cpu->env.cpu_model_str = cpu_model;
+
+    register_m68k_insns(&cpu->env);
+    /* TODO: Add [E]MAC registers.  */
+
+    if (!inited) {
+        cpu_m68k_register_internal(&cpu->env, cpu_model);
+    }
+    qemu_init_vcpu(&cpu->env);
+    inited = 1;
+    return cpu;
 }
 
 type_init(m68k_cpu_register_types)
