@@ -40,11 +40,15 @@
 
 static void main_cpu_reset(void *opaque)
 {
+    M68kCPU *cpu = opaque;
+    cpu_reset(CPU(cpu));
+    cpu->env.aregs[7] = ldl_phys(0);
+    cpu->env.pc = ldl_phys(4);
 }
 
 static void q800_init(QEMUMachineInitArgs *args)
 {
-    CPUM68KState *env = NULL;
+    M68kCPU *cpu = NULL;
     int linux_boot;
     int32_t kernel_size;
     uint64_t elf_entry;
@@ -65,12 +69,12 @@ static void q800_init(QEMUMachineInitArgs *args)
     if (cpu_model == NULL) {
         cpu_model = "m68040";
     }
-    env = cpu_init(cpu_model);
-    if (!env) {
+    cpu = cpu_m68k_init(cpu_model);
+    if (!cpu) {
             hw_error("qemu: unable to find m68k CPU definition\n");
             exit(1);
     }
-    qemu_register_reset(main_cpu_reset, env);
+    qemu_register_reset(main_cpu_reset, cpu);
 
     ram = g_malloc(sizeof (*ram));
     memory_region_init_ram(ram, NULL, "m68k_mac.ram", ram_size);
