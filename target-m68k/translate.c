@@ -967,12 +967,20 @@ static void gen_op_load_ea_FP0(CPUM68KState *env, DisasContext *s,
         break;
     case 4: /* Indirect predecrememnt.  */
         addr = gen_lea(env, s, insn, opsize);
+        if (IS_NULL_QREG(addr)) {
+            gen_addr_fault(s);
+            return;
+        }
         gen_load_FP0(s, opsize, addr);
         tcg_gen_mov_i32(AREG(insn, 0), addr);
         break;
     case 5: /* Indirect displacement.  */
     case 6: /* Indirect index + displacement.  */
         addr = gen_lea(env, s, insn, opsize);
+        if (IS_NULL_QREG(addr)) {
+            gen_addr_fault(s);
+            return;
+        }
         gen_load_FP0(s, opsize, addr);
         break;
     case 7: /* Other */
@@ -982,6 +990,10 @@ static void gen_op_load_ea_FP0(CPUM68KState *env, DisasContext *s,
         case 2: /* pc displacement  */
         case 3: /* pc index+displacement.  */
             addr = gen_lea(env, s, insn, opsize);
+            if (IS_NULL_QREG(addr)) {
+                gen_addr_fault(s);
+                return;
+            }
             gen_load_FP0(s, opsize, addr);
             break;
         case 4: /* Immediate.  */
@@ -1054,12 +1066,20 @@ static void gen_op_store_ea_FP0(CPUM68KState *env, DisasContext *s,
         break;
     case 4: /* Indirect predecrememnt.  */
         addr = gen_lea(env, s, insn, opsize);
+        if (IS_NULL_QREG(addr)) {
+            gen_addr_fault(s);
+            return;
+        }
         gen_store_FP0(s, opsize, addr);
         tcg_gen_mov_i32(AREG(insn, 0), addr);
         break;
     case 5: /* Indirect displacement.  */
     case 6: /* Indirect index + displacement.  */
         addr = gen_lea(env, s, insn, opsize);
+        if (IS_NULL_QREG(addr)) {
+            gen_addr_fault(s);
+            return;
+        }
         gen_store_FP0(s, opsize, addr);
         break;
     case 7: /* Other */
@@ -1067,6 +1087,10 @@ static void gen_op_store_ea_FP0(CPUM68KState *env, DisasContext *s,
         case 0: /* Absolute short.  */
         case 1: /* Absolute long.  */
             addr = gen_lea(env, s, insn, opsize);
+            if (IS_NULL_QREG(addr)) {
+                gen_addr_fault(s);
+                return;
+            }
             gen_store_FP0(s, opsize, addr);
             break;
         case 2: /* pc displacement  */
@@ -1610,6 +1634,7 @@ static void gen_push(DisasContext *s, TCGv val)
     tcg_gen_subi_i32(tmp, QREG_SP, 4);
     gen_store(s, OS_LONG, tmp, val);
     tcg_gen_mov_i32(QREG_SP, tmp);
+    tcg_temp_free(tmp);
 }
 
 DISAS_INSN(movem)
