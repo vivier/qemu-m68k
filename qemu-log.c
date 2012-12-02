@@ -23,7 +23,8 @@
 #ifdef WIN32
 static const char *logfilename = "qemu.log";
 #else
-static const char *logfilename = "/tmp/qemu.log";
+static char logfilenamebuf[256];
+static const char *logfilename = "/tmp/qemu-%06d.log";
 #endif
 FILE *qemu_logfile;
 int qemu_loglevel;
@@ -56,7 +57,8 @@ void qemu_set_log(int log_flags, bool use_own_buffers)
 {
     qemu_loglevel = log_flags;
     if (qemu_loglevel && !qemu_logfile) {
-        qemu_logfile = fopen(logfilename, log_append ? "a" : "w");
+	snprintf(logfilenamebuf, sizeof(logfilenamebuf), logfilename, getpid());
+        qemu_logfile = fopen(logfilenamebuf, log_append ? "a" : "w");
         if (!qemu_logfile) {
             perror(logfilename);
             _exit(1);

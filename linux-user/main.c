@@ -35,7 +35,7 @@
 #include "envlist.h"
 #include "elf.h"
 
-#define DEBUG_LOGFILE "/tmp/qemu.log"
+#define DEBUG_LOGFILE "/tmp/qemu-%d.log"
 
 char *exec_path;
 
