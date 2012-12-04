@@ -5037,6 +5037,45 @@ static int open_self_auxv(void *cpu_env, int fd)
     return 0;
 }
 
+#if defined(HOST_WORDS_BIGENDIAN) != defined(TARGET_WORDS_BIGENDIAN)
+static int open_net_route(void *cpu_env, int fd)
+{
+    FILE *fp;
+    char *line = NULL;
+    size_t len = 0;
+    ssize_t read;
+
+    fp = fopen("/proc/net/route", "r");
+    if (fp == NULL) {
+        return -EACCES;
+    }
+
+    /* read header */
+
+    read = getline(&line, &len, fp);
+    dprintf(fd, "%s", line);
+
+    /* read routes */
+
+    while ((read = getline(&line, &len, fp)) != -1) {
+        char iface[16];
+        uint32_t dest, gw, mask;
+        unsigned int flags, refcnt, use, metric, mtu, window, irtt;
+        sscanf(line, "%s\t%08x\t%08x\t%04x\t%d\t%d\t%d\t%08x\t%d\t%u\t%u\n",
+                     iface, &dest, &gw, &flags, &refcnt, &use, &metric,
+                     &mask, &mtu, &window, &irtt);
+        dprintf(fd, "%s\t%08x\t%08x\t%04x\t%d\t%d\t%d\t%08x\t%d\t%u\t%u\n",
+                iface, tswap32(dest), tswap32(gw), flags, refcnt, use,
+                metric, tswap32(mask), mtu, window, irtt);
+    }
+
+    free(line);
+    fclose(fp);
+
+    return 0;
+}
+#endif
+
 static int do_open(void *cpu_env, const char *pathname, int flags, mode_t mode)
 {
     struct fake_open {
@@ -5048,6 +5087,9 @@ static int do_open(void *cpu_env, const char *pathname, int flags, mode_t mode)
         { "/proc/self/maps", open_self_maps },
         { "/proc/self/stat", open_self_stat },
         { "/proc/self/auxv", open_self_auxv },
+#if defined(HOST_WORDS_BIGENDIAN) != defined(TARGET_WORDS_BIGENDIAN)
+        { "/proc/net/route", open_net_route },
+#endif
         { NULL, NULL }
     };
 
