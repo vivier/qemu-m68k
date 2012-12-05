@@ -3643,6 +3643,70 @@ static IOCTLEntry ioctl_entries[] = {
     { 0, 0, },
 };
 
+static void target_to_host_string (void *dst, const void *src)
+{
+#if HOST_LONG_BITS == 32 && TARGET_ABI_BITS == 32
+    if (*(uint32_t*)src == 0) {
+        *(uint32_t*)dst = 0;
+	return;
+    }
+    *(uint32_t *)dst = (uint32_t)g2h(tswap32(*(uint32_t *)src));
+#elif HOST_LONG_BITS == 64 && TARGET_ABI_BITS == 32
+    if (*(uint32_t*)src == 0) {
+        *(uint64_t*)dst = 0;
+	return;
+    }
+    *(uint64_t *)dst = (uint64_t)g2h(tswap32(*(uint32_t *)src));
+#elif HOST_LONG_BITS == 64 && TARGET_ABI_BITS == 64
+    if (*(uint64_t*)src == 0) {
+        *(uint64_t*)dst = 0;
+	return;
+    }
+    *(uint64_t *)dst = (uint64_t)g2h(tswap64(*(uint64_t *)src));
+#elif HOST_LONG_BITS == 32 && TARGET_ABI_BITS == 64
+    if (*(uint64_t*)src == 0) {
+        *(uint32_t*)dst = 0;
+	return;
+    }
+    *(uint32_t *)dst = (uint32_t)g2h(tswap64(*(uint64_t *)src));
+#endif
+}
+
+static void host_to_target_string (void *dst, const void *src)
+{
+#if HOST_LONG_BITS == 32 && TARGET_ABI_BITS == 32
+    if (*(uint32_t*)src == 0) {
+        *(uint32_t*)dst = 0;
+	return;
+    }
+    *(uint32_t *)dst = tswap32(h2g(*(uint32_t *)src));
+#elif HOST_LONG_BITS == 64 && TARGET_ABI_BITS == 32
+    if (*(uint64_t*)src == 0) {
+        *(uint32_t*)dst = 0;
+	return;
+    }
+    *(uint32_t *)dst = tswap32(h2g(*(uint64_t *)src));
+#elif HOST_LONG_BITS == 64 && TARGET_ABI_BITS == 64
+    if (*(uint64_t*)src == 0) {
+        *(uint64_t*)dst = 0;
+	return;
+    }
+    *(uint64_t *)dst = tswap64(h2g(*(uint64_t *)src));
+#elif HOST_LONG_BITS == 32 && TARGET_ABI_BITS == 64
+    if (*(uint32_t*)src == 0) {
+        *(uint64_t*)dst = 0;
+	return;
+    }
+    *(uint64_t *)dst = tswap64(h2g(*(uint32_t *)src));
+#endif
+}
+
+static const StructEntry struct_string_def = {
+    .convert = { host_to_target_string, target_to_host_string },
+    .size = { sizeof(target_long), sizeof(long) },
+    .align = { __alignof__(target_long), __alignof__(long) },
+};
+
 /* ??? Implement proper locking for ioctls.  */
 /* do_ioctl() Must return target values and target errnos. */
 static abi_long do_ioctl(int fd, abi_long cmd, abi_long arg)
