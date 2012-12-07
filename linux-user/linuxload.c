@@ -58,11 +58,6 @@ static int prepare_binprm(struct linux_binprm *bprm)
     bprm->e_uid = geteuid();
     bprm->e_gid = getegid();
 
-    /* Set-uid? */
-    if(mode & S_ISUID) {
-    	bprm->e_uid = st.st_uid;
-    }
-
     /* Set-gid? */
     /*
      * If setgid is set but no group execute bit then this
@@ -72,6 +67,17 @@ static int prepare_binprm(struct linux_binprm *bprm)
     if ((mode & (S_ISGID | S_IXGRP)) == (S_ISGID | S_IXGRP)) {
 	bprm->e_gid = st.st_gid;
     }
+#if defined(CONFIG_SUIDABLE)
+    setresgid(getgid(), bprm->e_gid, bprm->e_gid);
+#endif
+
+    /* Set-uid? */
+    if(mode & S_ISUID) {
+    	bprm->e_uid = st.st_uid;
+    }
+#if defined(CONFIG_SUIDABLE)
+    setresuid(getuid(), bprm->e_uid, bprm->e_uid);
+#endif
 
     retval = read(bprm->fd, bprm->buf, BPRM_BUF_SIZE);
     if (retval < 0) {

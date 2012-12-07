@@ -111,6 +111,7 @@ source_path=`dirname "$0"`
 cpu=""
 interp_prefix="/usr/gnemul/qemu-%M"
 static="no"
+suidable="no"
 sparc_cpu=""
 cross_prefix=""
 audio_drv_list=""
@@ -632,6 +633,9 @@ for opt do
     LDFLAGS="-static $LDFLAGS"
     QEMU_PKG_CONFIG_FLAGS="--static $QEMU_PKG_CONFIG_FLAGS"
   ;;
+  --suid-able)
+    suidable="yes"
+  ;;
   --mandir=*) mandir="$optarg"
   ;;
   --bindir=*) bindir="$optarg"
@@ -883,6 +887,11 @@ for opt do
   esac
 done
 
+if test "$suidable" = "yes" -a "$static" = "no" ; then
+    echo "ERROR: --suid-able needs --static"
+    exit 1
+fi
+
 #
 # If cpu ~= sparc and  sparc_cpu hasn't been defined, plug in the right
 # QEMU_CFLAGS/LDFLAGS (assume sparc_v8plus for 32-bit and sparc_v9 for 64-bit)
@@ -1060,6 +1069,7 @@ echo "  --install=INSTALL        use specified install [$install]"
 echo "  --python=PYTHON          use specified python [$python]"
 echo "  --smbd=SMBD              use specified smbd [$smbd]"
 echo "  --static                 enable static build [$static]"
+echo "  --suid-able              allow to use qemu with SUID bit [$suidable]"
 echo "  --mandir=PATH            install man pages in PATH"
 echo "  --datadir=PATH           install firmware in PATH$confsuffix"
 echo "  --docdir=PATH            install documentation in PATH$confsuffix"
@@ -3122,6 +3132,7 @@ echo "sparse enabled    $sparse"
 echo "strip binaries    $strip_opt"
 echo "profiler          $profiler"
 echo "static build      $static"
+echo "suid-able         $suidable"
 echo "-Werror enabled   $werror"
 if test "$darwin" = "yes" ; then
     echo "Cocoa support     $cocoa"
@@ -4131,6 +4142,10 @@ if test "$target_linux_user" = "yes" -o "$target_bsd_user" = "yes" ; then
     ldflags="$linker_script $ldflags"
     ;;
   esac
+fi
+if test "$target_linux_user" = "yes" -a "$suidable" = "yes" ; then
+  ldflags="$ldflags -Wl,--wrap=__unsetenv"
+  echo "CONFIG_SUIDABLE=y"  >> $config_target_mak
 fi
 
 echo "LDFLAGS+=$ldflags" >> $config_target_mak

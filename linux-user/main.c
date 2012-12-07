@@ -3389,6 +3389,20 @@ static int parse_args(int argc, char **argv)
     return optind;
 }
 
+#if defined(CONFIG_SUIDABLE)
+static int allow_unsetenv = 0;
+
+int __wrap___unsetenv(const char *name);
+int __real___unsetenv(const char *name);
+int
+__wrap___unsetenv(const char *name)
+{
+    if (!allow_unsetenv)
+        return 0;
+    return __real___unsetenv(name);
+}
+#endif
+
 int main(int argc, char **argv, char **envp)
 {
     const char *log_file = DEBUG_LOGFILE;
@@ -3403,6 +3417,12 @@ int main(int argc, char **argv, char **envp)
     int target_argc;
     int i;
     int ret;
+
+#if defined(CONFIG_SUIDABLE)
+    allow_unsetenv = 1;
+    seteuid(getuid());
+    setegid(getgid());
+#endif
 
     module_call_init(MODULE_INIT_QOM);
 
