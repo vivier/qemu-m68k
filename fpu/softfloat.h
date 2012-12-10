@@ -480,6 +480,7 @@ float128 floatx80_to_float128( floatx80 STATUS_PARAM );
 /*----------------------------------------------------------------------------
 | Software IEC/IEEE extended double-precision operations.
 *----------------------------------------------------------------------------*/
+
 floatx80 floatx80_round_to_int( floatx80 STATUS_PARAM );
 floatx80 floatx80_add( floatx80, floatx80 STATUS_PARAM );
 floatx80 floatx80_sub( floatx80, floatx80 STATUS_PARAM );
@@ -502,6 +503,9 @@ int floatx80_is_signaling_nan( floatx80 );
 floatx80 floatx80_maybe_silence_nan( floatx80 );
 floatx80 floatx80_scalbn( floatx80, int STATUS_PARAM );
 
+extern const floatx80 floatx80_default_inf;
+extern const floatx80 floatx80_default_nan;
+
 INLINE floatx80 floatx80_abs(floatx80 a)
 {
     a.high &= 0x7fff;
@@ -516,7 +520,8 @@ INLINE floatx80 floatx80_chs(floatx80 a)
 
 INLINE int floatx80_is_infinity(floatx80 a)
 {
-    return (a.high & 0x7fff) == 0x7fff && a.low == 0x8000000000000000LL;
+    return (a.high & 0x7fff) == floatx80_default_inf.high &&
+	   a.low == floatx80_default_inf.low;
 }
 
 INLINE int floatx80_is_neg(floatx80 a)
@@ -548,19 +553,6 @@ INLINE int floatx80_is_any_nan(floatx80 a)
 #define floatx80_e make_floatx80(0x4000, 0xadf85458a2bb4a9aULL)
 #define floatx80_log2e make_floatx80(0x3fff, 0xb8aa3b295c17f0bcULL)
 #define floatx80_10 make_floatx80(0x4002, 0xa000000000000000ULL)
-
-/*----------------------------------------------------------------------------
-| The pattern for a default generated extended double-precision NaN.
-*----------------------------------------------------------------------------*/
-extern const floatx80 floatx80_default_nan;
-
-#if defined(TARGET_M68K)
-#define floatx80_default_inf_high 0x7FFF
-#define floatx80_default_inf_low  LIT64( 0x0000000000000000 )
-#else
-#define floatx80_default_inf_high 0x7FFF
-#define floatx80_default_inf_low  LIT64( 0x8000000000000000 )
-#endif
 
 /*----------------------------------------------------------------------------
 | Software IEC/IEEE quadruple-precision conversion routines.

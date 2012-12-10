@@ -57,7 +57,8 @@ const float16 float16_default_nan = const_float16(0xFE00);
 *----------------------------------------------------------------------------*/
 #if defined(TARGET_SPARC)
 const float32 float32_default_nan = const_float32(0x7FFFFFFF);
-#elif defined(TARGET_PPC) || defined(TARGET_ARM) || defined(TARGET_ALPHA)
+#elif defined(TARGET_PPC) || defined(TARGET_ARM) || \
+      defined(TARGET_ALPHA) || defined(TARGET_M68K)
 const float32 float32_default_nan = const_float32(0x7FC00000);
 #elif SNAN_BIT_IS_ONE
 const float32 float32_default_nan = const_float32(0x7FBFFFFF);
@@ -70,7 +71,8 @@ const float32 float32_default_nan = const_float32(0xFFC00000);
 *----------------------------------------------------------------------------*/
 #if defined(TARGET_SPARC)
 const float64 float64_default_nan = const_float64(LIT64( 0x7FFFFFFFFFFFFFFF ));
-#elif defined(TARGET_PPC) || defined(TARGET_ARM) || defined(TARGET_ALPHA)
+#elif defined(TARGET_PPC) || defined(TARGET_ARM) || \
+      defined(TARGET_ALPHA) || defined(TARGET_M68K)
 const float64 float64_default_nan = const_float64(LIT64( 0x7FF8000000000000 ));
 #elif SNAN_BIT_IS_ONE
 const float64 float64_default_nan = const_float64(LIT64( 0x7FF7FFFFFFFFFFFF ));
@@ -81,21 +83,30 @@ const float64 float64_default_nan = const_float64(LIT64( 0xFFF8000000000000 ));
 /*----------------------------------------------------------------------------
 | The pattern for a default generated extended double-precision NaN.
 *----------------------------------------------------------------------------*/
-#if SNAN_BIT_IS_ONE
-#define floatx80_default_nan_high 0x7FFF
-#define floatx80_default_nan_low  LIT64( 0xBFFFFFFFFFFFFFFF )
-#else
 #if defined(TARGET_M68K)
 #define floatx80_default_nan_high 0x7FFF
-#define floatx80_default_nan_low  LIT64( 0xFFFFFFFFFFFFFFFF )
+#define floatx80_default_nan_low  LIT64( 0x4000000000000000 )
+#elif SNAN_BIT_IS_ONE
+#define floatx80_default_nan_high 0x7FFF
+#define floatx80_default_nan_low  LIT64( 0xBFFFFFFFFFFFFFFF )
 #else
 #define floatx80_default_nan_high 0xFFFF
 #define floatx80_default_nan_low  LIT64( 0xC000000000000000 )
 #endif
-#endif
 
 const floatx80 floatx80_default_nan
     = make_floatx80_init(floatx80_default_nan_high, floatx80_default_nan_low);
+
+#if defined(TARGET_M68K)
+#define floatx80_default_inf_high 0x7FFF
+#define floatx80_default_inf_low  LIT64( 0x0000000000000000 )
+#else
+#define floatx80_default_inf_high 0x7FFF
+#define floatx80_default_inf_low  LIT64( 0x8000000000000000 )
+#endif
+
+const floatx80 floatx80_default_inf
+    = make_floatx80_init(floatx80_default_inf_high, floatx80_default_inf_low);
 
 /*----------------------------------------------------------------------------
 | The pattern for a default generated quadruple-precision NaN.  The `high' and
@@ -850,7 +861,9 @@ int floatx80_is_signaling_nan( floatx80 a )
 floatx80 floatx80_maybe_silence_nan( floatx80 a )
 {
     if (floatx80_is_signaling_nan(a)) {
-#if SNAN_BIT_IS_ONE
+#if defined(TARGET_M68K)
+        a.low |= LIT64( 0x4000000000000000 );
+#elif SNAN_BIT_IS_ONE
 #  if defined(TARGET_MIPS) || defined(TARGET_SH4) || defined(TARGET_UNICORE32)
         a.low = floatx80_default_nan_low;
         a.high = floatx80_default_nan_high;
