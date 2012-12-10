@@ -114,7 +114,8 @@ float32 float32_default_nan(float_status *status)
 #if defined(TARGET_SPARC)
     return const_float32(0x7FFFFFFF);
 #elif defined(TARGET_PPC) || defined(TARGET_ARM) || defined(TARGET_ALPHA) || \
-      defined(TARGET_XTENSA) || defined(TARGET_S390X) || defined(TARGET_TRICORE)
+      defined(TARGET_XTENSA) || defined(TARGET_S390X) || \
+      defined(TARGET_TRICORE) || defined(TARGET_M68K)
     return const_float32(0x7FC00000);
 #else
     if (status->snan_bit_is_one) {
@@ -137,7 +138,7 @@ float64 float64_default_nan(float_status *status)
 #if defined(TARGET_SPARC)
     return const_float64(LIT64(0x7FFFFFFFFFFFFFFF));
 #elif defined(TARGET_PPC) || defined(TARGET_ARM) || defined(TARGET_ALPHA) || \
-      defined(TARGET_S390X)
+      defined(TARGET_S390X) || defined(TARGET_M68K)
     return const_float64(LIT64(0x7FF8000000000000));
 #else
     if (status->snan_bit_is_one) {
@@ -158,18 +159,18 @@ float64 float64_default_nan(float_status *status)
 floatx80 floatx80_default_nan(float_status *status)
 {
     floatx80 r;
+#if defined(TARGET_M68K)
+    r.low = LIT64(0x4000000000000000);
+    r.high = 0x7FFF;
+#else
     if (status->snan_bit_is_one) {
         r.low = LIT64(0xBFFFFFFFFFFFFFFF);
         r.high = 0x7FFF;
     } else {
-#if defined(TARGET_M68K)
-        r.low = LIT64(0xFFFFFFFFFFFFFFFF);
-        r.high = 0x7FFF;
-#else
         r.low = LIT64(0xC000000000000000);
         r.high = 0xFFFF;
-#endif
     }
+#endif
     return r;
 }
 
@@ -1042,12 +1043,16 @@ int floatx80_is_signaling_nan(floatx80 a, float_status *status)
 floatx80 floatx80_maybe_silence_nan(floatx80 a, float_status *status)
 {
     if (floatx80_is_signaling_nan(a, status)) {
+#if defined(TARGET_M68K)
+        a.low |= LIT64( 0x4000000000000000 );
+#else
         if (status->snan_bit_is_one) {
             a = floatx80_default_nan(status);
         } else {
             a.low |= LIT64(0xC000000000000000);
             return a;
         }
+#endif
     }
     return a;
 }
