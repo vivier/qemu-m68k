@@ -1143,7 +1143,8 @@ void HELPER(extf32_FP0)(CPUM68KState *env)
 {
     floatx80 res;
 
-    DBG_FPUH("extf32_FP0 %f", FLOAT(FP0_to_float32(env)));
+    DBG_FPUH("extf32_FP0 %f %08x", FLOAT(FP0_to_float32(env)),
+                                   FP0_to_int32(env));
     res = float32_to_floatx80(FP0_to_float32(env), &env->fp_status);
     DBG_FPU(" = %Lg\n", floatx80_to_ldouble(res));
 
@@ -1633,12 +1634,37 @@ void HELPER(sincos_FP0_FP1)(CPUM68KState *env)
     floatx80_to_FP1(env, res);
 }
 
+static void set_fpcc(CPUM68KState *env, floatx80 val)
+{
+    uint32_t fpcc = 0;
+
+    if (floatx80_is_any_nan(val)) {
+        fpcc |= FCCF_A;
+    }
+    if (floatx80_is_infinity(val)) {
+        fpcc |= FCCF_I;
+    }
+    if (floatx80_is_neg(val)) {
+        fpcc |= FCCF_N;
+    }
+    if (floatx80_is_zero(val)) {
+        fpcc |= FCCF_Z;
+    }
+
+    DBG_FPU("FPCC 0x%02x %c%c%c%c\n", fpcc >> FCCF_SHIFT,
+            fpcc & FCCF_N ? 'N' : '-',
+            fpcc & FCCF_Z ? 'Z' : '-',
+            fpcc & FCCF_I ? 'I' : '-',
+            fpcc & FCCF_A ? 'A' : '-');
+    env->fpsr = (env->fpsr & ~FCCF_MASK) | fpcc;
+}
+
 void HELPER(fcmp_FP0_FP1)(CPUM68KState *env)
 {
     /* ??? This may incorrectly raise exceptions.  */
     /* ??? Should flush denormals to zero.  */
     floatx80 res;
-    DBG_FPUH("cmp_FP0_FP1 %Lg %Lg", floatx80_to_ldouble(FP0_to_floatx80(env)),
+    DBG_FPU("cmp_FP0_FP1 %Lg %Lg\n", floatx80_to_ldouble(FP0_to_floatx80(env)),
             floatx80_to_ldouble(FP1_to_floatx80(env)));
     res = floatx80_sub(FP1_to_floatx80(env), FP0_to_floatx80(env),
                        &env->fp_status);
@@ -1651,26 +1677,25 @@ void HELPER(fcmp_FP0_FP1)(CPUM68KState *env)
                 res = floatx80_chs(res);
         }
     }
-    DBG_FPU(" = %Lg\n", floatx80_to_ldouble(res));
-    floatx80_to_FP0(env, res);
+
+    set_fpcc(env, res);
 }
 
-uint32_t HELPER(compare_FP0)(CPUM68KState *env)
+void HELPER(compare_FP0)(CPUM68KState *env)
 {
-    uint32_t res;
+    DBG_FPU("compare_FP0 %Lg\n", floatx80_to_ldouble(FP0_to_floatx80(env)));
+    set_fpcc(env, FP0_to_floatx80(env));
+}
 
-    DBG_FPUH("compare_FP0 %Lg", floatx80_to_ldouble(FP0_to_floatx80(env)));
-    res = float64_compare_quiet(floatx80_to_float64(FP0_to_floatx80(env),
-                                                    &env->fp_status),
-				float64_zero, &env->fp_status);
-    DBG_FPU(" = %d\n", res);
-    return res;
+void HELPER(update_fpsr)(CPUM68KState *env)
+{
 }
 
 void HELPER(fmovem)(CPUM68KState *env, uint32_t opsize, uint32_t mode, uint32_t mask)
 {
     fprintf(stderr, "MISSING HELPER fmovem\n");
 }
+
 /* MAC unit.  */
 /* FIXME: The MAC unit implementation is a bit of a mess.  Some helpers
    take values,  others take register numbers and manipulate the contents
