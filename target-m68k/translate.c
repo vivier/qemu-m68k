@@ -3708,6 +3708,7 @@ DISAS_INSN(fpu)
     case 3: /* fmove out */
         opsize = ext_opsize(ext, 10);
         gen_op_load_fpr_FP0(REG(ext, 7));
+        gen_helper_compare_FP0(cpu_env);
         gen_op_store_ea_FP0(env, s, insn, opsize);
         return;
     case 4: /* fmove to control register.  */
@@ -3732,6 +3733,7 @@ DISAS_INSN(fpu)
             cpu_abort(NULL, "Unimplemented: fmove from control FPIAR");
             goto undef;
         case 2: /* FPSR */
+            gen_helper_update_fpsr(cpu_env);
             DEST_EA(env, insn, OS_LONG, QEMU_FPSR, NULL);
             return;
         default:
@@ -3872,9 +3874,7 @@ DISAS_INSN(fpu)
     case 0x38: /* fcmp */
         gen_op_load_fpr_FP1(REG(ext, 7));
         gen_helper_fcmp_FP0_FP1(cpu_env);
-        set_dest = 0;
-        round = 0;
-        break;
+        return;
     case 0x3a: /* ftst */
         set_dest = 0;
         round = 0;
@@ -3882,6 +3882,7 @@ DISAS_INSN(fpu)
     default:
         goto undef;
     }
+    gen_helper_compare_FP0(cpu_env);
     if (round) {
         if (opmode & 0x40) {
             if ((opmode & 0x4) != 0)
@@ -3910,60 +3911,121 @@ undef:
 
 static void gen_fjmpcc(DisasContext *s, int cond, int l1)
 {
-    TCGv flag;
+    TCGv tmp;
 
     /* TODO: Raise BSUN exception.  */
-    flag = tcg_temp_new();
-    gen_helper_compare_FP0(flag, cpu_env);
+
     /* Jump to l1 if condition is true.  */
     switch (cond) {
-    case 0: /* f */
+    case 0:  /* False */
+    case 16: /* Signaling false */
         break;
-    case 1: /* eq (=0) */
-        tcg_gen_brcond_i32(TCG_COND_EQ, flag, tcg_const_i32(0), l1);
+    case 1:  /* Equal Z */
+    case 17: /* Signaling Equal Z */
+        tmp = tcg_temp_new();
+        tcg_gen_andi_i32(tmp, QREG_FPSR, FCCF_Z);
+        tcg_gen_brcondi_i32(TCG_COND_NE, tmp, 0, l1);
         break;
-    case 2: /* ogt (=1) */
-        tcg_gen_brcond_i32(TCG_COND_EQ, flag, tcg_const_i32(1), l1);
+    case 2: /* Ordered Greater Than !(A || Z || N) */
+    case 18:
+        tmp = tcg_temp_new();
+        tcg_gen_andi_i32(tmp, QREG_FPSR,
+                         FCCF_A | FCCF_Z | FCCF_N);
+        tcg_gen_brcondi_i32(TCG_COND_EQ, tmp, 0, l1);
         break;
-    case 3: /* oge (=0 or =1) */
-        tcg_gen_brcond_i32(TCG_COND_LEU, flag, tcg_const_i32(1), l1);
+    case 3: /* Ordered Greater Than or Equal Z || !(A || N) */
+    case 19:
+        assert(FCCF_A == (FCCF_N >> 3));
+        tmp = tcg_temp_new();
+        tcg_gen_shli_i32(tmp, QREG_FPSR, 3);
+        tcg_gen_or_i32(tmp, tmp, QREG_FPSR);
+        tcg_gen_xori_i32(tmp, tmp, FCCF_N);
+        tcg_gen_andi_i32(tmp, tmp, FCCF_N | FCCF_Z);
+        tcg_gen_brcondi_i32(TCG_COND_NE, tmp, 0, l1);
         break;
-    case 4: /* olt (=-1) */
-        tcg_gen_brcond_i32(TCG_COND_LT, flag, tcg_const_i32(0), l1);
+    case 4: /* Ordered Less Than !(!N || A || Z); */
+    case 20:
+        tmp = tcg_temp_new();
+        tcg_gen_xori_i32(tmp, QREG_FPSR, FCCF_N);
+        tcg_gen_andi_i32(tmp, tmp, FCCF_N | FCCF_A | FCCF_Z);
+        tcg_gen_brcondi_i32(TCG_COND_EQ, tmp, 0, l1);
         break;
-    case 5: /* ole (=-1 or =0) */
-        tcg_gen_brcond_i32(TCG_COND_LE, flag, tcg_const_i32(0), l1);
+    case 5: /* Ordered Less Than or Equal Z || (N && !A) */
+    case 21:
+        assert(FCCF_A == (FCCF_N >> 3));
+        tmp = tcg_temp_new();
+        tcg_gen_xori_i32(tmp, QREG_FPSR, FCCF_A);
+        tcg_gen_shli_i32(tmp, tmp, 3);
+        tcg_gen_ori_i32(tmp, tmp, FCCF_Z);
+        tcg_gen_and_i32(tmp, tmp, QREG_FPSR);
+        tcg_gen_brcondi_i32(TCG_COND_NE, tmp, 0, l1);
         break;
-    case 6: /* ogl (=-1 or =1) */
-        tcg_gen_andi_i32(flag, flag, 1);
-        tcg_gen_brcond_i32(TCG_COND_NE, flag, tcg_const_i32(0), l1);
+    case 6: /* Ordered Greater or Less Than !(A || Z) */
+    case 22:
+        tmp = tcg_temp_new();
+        tcg_gen_andi_i32(tmp, QREG_FPSR, FCCF_A | FCCF_Z);
+        tcg_gen_brcondi_i32(TCG_COND_EQ, tmp, 0, l1);
         break;
-    case 7: /* or (<2) */
-        tcg_gen_brcond_i32(TCG_COND_LT, flag, tcg_const_i32(2), l1);
+    case 7: /* Ordered !A */
+    case 23:
+        tmp = tcg_temp_new();
+        tcg_gen_andi_i32(tmp, QREG_FPSR, FCCF_A);
+        tcg_gen_brcondi_i32(TCG_COND_EQ, tmp, 0, l1);
         break;
-    case 8: /* un (=2) */
-        tcg_gen_brcond_i32(TCG_COND_EQ, flag, tcg_const_i32(2), l1);
+    case 8: /* Unordered A */
+    case 24:
+        tmp = tcg_temp_new();
+        tcg_gen_andi_i32(tmp, QREG_FPSR, FCCF_A);
+        tcg_gen_brcondi_i32(TCG_COND_NE, tmp, 0, l1);
         break;
-    case 9: /* ueq (=0 or =2) */
-        tcg_gen_andi_i32(flag, flag, 1);
-        tcg_gen_brcond_i32(TCG_COND_EQ, flag, tcg_const_i32(0), l1);
+    case 9: /* Unordered or Equal A || Z */
+    case 25:
+        tmp = tcg_temp_new();
+        tcg_gen_andi_i32(tmp, QREG_FPSR, FCCF_A | FCCF_Z);
+        tcg_gen_brcondi_i32(TCG_COND_NE, tmp, 0, l1);
         break;
-    case 10: /* ugt (>0) */
-        tcg_gen_brcond_i32(TCG_COND_GT, flag, tcg_const_i32(0), l1);
+    case 10: /* Unordered or Greater Than A || !(N || Z)) */
+    case 26:
+        assert(FCCF_Z == (FCCF_N >> 1));
+        tmp = tcg_temp_new();
+        tcg_gen_shli_i32(tmp, QREG_FPSR, 1);
+        tcg_gen_or_i32(tmp, tmp, QREG_FPSR);
+        tcg_gen_xori_i32(tmp, tmp, FCCF_N);
+        tcg_gen_andi_i32(tmp, tmp, FCCF_N | FCCF_A);
+        tcg_gen_brcondi_i32(TCG_COND_NE, tmp, 0, l1);
         break;
-    case 11: /* uge (>=0) */
-        tcg_gen_brcond_i32(TCG_COND_GE, flag, tcg_const_i32(0), l1);
+    case 11: /* Unordered or Greater or Equal A || Z || N */
+    case 13: /* Unordered or Less or Equal A || Z || N */
+    case 29:
+        tmp = tcg_temp_new();
+        tcg_gen_andi_i32(tmp, QREG_FPSR, FCCF_A | FCCF_Z | FCCF_N);
+        tcg_gen_brcondi_i32(TCG_COND_NE, tmp, 0, l1);
         break;
-    case 12: /* ult (=-1 or =2) */
-        tcg_gen_brcond_i32(TCG_COND_GEU, flag, tcg_const_i32(2), l1);
+    case 27: /* Not Less Than A || Z || !N */
+        tmp = tcg_temp_new();
+        tcg_gen_andi_i32(tmp, QREG_FPSR, FCCF_A | FCCF_Z | FCCF_N);
+        tcg_gen_xori_i32(tmp, tmp, FCCF_N);
+        tcg_gen_brcondi_i32(TCG_COND_NE, tmp, 0, l1);
         break;
-    case 13: /* ule (!=1) */
-        tcg_gen_brcond_i32(TCG_COND_NE, flag, tcg_const_i32(1), l1);
+    case 12: /* Unordered or Less Than A || (N && !Z) */
+    case 28:
+        assert(FCCF_Z == (FCCF_N >> 1));
+        tmp = tcg_temp_new();
+        tcg_gen_xori_i32(tmp, QREG_FPSR, FCCF_Z);
+        tcg_gen_shli_i32(tmp, tmp, 1);
+        tcg_gen_ori_i32(tmp, tmp, FCCF_A);
+        tcg_gen_and_i32(tmp, tmp, QREG_FPSR);
+        tcg_gen_andi_i32(tmp, tmp, FCCF_A | FCCF_N);
+        tcg_gen_brcondi_i32(TCG_COND_NE, tmp, 0, l1);
         break;
-    case 14: /* ne (!=0) */
-        tcg_gen_brcond_i32(TCG_COND_NE, flag, tcg_const_i32(0), l1);
+    case 14: /* Not Equal !Z */
+    case 30: /* Signaling Not Equal !Z */
+        tmp = tcg_temp_new();
+        tcg_gen_andi_i32(tmp, QREG_FPSR, FCCF_Z);
+        tcg_gen_brcondi_i32(TCG_COND_EQ, tmp, 0, l1);
         break;
-    case 15: /* t */
+    case 15: /* True */
+    case 31: /* Signaling True */
         tcg_gen_br(l1);
         break;
     }
@@ -3984,7 +4046,7 @@ DISAS_INSN(fbcc)
     }
 
     l1 = gen_new_label();
-    gen_fjmpcc(s, insn & 0xf, l1);
+    gen_fjmpcc(s, insn & 0x3f, l1);
     gen_jmp_tb(s, 0, s->pc);
     gen_set_label(l1);
     gen_jmp_tb(s, 1, addr + offset);
@@ -4008,7 +4070,7 @@ DISAS_INSN(fscc_mem)
     tcg_gen_mov_i32(addr, taddr);
     l1 = gen_new_label();
     l2 = gen_new_label();
-    gen_fjmpcc(s, ext & 0xf, l1);
+    gen_fjmpcc(s, ext & 0x3f, l1);
     gen_store(s, OS_BYTE, addr, tcg_const_i32(0x00));
     tcg_gen_br(l2);
     gen_set_label(l1);
@@ -4029,7 +4091,7 @@ DISAS_INSN(fscc_reg)
 
     l1 = gen_new_label();
     tcg_gen_ori_i32(reg, reg, 0x000000ff);
-    gen_fjmpcc(s, ext & 0xf, l1);
+    gen_fjmpcc(s, ext & 0x3f, l1);
     tcg_gen_andi_i32(reg, reg, 0xffffff00);
     gen_set_label(l1);
 }
