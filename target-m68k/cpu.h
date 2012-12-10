@@ -223,6 +223,13 @@ enum {
 #define MACSR_V     0x002
 #define MACSR_EV    0x001
 
+#define FCCF_SHIFT 24
+#define FCCF_MASK  (0xff << FCCF_SHIFT)
+#define FCCF_A     (0x01 << FCCF_SHIFT) /* Not-A-Number */
+#define FCCF_I     (0x02 << FCCF_SHIFT) /* Infinity */
+#define FCCF_Z     (0x04 << FCCF_SHIFT) /* Zero */
+#define FCCF_N     (0x08 << FCCF_SHIFT) /* Negative */
+
 void m68k_set_irq_level(CPUM68KState *env, int level, uint8_t vector);
 void m68k_set_macsr(CPUM68KState *env, uint32_t val);
 void m68k_switch_sp(CPUM68KState *env);
