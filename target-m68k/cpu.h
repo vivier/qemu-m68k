@@ -205,6 +205,13 @@ enum {
 #define M68K_SSP    0
 #define M68K_USP    1
 
+#define FCCF_SHIFT 24
+#define FCCF_MASK  (0xff << FCCF_SHIFT)
+#define FCCF_A     (0x01 << FCCF_SHIFT) /* Not-A-Number */
+#define FCCF_I     (0x02 << FCCF_SHIFT) /* Infinity */
+#define FCCF_Z     (0x04 << FCCF_SHIFT) /* Zero */
+#define FCCF_N     (0x08 << FCCF_SHIFT) /* Negative */
+
 /* CACR fields are implementation defined, but some bits are common.  */
 #define M68K_CACR_EUSP  0x10
 
