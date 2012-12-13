@@ -3713,8 +3713,10 @@ DISAS_INSN(fpu)
             SRC_EA(env, val, OS_LONG, 0, NULL);
             gen_helper_set_fpcr(cpu_env, val);
             return;
-        case 1: /* FPIAR */
         case 2: /* FPSR */
+            SRC_EA(env, QEMU_FPSR, OS_LONG, 0, NULL);
+            return;
+        case 1: /* FPIAR */
         default:
             cpu_abort(NULL, "Unimplemented: fmove to control %d",
                       (ext >> 10) & 7);
