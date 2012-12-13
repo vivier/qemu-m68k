@@ -2850,7 +2850,7 @@ static inline abi_long do_msgrcv(int msqid, abi_long msgp,
         return -TARGET_EFAULT;
 
     host_mb = g_malloc(msgsz+sizeof(long));
-    ret = get_errno(msgrcv(msqid, host_mb, msgsz, tswapal(msgtyp), msgflg));
+    ret = get_errno(msgrcv(msqid, host_mb, msgsz, msgtyp, msgflg));
 
     if (ret > 0) {
         abi_ulong target_mtext_addr = msgp + sizeof(abi_ulong);
@@ -3142,7 +3142,7 @@ static abi_long do_ipc(unsigned int call, int first,
                     break;
                 }
 
-                ret = do_msgrcv(first, tmp->msgp, second, tmp->msgtyp, third);
+                ret = do_msgrcv(first, tswapal(tmp->msgp), second, tswapal(tmp->msgtyp), third);
 
                 unlock_user_struct(tmp, ptr, 0);
                 break;
