@@ -299,6 +299,9 @@ static inline void cpu_clone_regs(CPUM68KState *env, target_ulong newsp)
         env->aregs[7] = newsp;
     env->dregs[0] = 0;
 }
+static inline void cpu_set_tls(CPUM68KState *env, target_ulong newtls)
+{
+}
 #endif
 
 static inline void cpu_get_tb_cpu_state(CPUM68KState *env, target_ulong *pc,

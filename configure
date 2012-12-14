@@ -3747,6 +3747,7 @@ case "$target_arch2" in
     target_int_alignment=2
     target_long_alignment=2
     target_llong_alignment=2
+    target_nptl="yes"
   ;;
   microblaze|microblazeel)
     TARGET_ARCH=microblaze
