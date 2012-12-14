@@ -240,6 +240,9 @@ static inline void cpu_clone_regs(CPUM68KState *env, target_ulong newsp)
         env->aregs[7] = newsp;
     env->dregs[0] = 0;
 }
+static inline void cpu_set_tls(CPUM68KState *env, target_ulong newtls)
+{
+}
 #endif
 
 #include "exec/cpu-all.h"
