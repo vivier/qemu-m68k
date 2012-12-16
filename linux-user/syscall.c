@@ -7422,7 +7422,15 @@ abi_long do_syscall(void *cpu_env, int num, abi_long arg1,
                         break;
                     de->d_reclen = tswap16(reclen);
                     tswap64s((uint64_t *)&de->d_ino);
+#if defined(TARGET_M68K)
+                    /* d_off is not a real offset, but a 64bit value
+                     * which generates overflow error in glibc
+                     * setting it to 0 allows to ignore it
+                     */
+                    de->d_off = 0;
+#else
                     tswap64s((uint64_t *)&de->d_off);
+#endif
                     de = (struct linux_dirent64 *)((char *)de + reclen);
                     len -= reclen;
                 }
