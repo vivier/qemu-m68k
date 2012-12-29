@@ -1530,6 +1530,28 @@ static abi_long do_setsockopt(int sockfd, int level, int optname,
                 unlock_user_struct(tfprog, optval_addr, 1);
                 return ret;
         }
+        case TARGET_SO_RCVTIMEO:
+        {
+                struct timeval tv;
+
+                optname = SO_RCVTIMEO;
+
+set_timeout:
+                if (optlen != sizeof(struct target_timeval)) {
+                    return -TARGET_EINVAL;
+                }
+
+                if (copy_from_user_timeval(&tv, optval_addr)) {
+                    return -TARGET_EFAULT;
+                }
+
+                ret = get_errno(setsockopt(sockfd, SOL_SOCKET, optname,
+                                &tv, sizeof(tv)));
+                return ret;
+        }
+        case TARGET_SO_SNDTIMEO:
+                optname = SO_SNDTIMEO;
+                goto set_timeout;
             /* Options with 'int' argument.  */
         case TARGET_SO_DEBUG:
 		optname = SO_DEBUG;
@@ -1580,12 +1602,6 @@ static abi_long do_setsockopt(int sockfd, int level, int optname,
 		break;
         case TARGET_SO_RCVLOWAT:
 		optname = SO_RCVLOWAT;
-		break;
-        case TARGET_SO_RCVTIMEO:
-		optname = SO_RCVTIMEO;
-		break;
-        case TARGET_SO_SNDTIMEO:
-		optname = SO_SNDTIMEO;
 		break;
             break;
         default:

@@ -1498,10 +1498,12 @@ print_optint:
                 goto print_optint;
             case TARGET_SO_RCVTIMEO:
                 gemu_log("SO_RCVTIMEO,");
-                goto print_optint;
+                print_timeval(optval, 0);
+                break;
             case TARGET_SO_SNDTIMEO:
                 gemu_log("SO_SNDTIMEO,");
-                goto print_optint;
+                print_timeval(optval, 0);
+                break;
             case TARGET_SO_ATTACH_FILTER: {
                 struct target_sock_fprog *fprog;
 
