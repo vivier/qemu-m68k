@@ -2282,7 +2282,12 @@ static abi_long do_socketcall(int num, abi_ulong vptr)
     /* now when we have the args, actually handle the call */
     switch (num) {
     case SOCKOP_socket: /* domain, type, protocol */
-        return do_socket(a[0], a[1], a[2]);
+        if (a[0] == AF_PACKET ||
+            a[1] == TARGET_SOCK_PACKET) {
+            return do_socket(a[0], a[1], tswap16(a[2]));
+        } else {
+            return do_socket(a[0], a[1], a[2]);
+        }
     case SOCKOP_bind: /* sockfd, addr, addrlen */
         return do_bind(a[0], a[1], a[2]);
     case SOCKOP_connect: /* sockfd, addr, addrlen */
@@ -6858,7 +6863,13 @@ abi_long do_syscall(void *cpu_env, int num, abi_long arg1,
 #endif
 #ifdef TARGET_NR_socket
     case TARGET_NR_socket:
-        ret = do_socket(arg1, arg2, arg3);
+        if (arg1 == AF_PACKET ||
+            arg2 == TARGET_SOCK_PACKET) {
+            /* in this case, socket() needs a network endian short */
+            ret = do_socket(arg1, arg2, tswap16(arg3));
+        } else {
+            ret = do_socket(arg1, arg2, arg3);
+        }
         break;
 #endif
 #ifdef TARGET_NR_socketpair
