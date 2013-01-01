@@ -15,6 +15,15 @@ static inline abi_ulong tswapal(abi_ulong v)
     return tswap32(v);
 }
 
+static inline abi_ulong abi_ntohl(abi_ulong v)
+{
+#if defined(HOST_BIG_ENDIAN)
+    return v;
+#else
+    return bswap_32(v);
+#endif
+}
+
 #else
 typedef target_ulong abi_ulong;
 typedef target_long abi_long;
@@ -30,6 +39,19 @@ typedef target_long abi_long;
 static inline abi_ulong tswapal(abi_ulong v)
 {
     return tswapl(v);
+}
+
+static inline abi_ulong abi_ntohl(abi_ulong v)
+{
+#if defined(HOST_BIG_ENDIAN)
+    return v;
+#else
+#if TARGET_LONG_SIZE == 4
+    return bswap_32(v);
+#else
+    return bswap_64(v);
+#endif
+#endif
 }
 
 #endif
