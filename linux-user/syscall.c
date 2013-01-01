@@ -2190,6 +2190,17 @@ static abi_long do_socketcall(int num, abi_ulong vptr)
                 || get_user_ual(protocol, vptr + 2 * n))
                 return -TARGET_EFAULT;
 
+            if (domain == AF_PACKET ||
+#if defined(TARGET_MIPS)
+                type == TARGET_SOCK_PACKET) {
+#else
+                type == SOCK_PACKET) {
+#endif
+                /* in this case, socket() needs a network endian short */
+                protocol = tswapal(protocol); /* restore network endian long */
+                protocol = abi_ntohl(protocol); /* a host endian long */
+                protocol = htons(protocol); /* network endian short */
+            }
             ret = do_socket(domain, type, protocol);
 	}
         break;
@@ -6896,7 +6907,17 @@ abi_long do_syscall(void *cpu_env, int num, abi_long arg1,
 #endif
 #ifdef TARGET_NR_socket
     case TARGET_NR_socket:
-        ret = do_socket(arg1, arg2, arg3);
+        if (arg1 == AF_PACKET ||
+#if defined(TARGET_MIPS)
+            arg2 == TARGET_SOCK_PACKET) {
+#else
+            arg2 == SOCK_PACKET) {
+#endif
+            /* in this case, socket() needs a network endian short */
+            ret = do_socket(arg1, arg2, tswap16(arg3));
+        } else {
+            ret = do_socket(arg1, arg2, arg3);
+        }
         break;
 #endif
 #ifdef TARGET_NR_socketpair
