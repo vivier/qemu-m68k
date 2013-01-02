@@ -6288,6 +6288,14 @@ abi_long do_syscall(void *cpu_env, int num, abi_long arg1,
         ret = get_errno(sethostname(p, arg2));
         unlock_user(p, arg1, 0);
         break;
+#ifdef TARGET_NR_gethostname
+    case TARGET_NR_gethostname:
+        if (!(p = lock_user_string(arg1)))
+            goto efault;
+        ret = get_errno(gethostname(p, arg2));
+        unlock_user(p, arg1, 0);
+       break;
+#endif
     case TARGET_NR_setrlimit:
         {
             int resource = target_to_host_resource(arg1);
