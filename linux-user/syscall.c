@@ -7555,6 +7555,14 @@ abi_long do_syscall(void *cpu_env, int num, abi_long arg1,
            return value. */
         ret = -TARGET_ENOTDIR;
         break;
+#if defined(TARGET_NR_oldumount)
+    case TARGET_NR_oldumount:
+        if (!(p = lock_user_string(arg1)))
+            goto efault;
+        ret = get_errno(umount(p));
+        unlock_user(p, arg1, 0);
+        break;
+#endif
     case TARGET_NR_sched_getaffinity:
         {
             unsigned int mask_size;
