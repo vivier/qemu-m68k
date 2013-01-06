@@ -61,6 +61,21 @@ set_mips() {
 	QEMU_TARGET=mips
 }
 
+set_ppc() {
+	CONTAINER_NAME=virt${TARGET}
+	CONTAINER_PATH=/containers/${TARGET}
+	LXC_CONF=$HOME/lxc-${TARGET}.conf
+
+	DEBIAN_REPO=http://ftp.debian.org/debian
+	DEBIAN_DIST=stable
+	DEBIAN_SIGN=55BE302B
+	DEBIAN_TARGET=powerpc
+
+        CONFIGURE_PARAMS=""
+	CHECK_BIN=check_default
+	QEMU_TARGET=ppc
+}
+
 check_target() {
 	case "$TARGET"
 	in
@@ -75,6 +90,9 @@ check_target() {
 		;;
 	mips)
 		set_mips
+		;;
+	ppc)
+		set_ppc
 		;;
 	*)
 		echo "ERROR: unknown target $TARGET" 1>&2
