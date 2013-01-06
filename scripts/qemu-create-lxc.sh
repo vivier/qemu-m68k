@@ -46,6 +46,21 @@ set_sparc() {
 	QEMU_TARGET=sparc32plus
 }
 
+set_mips() {
+	CONTAINER_NAME=virt${TARGET}
+	CONTAINER_PATH=/containers/${TARGET}
+	LXC_CONF=$HOME/lxc-${TARGET}.conf
+
+	DEBIAN_REPO=http://ftp.debian.org/debian
+	DEBIAN_DIST=stable
+	DEBIAN_SIGN=55BE302B
+	DEBIAN_TARGET=mips
+
+        CONFIGURE_PARAMS=""
+	CHECK_BIN=check_default
+	QEMU_TARGET=mips
+}
+
 check_target() {
 	case "$TARGET"
 	in
@@ -57,6 +72,9 @@ check_target() {
 		;;
 	sparc)
 		set_sparc
+		;;
+	mips)
+		set_mips
 		;;
 	*)
 		echo "ERROR: unknown target $TARGET" 1>&2
