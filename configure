@@ -620,7 +620,7 @@ for opt do
   ;;
   --*-default-cpu=*)
     tmp=`expr "x$opt" : 'x--\(.*\)-default-cpu=.*'`
-    eval ${tmp}_default_cpu="$optarg"
+    eval ${tmp}_default_cpu="\"$optarg\""
   ;;
   --enable-trace-backend=*) trace_backend="$optarg"
   ;;
@@ -3840,7 +3840,7 @@ case "$target_arch2" in
     TARGET_ABI_DIR=sparc
     echo "TARGET_ABI32=y" >> $config_target_mak
     target_phys_bits=64
-    target_default_cpu="Fujitsu MB86904"
+    target_default_cpu="TI UltraSparc II"
   ;;
   s390x)
     target_nptl="yes"
