@@ -9,9 +9,11 @@ set_m68k() {
 	DEBIAN_REPO=http://archive.debian.org/debian
 	DEBIAN_DIST=etch-m68k
 	DEBIAN_SIGN=55BE302B
+	DEBIAN_TARGET=m68k
 
         CONFIGURE_PARAMS=--m68k-default-cpu=m68040
 	CHECK_BIN=check_m68k
+	QEMU_TARGET=m68k
 }
 
 set_alpha() {
@@ -22,9 +24,26 @@ set_alpha() {
 	DEBIAN_REPO=http://archive.debian.org/debian
 	DEBIAN_DIST=lenny
 	DEBIAN_SIGN=473041FA
+	DEBIAN_TARGET=alpha
 
         CONFIGURE_PARAMS=""
-	CHECK_BIN=check_alpha
+	CHECK_BIN=check_default
+	QEMU_TARGET=alpha
+}
+
+set_sparc() {
+	CONTAINER_NAME=virt${TARGET}
+	CONTAINER_PATH=/containers/${TARGET}
+	LXC_CONF=$HOME/lxc-${TARGET}.conf
+
+	DEBIAN_REPO=http://ftp.debian.org/debian
+	DEBIAN_DIST=stable
+	DEBIAN_SIGN=55BE302B
+	DEBIAN_TARGET=sparc
+
+        CONFIGURE_PARAMS=""
+	CHECK_BIN=check_default
+	QEMU_TARGET=sparc32plus
 }
 
 check_target() {
@@ -36,15 +55,19 @@ check_target() {
 	alpha)
 		set_alpha
 		;;
+	sparc)
+		set_sparc
+		;;
 	*)
 		echo "ERROR: unknown target $TARGET" 1>&2
 		exit 1
 		;;
 	esac
+	QEMU_BIN=${QEMU_PATH}/build-${QEMU_TARGET}/${QEMU_TARGET}-linux-user/qemu-${QEMU_TARGET}
 }
 
 check_m68k() {
-	if ${QEMU_PATH}/build-m68k/m68k-linux-user/qemu-m68k -cpu help | grep -q ">m68040"
+	if ${QEMU_BIN} -cpu help | grep -q ">m68040"
 	then
 		echo "Found an existing qemu-m68k, use it !" 1>&2
 		return 0
@@ -54,8 +77,8 @@ check_m68k() {
 	exit 1
 }
 
-check_alpha() {
-	test -e ${QEMU_PATH}/build-alpha/alpha-linux-user/qemu-alpha
+check_default() {
+	test -e ${QEMU_BIN}
 }
 
 installed_dpkg() {
@@ -74,7 +97,7 @@ check_env() {
 }
 
 create_qemu() {
-	if [ -e "${QEMU_PATH}/build-${TARGET}/${TARGET}-linux-user/qemu-${TARGET}" ]
+	if [ -e "${QEMU_BIN}" ]
 	then
 		if ${CHECK_BIN}
 		then
@@ -82,10 +105,10 @@ create_qemu() {
 		fi
 	fi
 	echo "cd ${QEMU_PATH} && \
-	mkdir build-${TARGET} && \
-	cd build-${TARGET} && \
+	mkdir build-${QEMU_TARGET} && \
+	cd build-${QEMU_TARGET} && \
 	../configure --static --suid-able ${CONFIGURE_PARAMS} \
-		     --target-list=${TARGET}-linux-user && \
+		     --target-list=${QEMU_TARGET}-linux-user && \
 	make" | sudo -i -u ${SUDO_USER}
 	if ! ${CHECK_BIN}
 	then
@@ -116,18 +139,16 @@ create_root() {
 
 	mkdir -p "${CONTAINER_PATH}"
 	debootstrap --foreign \
-		    --arch=${TARGET} \
+		    --arch=${DEBIAN_TARGET} \
                     ${DEBIAN_DIST} ${CONTAINER_PATH} \
 		    ${DEBIAN_REPO} && \
 
 	# adding qemu binary
 
-	rm -fr ${CONTAINER_PATH}/usr/bin/qemu-${TARGET} && \
-	cp ${QEMU_PATH}/build-${TARGET}/${TARGET}-linux-user/qemu-${TARGET} \
-	   ${CONTAINER_PATH}/bin && \
-	chown root:root ${CONTAINER_PATH}/bin/qemu-${TARGET} && \
-	chmod +s ${CONTAINER_PATH}/bin/qemu-${TARGET} && \
-	${QEMU_PATH}/scripts/qemu-update-binfmt ${TARGET}
+	cp ${QEMU_BIN} ${CONTAINER_PATH}/bin && \
+	chown root:root ${CONTAINER_PATH}/bin/qemu-${QEMU_TARGET} && \
+	chmod +s ${CONTAINER_PATH}/bin/qemu-${QEMU_TARGET} && \
+	${QEMU_PATH}/scripts/qemu-update-binfmt ${QEMU_TARGET}
 
 	# debian bootstrap second stage
 
@@ -194,7 +215,8 @@ lxc.cgroup.devices.allow = b 1:* rwm # ram
 check_env
 check_target
 
-echo "TARGET        : ${TARGET}"
+echo "DEBIAN_TARGET : ${DEBIAN_TARGET}"
+echo "QEMU_TARGET   : ${QEMU_TARGET}"
 echo "CONTAINER_NAME: ${CONTAINER_NAME}"
 echo "CONTAINER_PATH: ${CONTAINER_PATH}"
 echo "QEMU_PATH     : ${QEMU_PATH}"
