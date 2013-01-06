@@ -38,7 +38,7 @@ set_sparc() {
 
 	DEBIAN_REPO=http://ftp.debian.org/debian
 	DEBIAN_DIST=stable
-	DEBIAN_SIGN=55BE302B
+	DEBIAN_SIGN=""
 	DEBIAN_TARGET=sparc
 
         CONFIGURE_PARAMS=""
@@ -53,7 +53,7 @@ set_mips() {
 
 	DEBIAN_REPO=http://ftp.debian.org/debian
 	DEBIAN_DIST=stable
-	DEBIAN_SIGN=55BE302B
+	DEBIAN_SIGN=""
 	DEBIAN_TARGET=mips
 
         CONFIGURE_PARAMS=""
@@ -68,12 +68,27 @@ set_ppc() {
 
 	DEBIAN_REPO=http://ftp.debian.org/debian
 	DEBIAN_DIST=stable
-	DEBIAN_SIGN=55BE302B
+	DEBIAN_SIGN=""
 	DEBIAN_TARGET=powerpc
 
         CONFIGURE_PARAMS=""
 	CHECK_BIN=check_default
 	QEMU_TARGET=ppc
+}
+
+set_raspberry() {
+	CONTAINER_NAME=virt${TARGET}
+	CONTAINER_PATH=/containers/${TARGET}
+	LXC_CONF=$HOME/lxc-${TARGET}.conf
+
+	DEBIAN_REPO=http://archive.raspbian.org/raspbian
+	DEBIAN_DIST=wheezy
+	DEBIAN_SIGN=""
+	DEBIAN_TARGET=armhf
+
+        CONFIGURE_PARAMS=""
+	CHECK_BIN=check_default
+	QEMU_TARGET=arm
 }
 
 check_target() {
@@ -93,6 +108,9 @@ check_target() {
 		;;
 	ppc)
 		set_ppc
+		;;
+	raspberry)
+		set_raspberry
 		;;
 	*)
 		echo "ERROR: unknown target $TARGET" 1>&2
@@ -199,6 +217,7 @@ sys		/sys		sysfs	nodev,noexec,nosuid 0	1
 devpts		/dev/pts	devpts	nodev,noexec,nosuid 0	1
 !EOF
 
+	echo "$CONTAINER_NAME" > ${CONTAINER_PATH}/etc/hostname
 	echo "c:2345:respawn:/sbin/getty 38400 console" >> ${CONTAINER_PATH}/etc/inittab
 
 	cat >> ${CONTAINER_PATH}/etc/network/interfaces <<!EOF
@@ -213,12 +232,16 @@ deb-src ${DEBIAN_REPO} ${DEBIAN_DIST} main contrib non-free
 
 	rm -f ${CONTAINER_PATH}/dev/ptmx
 
-	HOME=/root chroot ${CONTAINER_PATH} gpg --keyserver pgpkeys.mit.edu --recv-key ${DEBIAN_SIGN}
-	HOME=/root chroot ${CONTAINER_PATH} gpg -a --export ${DEBIAN_SIGN} | chroot ${CONTAINER_PATH}  apt-key add -
+	if [ "$DEBIAN_SIGN" != "" ]
+	then
+		HOME=/root chroot ${CONTAINER_PATH} gpg --keyserver pgpkeys.mit.edu --recv-key ${DEBIAN_SIGN}
+		HOME=/root chroot ${CONTAINER_PATH} gpg -a --export ${DEBIAN_SIGN} | chroot ${CONTAINER_PATH}  apt-key add -
+	fi
 	chroot ${CONTAINER_PATH} apt-get update
 	chroot ${CONTAINER_PATH} dpkg-reconfigure tzdata
 	chroot ${CONTAINER_PATH} apt-get install locales
 	chroot ${CONTAINER_PATH} dpkg-reconfigure locales
+	chroot ${CONTAINER_PATH} passwd
 }
 
 create_lxc() {
