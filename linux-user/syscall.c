@@ -103,6 +103,7 @@ int __clone2(int (*fn)(void *), void *child_stack_base,
 #include <linux/dm-ioctl.h>
 #include <linux/reboot.h>
 #include <linux/filter.h>
+#include <linux/reboot.h>
 #include "linux_loop.h"
 #include "cpu-uname.h"
 
