@@ -1,6 +1,29 @@
 #!/bin/bash
 
 name="$1"
+
+# probe cpu type
+cpu=`uname -m`
+case "$cpu" in
+  i386|i486|i586|i686|i86pc|BePC|x86_64)
+    cpu="i386"
+  ;;
+  mips*)
+    cpu="mips"
+  ;;
+  "Power Macintosh"|ppc64)
+    cpu="ppc"
+  ;;
+  armv[4-9]*)
+    cpu="arm"
+  ;;
+esac
+
+if [ "$name" = "$cpu" ]
+then
+    exit 0
+fi
+
 case $name
 in
     m68k)

@@ -1,122 +1,79 @@
 QEMU_PATH=$(dirname $(dirname $(readlink -f $0)))
-TARGET="$1"
+
+TARGET_LIST="i386 m68k alpha sparc mips ppc raspberrypi"
+
+set_i386() {
+	: nothing specific
+}
 
 set_m68k() {
-	CONTAINER_NAME=virt${TARGET}
-	CONTAINER_PATH=/containers/${TARGET}
-	LXC_CONF=$HOME/lxc-${TARGET}.conf
-
 	DEBIAN_REPO=http://archive.debian.org/debian
 	DEBIAN_DIST=etch-m68k
 	DEBIAN_SIGN=55BE302B
-	DEBIAN_TARGET=m68k
 
         CONFIGURE_PARAMS=--m68k-default-cpu=m68040
-	CHECK_BIN=check_m68k
-	QEMU_TARGET=m68k
 }
 
 set_alpha() {
-	CONTAINER_NAME=virt${TARGET}
-	CONTAINER_PATH=/containers/${TARGET}
-	LXC_CONF=$HOME/lxc-${TARGET}.conf
-
 	DEBIAN_REPO=http://archive.debian.org/debian
 	DEBIAN_DIST=lenny
-	DEBIAN_SIGN=473041FA
-	DEBIAN_TARGET=alpha
-
-        CONFIGURE_PARAMS=""
-	CHECK_BIN=check_default
-	QEMU_TARGET=alpha
 }
 
 set_sparc() {
-	CONTAINER_NAME=virt${TARGET}
-	CONTAINER_PATH=/containers/${TARGET}
-	LXC_CONF=$HOME/lxc-${TARGET}.conf
-
-	DEBIAN_REPO=http://ftp.debian.org/debian
-	DEBIAN_DIST=stable
-	DEBIAN_SIGN=""
-	DEBIAN_TARGET=sparc
-
-        CONFIGURE_PARAMS=""
-	CHECK_BIN=check_default
 	QEMU_TARGET=sparc32plus
 }
 
 set_mips() {
-	CONTAINER_NAME=virt${TARGET}
-	CONTAINER_PATH=/containers/${TARGET}
-	LXC_CONF=$HOME/lxc-${TARGET}.conf
-
-	DEBIAN_REPO=http://ftp.debian.org/debian
-	DEBIAN_DIST=stable
-	DEBIAN_SIGN=""
-	DEBIAN_TARGET=mips
-
-        CONFIGURE_PARAMS=""
-	CHECK_BIN=check_default
-	QEMU_TARGET=mips
+	: nothing specific
 }
 
 set_ppc() {
-	CONTAINER_NAME=virt${TARGET}
-	CONTAINER_PATH=/containers/${TARGET}
-	LXC_CONF=$HOME/lxc-${TARGET}.conf
-
-	DEBIAN_REPO=http://ftp.debian.org/debian
-	DEBIAN_DIST=stable
-	DEBIAN_SIGN=""
 	DEBIAN_TARGET=powerpc
-
-        CONFIGURE_PARAMS=""
-	CHECK_BIN=check_default
-	QEMU_TARGET=ppc
 }
 
-set_raspberry() {
-	CONTAINER_NAME=virt${TARGET}
-	CONTAINER_PATH=/containers/${TARGET}
-	LXC_CONF=$HOME/lxc-${TARGET}.conf
-
+set_raspberrypi() {
 	DEBIAN_REPO=http://archive.raspbian.org/raspbian
 	DEBIAN_DIST=wheezy
 	DEBIAN_SIGN=""
 	DEBIAN_TARGET=armhf
-
-        CONFIGURE_PARAMS=""
-	CHECK_BIN=check_default
 	QEMU_TARGET=arm
 }
 
 check_target() {
-	case "$TARGET"
-	in
-	m68k)
-		set_m68k
-		;;
-	alpha)
-		set_alpha
-		;;
-	sparc)
-		set_sparc
-		;;
-	mips)
-		set_mips
-		;;
-	ppc)
-		set_ppc
-		;;
-	raspberry)
-		set_raspberry
-		;;
-	*)
+	found=0
+	for available in $TARGET_LIST
+	do
+		if [ "$available" = "$TARGET" ]
+		then 
+			found=1
+			break;
+		fi
+	done
+	if [ $found -eq 0 ]
+	then
 		echo "ERROR: unknown target $TARGET" 1>&2
 		exit 1
-		;;
-	esac
+	fi
+
+	# generic values
+
+	CONTAINER_NAME=virt${TARGET}
+	CONTAINER_PATH=/containers/${TARGET}
+	LXC_CONF=$HOME/lxc-${TARGET}.conf
+
+	DEBIAN_REPO=http://ftp.debian.org/debian
+	DEBIAN_DIST=stable
+	DEBIAN_SIGN=""
+	DEBIAN_TARGET=$TARGET
+
+	QEMU_TARGET=$TARGET
+
+	CHECK_BIN=check_default
+
+	# target specific values
+
+	set_$TARGET
+
 	QEMU_BIN=${QEMU_PATH}/build-${QEMU_TARGET}/${QEMU_TARGET}-linux-user/qemu-${QEMU_TARGET}
 }
 
@@ -128,6 +85,8 @@ check_m68k() {
 	fi
 	echo "Found an existing qemu-m68k, but with no m68040 emulation" 1>&2
 	echo "Please, remove it" 1>&2
+	echo "m68040 emulation is available from " 1>&2
+	echo "git clone git://gitorious.org/qemu-m68k/qemu-m68k.git"
 	exit 1
 }
 
@@ -140,11 +99,16 @@ installed_dpkg() {
 }
 
 check_env() {
+	if [ ! -e /etc/debian_version ]
+	then
+		echo "ERROR: this script works only on Debian based distro" 1>&2
+		exit 1
+	fi
 	for pkg in zlib1g gcc make debootstrap lxc
 	do
 		if  ! installed_dpkg $pkg
 		then
-			echo "$pkg is needed" 1>&2
+			echo "ERROR: $pkg is needed" 1>&2
 			exit 1
 		fi
 	done
@@ -213,7 +177,6 @@ create_root() {
 	cat >> ${CONTAINER_PATH}/etc/fstab <<!EOF
 # <file system> <mount point>   <type>  <options>       <dump>  <pass>
 proc		/proc		proc	nodev,noexec,nosuid 0	1
-sys		/sys		sysfs	nodev,noexec,nosuid 0	1
 devpts		/dev/pts	devpts	nodev,noexec,nosuid 0	1
 !EOF
 
@@ -270,6 +233,17 @@ lxc.cgroup.devices.allow = b 1:* rwm # ram
 !EOF
 	lxc-create -n ${CONTAINER_NAME} -f ${LXC_CONF}
 }
+
+TARGET="$1"
+
+if [ "$TARGET" = "" ]
+then
+	echo "ERROR: you must provide a target." 1>&2
+	echo "       Available targets are:" 1>&2
+	echo "       $TARGET_LIST"
+	exit 1
+fi
+
 
 check_env
 check_target
