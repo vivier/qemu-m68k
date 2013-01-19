@@ -1,0 +1,59 @@
+#!/bin/sh
+
+if [ ! -f /usr/sbin/update-binfmts ] ; then
+    echo "ERROR: this scripts needs update-binfmts" 1>&2
+    exit 1
+fi
+
+MAGIC=$(dirname $(readlink -f "$0"))/binfmts-magic
+
+if [ ! -e "$MAGIC" ] ; then
+    echo "ERROR: file $MAGIC is missing !" 1>&2
+    exit 1
+fi
+
+. "$MAGIC"
+
+# interpreter to install
+
+cpu="$1"
+if [ "$cpu" = "" ] ; then
+    echo "ERROR: you need to specify the cpu target" 1>&2
+    echo "       available targets are:" 1>&2
+    for target in  $qemu_target_list ; do
+        echo "       $target " 1>&2
+    done
+    exit 1
+fi
+
+# interpreter path
+
+QEMU_PATH="$2"
+if [ "$QEMU_PATH" = "" ] ; then
+    QEMU_PATH=/usr/local/bin
+fi
+
+# probe cpu type
+
+host_family=$(qemu_get_family)
+
+magic=$(eval echo \$${cpu}_magic)
+mask=$(eval echo \$${cpu}_mask)
+family=$(eval echo \$${cpu}_family)
+
+if [ "$magic" = "" -o "$mask" = "" -o "$family" = "" ] ; then
+    echo "INTERNAL ERROR: unknown cpu $cpu" 1>&2
+    exit 1
+fi
+
+if [ "$host_family" = "$family" ] ; then
+    echo "WARNING: don't install interpreter for current cpu !" 1>&2
+    exit 0
+fi
+
+qemu="$QEMU_PATH/qemu-$cpu"
+if [ "$cpu" = "i486" ] ; then
+    qemu="$QEMU_PATH/qemu-i386"
+fi
+
+update-binfmts --install $cpu ${qemu} --magic $magic --mask $mask
