@@ -170,6 +170,16 @@ floatx80 floatx80_default_nan(float_status *status)
 }
 
 /*----------------------------------------------------------------------------
+| The pattern for a default generated extended double-precision inf.
+*----------------------------------------------------------------------------*/
+
+#define floatx80_default_inf_high 0x7FFF
+#define floatx80_default_inf_low  LIT64( 0x8000000000000000 )
+
+const floatx80 floatx80_default_inf
+    = make_floatx80_init(floatx80_default_inf_high, floatx80_default_inf_low);
+
+/*----------------------------------------------------------------------------
 | The pattern for a default generated quadruple-precision NaN.
 *----------------------------------------------------------------------------*/
 float128 float128_default_nan(float_status *status)

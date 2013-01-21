@@ -597,6 +597,11 @@ float64 floatx80_to_float64(floatx80, float_status *status);
 float128 floatx80_to_float128(floatx80, float_status *status);
 
 /*----------------------------------------------------------------------------
+| The pattern for a default generated extended double-precision inf.
+*----------------------------------------------------------------------------*/
+extern const floatx80 floatx80_default_inf;
+
+/*----------------------------------------------------------------------------
 | Software IEC/IEEE extended double-precision operations.
 *----------------------------------------------------------------------------*/
 floatx80 floatx80_round_to_int(floatx80, float_status *status);
@@ -635,7 +640,8 @@ static inline floatx80 floatx80_chs(floatx80 a)
 
 static inline int floatx80_is_infinity(floatx80 a)
 {
-    return (a.high & 0x7fff) == 0x7fff && a.low == 0x8000000000000000LL;
+    return (a.high & 0x7fff) == floatx80_default_inf.high &&
+                       a.low == floatx80_default_inf.low;
 }
 
 static inline int floatx80_is_neg(floatx80 a)
