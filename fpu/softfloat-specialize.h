@@ -101,6 +101,16 @@ const floatx80 floatx80_default_nan
     = make_floatx80_init(floatx80_default_nan_high, floatx80_default_nan_low);
 
 /*----------------------------------------------------------------------------
+| The pattern for a default generated extended double-precision inf.
+*----------------------------------------------------------------------------*/
+
+#define floatx80_default_inf_high 0x7FFF
+#define floatx80_default_inf_low  LIT64( 0x8000000000000000 )
+
+const floatx80 floatx80_default_inf
+    = make_floatx80_init(floatx80_default_inf_high, floatx80_default_inf_low);
+
+/*----------------------------------------------------------------------------
 | The pattern for a default generated quadruple-precision NaN.  The `high' and
 | `low' values hold the most- and least-significant bits, respectively.
 *----------------------------------------------------------------------------*/
