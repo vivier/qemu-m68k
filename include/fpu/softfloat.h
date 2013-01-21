@@ -561,8 +561,14 @@ float64 floatx80_to_float64( floatx80 STATUS_PARAM );
 float128 floatx80_to_float128( floatx80 STATUS_PARAM );
 
 /*----------------------------------------------------------------------------
+| The pattern for a default generated extended double-precision inf.
+*----------------------------------------------------------------------------*/
+extern const floatx80 floatx80_default_inf;
+
+/*----------------------------------------------------------------------------
 | Software IEC/IEEE extended double-precision operations.
 *----------------------------------------------------------------------------*/
+
 floatx80 floatx80_round_to_int( floatx80 STATUS_PARAM );
 floatx80 floatx80_add( floatx80, floatx80 STATUS_PARAM );
 floatx80 floatx80_sub( floatx80, floatx80 STATUS_PARAM );
@@ -599,7 +605,8 @@ INLINE floatx80 floatx80_chs(floatx80 a)
 
 INLINE int floatx80_is_infinity(floatx80 a)
 {
-    return (a.high & 0x7fff) == 0x7fff && a.low == 0x8000000000000000LL;
+    return (a.high & 0x7fff) == floatx80_default_inf.high &&
+                       a.low == floatx80_default_inf.low;
 }
 
 INLINE int floatx80_is_neg(floatx80 a)
