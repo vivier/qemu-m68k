@@ -3434,6 +3434,26 @@ static int parse_args(int argc, char **argv)
     return optind;
 }
 
+static int get_execfd(char **envp)
+{
+    typedef struct {
+        long a_type;
+        long a_val;
+    } auxv_t;
+    auxv_t *auxv;
+
+    while (*envp++ != NULL) {
+        ;
+    }
+
+    for (auxv = (auxv_t *)envp; auxv->a_type != AT_NULL; auxv++) {
+        if (auxv->a_type == AT_EXECFD) {
+            return auxv->a_val;
+        }
+    }
+    return -1;
+}
+
 int main(int argc, char **argv, char **envp)
 {
     const char *log_file = DEBUG_LOGFILE;
@@ -3448,6 +3468,7 @@ int main(int argc, char **argv, char **envp)
     int target_argc;
     int i;
     int ret;
+    int execfd;
 
     module_call_init(MODULE_INIT_QOM);
 
@@ -3592,7 +3613,16 @@ int main(int argc, char **argv, char **envp)
     env->opaque = ts;
     task_settid(ts);
 
-    ret = loader_exec(filename, target_argv, target_environ, regs,
+    execfd = get_execfd(envp);
+    if (execfd < 0) {
+        execfd = open(filename, O_RDONLY);
+    }
+    if (execfd < 0) {
+        printf("Error while loading %s: %s\n", filename, strerror(-execfd));
+        _exit(1);
+    }
+
+    ret = loader_exec(execfd, filename, target_argv, target_environ, regs,
         info, &bprm);
     if (ret != 0) {
         printf("Error while loading %s: %s\n", filename, strerror(-ret));
