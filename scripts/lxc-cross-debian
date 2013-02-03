@@ -1,0 +1,250 @@
+#!/bin/bash
+#
+# Some parts from lxc-debian, Daniel Lezcano <daniel.lezcano@free.fr>
+#
+# Copy this script to /usr/share/lxc/templates
+#
+# and use it with 
+# lxc-create -t cross-debian -n xxxx  -- --arch xxx --qemu-path /a/b/c/qemu-xxx
+#
+
+SUITE=stable
+MIRROR=http://ftp.debian.org/debian
+
+find_interpreter() {
+    qemu=$(basename "$1")
+
+    if [ ! -d /proc/sys/fs/binfmt_misc/ ] ; then
+        return 1
+    fi
+    for file in /proc/sys/fs/binfmt_misc/* ; do
+        if [ "$file" = "/proc/sys/fs/binfmt_misc/register" -o \
+             "$file" = "/proc/sys/fs/binfmt_misc/status" ] ; then
+            continue
+        fi
+        interpreter_path=$(sed -n "/^interpreter/s/interpreter \([^[:space:]]*\)/\1/p" "$file")
+        interpreter=$(basename $interpreter_path)
+         
+        if [ "$qemu" = "$interpreter" ] ; then
+            echo "$interpreter_path"
+            return 0
+        fi
+    done
+    return 1
+}
+
+create_root() {
+
+    rootfs="$1"
+    hostname="$2"
+    qemu="$3"
+    arch="$4"
+    interpreter_path="$5"
+
+    # Debian bootstrap
+
+    debootstrap --foreign \
+                --arch=$arch \
+                --include=locales,openssh-server \
+                ${SUITE} "$rootfs" \
+                ${MIRROR}
+
+    # adding qemu binary
+
+    if ! cp "$qemu" "$rootfs/$interpreter_path" ; then
+        echo "ERROR: failed to copy $qemu to $rootfs/$interpreter_path" 1>&2
+        exit 1
+    fi
+
+    # debian bootstrap second stage
+
+    chroot "$rootfs" debootstrap/debootstrap --second-stage
+}
+
+configure_debian() {
+
+    rootfs="$1"
+    hostname="$2"
+    debian_sign="$3"
+
+    # set timezone
+
+    cat /etc/timezone > "$rootfs/etc/timezone"
+    chroot $rootfs dpkg-reconfigure -fnoninteractive tzdata
+
+    # configuration
+
+    cat >> "$rootfs/etc/fstab" <<!EOF
+# <file system> <mount point>   <type>  <options>       <dump>  <pass>
+devpts		/dev/pts	devpts	nodev,noexec,nosuid 0	1
+!EOF
+
+    echo "$hostname" > "$rootfs/etc/hostname"
+    echo "c:2345:respawn:/sbin/getty 38400 console" >> "$rootfs/etc/inittab"
+
+    cat >> "$rootfs/etc/network/interfaces" <<!EOF
+auto eth0
+iface eth0 inet dhcp
+!EOF
+
+    cat >> "$rootfs/etc/apt/sources.list" <<!EOF
+deb ${MIRROR} ${SUITE} main contrib non-free
+deb-src ${MIRROR} ${SUITE} main contrib non-free
+!EOF
+
+    if [ "$debian_sign" != "" ]
+    then
+        HOME=/root chroot "$rootfs" gpg --keyserver pgpkeys.mit.edu --recv-key ${debian_sign}
+        HOME=/root chroot "$rootfs" gpg -a --export ${debian_sign} | chroot "$rootfs"  apt-key add -
+    fi
+
+    chroot "$rootfs" apt-get update
+
+    if [ -z "$LANG" ]; then
+        echo "en_US.UTF-8 UTF-8" > "$rootfs/etc/locale.gen"
+        chroot $rootfs locale-gen
+        chroot $rootfs update-locale LANG=en_US.UTF-8
+    else
+        echo "$LANG $(echo $LANG | cut -d. -f2)" > "$rootfs/etc/locale.gen"
+        chroot $rootfs locale-gen
+        chroot $rootfs update-locale LANG=$LANG
+    fi
+
+    echo "root:root" | chroot $rootfs chpasswd
+    echo "Root password is 'root', please change !"
+}
+
+get_rootfs() {
+    config="$1/config"
+    rootfs=$(sed -n "s/^lxc.rootfs[[:space:]]*=[[:space:]]*\(.*\)/\1/p" $config)
+    if [ "$rootfs" = "" ]
+    then
+        echo "$path/rootfs"
+    else
+        echo "$rootfs"
+    fi
+}
+
+create_lxc() {
+    path="$1"
+    rootfs="$2"
+    hostname="$3"
+
+    grep -q "^lxc.rootfs" $path/config 2>/dev/null || echo "lxc.rootfs = $rootfs" >> "$path/config"
+    cat >> "$path/config" <<!EOF
+lxc.utsname = $hostname
+
+lxc.pts=1023
+lxc.tty=12
+
+lxc.cgroup.devices.deny = a
+lxc.cgroup.devices.allow = c 136:* rwm # pts
+lxc.cgroup.devices.allow = c 254:0 rwm # rtc
+lxc.cgroup.devices.allow = c 5:* rwm
+lxc.cgroup.devices.allow = c 4:* rwm # ttyXX
+lxc.cgroup.devices.allow = c 1:* rwm
+lxc.cgroup.devices.allow = b 7:* rwm # loop
+lxc.cgroup.devices.allow = b 1:* rwm # ram
+
+lxc.mount.entry=proc proc proc nodev,noexec,nosuid 0 0
+lxc.mount.entry=sysfs sys sysfs defaults  0 0
+
+!EOF
+    if [ $? -ne 0 ] ; then
+        echo "ERROR: failed to create LXC configuration" 1>&2
+        exit 1
+    fi
+}
+
+usage()
+{
+    cat <<!EOF
+Usage: $1 --path PATH --name NAME --arch ARCH --qemu-path QEMU
+          [--mirror MIRROR][--suite SUITE]
+
+    --path is configuration path
+    --name is container name
+    --arch is debian architecture
+    --qemu-path is path to qemu to copy to rootfs
+    --mirror is URL of debian mirror to use
+    --suite is debian suite to install
+!EOF
+}
+
+options=$(getopt -o hp:n:Q:a:s:m:k: -l help,path:,name:,qemu-path:,arch:,suite:,mirror:,deb-sign: -- "$@")
+if [ $? -ne 0 ]; then
+        usage $(basename $0)
+        exit 1
+fi
+eval set -- "$options"
+
+while true ; do
+    case "$1" in
+    -p|--path)
+        shift
+        path="$1"
+        ;;
+    -n|--name)
+        shift
+        name="$1"
+        ;;
+    -a|--arch)
+        shift
+        arch="$1"
+        ;;
+    -Q|--qemu-path)
+        shift
+        qemu="$1"
+        ;;
+    -s|--suite)
+        shift
+        SUITE="$1"
+        ;;
+    -m|--mirror)
+        shift
+        MIRROR="$1"
+        ;;
+    -k|--deb-sign)
+        shift
+        debian_sign="$1"
+        ;;
+    -h|--help)
+        usage
+        exit 1
+        ;;
+    *)
+        break
+        ;;
+    esac
+    shift
+done
+
+if [ "$path" = "" -o "$name" = "" -o "$arch" = "" -o "$qemu" = "" ] ; then
+    echo "ERROR: missing parameter" 1>&2
+    usage
+    exit 1
+fi
+
+if ! type debootstrap ; then
+    echo "ERROR: 'debootstrap' command is missing" 1>&2
+    exit 1
+fi
+
+if ! file -b "${qemu}" |grep -q "statically linked" ; then
+    echo "ERROR: '${qemu}' must be statically linked" 1>&2
+    exit 1
+fi
+
+interpreter_path=$(find_interpreter "$qemu")
+if [ $? -ne 0 ] ; then
+    echo "ERROR: no binfmt interpreter using $(basename $qemu)" 1>&2
+    exit 1
+fi
+
+rootfs=$(get_rootfs $path)
+
+create_root "$rootfs" "$name" "$qemu" "$arch" "$interpreter_path"
+
+configure_debian "$rootfs" "$name" "$debian_sign"
+
+create_lxc "$path" "$rootfs" "$name"
