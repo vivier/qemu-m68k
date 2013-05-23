@@ -217,7 +217,7 @@ static void mips_jazz_init(MachineState *machine,
     cpu_mips_clock_init(env);
 
     /* Chipset */
-    rc4030_opaque = rc4030_init(env->irq[6], env->irq[3], &rc4030, &dmas,
+    rc4030_dma_mr = rc4030_init(env->irq[6], env->irq[3], &rc4030, &dmas,
                                 address_space);
     memory_region_init_io(dma_dummy, NULL, &dma_dummy_ops, NULL, "dummy_dma", 0x1000);
     memory_region_add_subregion(address_space, 0x8000d000, dma_dummy);
@@ -272,7 +272,7 @@ static void mips_jazz_init(MachineState *machine,
             nd->model = g_strdup("dp83932");
         if (strcmp(nd->model, "dp83932") == 0) {
             dp83932_init(nd, 0x80001000, 0x8000b000, 2, 0, get_system_memory(),
-                         rc4030[4], rc4030_opaque, rc4030_dma_memory_rw);
+                         rc4030[4], rc4030_dma_mr);
             break;
         } else if (is_help_option(nd->model)) {
             fprintf(stderr, "qemu: Supported NICs: dp83932\n");

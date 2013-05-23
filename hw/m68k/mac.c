@@ -117,12 +117,6 @@ static void main_cpu_reset(void *opaque)
     cpu_reset(cs);
 }
 
-static void macsonic_rw(void *opaque, hwaddr addr, uint8_t *buf,
-                 int len, int is_write)
-{
-    cpu_physical_memory_rw(addr, buf, len, is_write);
-}
-
 static void q800_init(MachineState *machine)
 {
     M68kCPU *cpu = NULL;
@@ -220,7 +214,7 @@ static void q800_init(MachineState *machine)
         nd_table[0].macaddr.a[2] = 0x07;
     }
     dp83932_init(&nd_table[0], SONIC_BASE, SONIC_PROM_BASE, 2, 2,
-                 get_system_memory(), pic[2], NULL, macsonic_rw);
+                 get_system_memory(), pic[2], get_system_memory());
 
     /* SCC */
 
