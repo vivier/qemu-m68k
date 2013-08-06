@@ -36,6 +36,7 @@
 #include "hw/misc/mac_via.h"
 #include "hw/input/adb.h"
 #include "hw/audio/asc.h"
+#include "hw/nubus/mac.h"
 
 #define MACROM_ADDR     0x40000000
 #define MACROM_SIZE     0x00100000
@@ -61,13 +62,19 @@
 #define MACH_MAC        3
 #define Q800_MAC_CPU_ID 2
 
-#define VIA_BASE   0x50f00000
-#define SCC_BASE   0x50f0c020
-#define ESP_BASE   0x50f10000
-#define ESP_PDMA   0x50f10100
-#define ASC_BASE   0x50F14000
-#define VIDEO_BASE 0xf9001000
-#define DAFB_BASE  0xf9800000
+#define VIA_BASE              0x50f00000
+#define SCC_BASE              0x50f0c020
+#define ESP_BASE              0x50f10000
+#define ESP_PDMA              0x50f10100
+#define ASC_BASE              0x50F14000
+#define NUBUS_SUPER_SLOT_BASE 0x60000000
+#define NUBUS_SLOT_BASE       0xf0000000
+
+/* the video base, whereas it a Nubus address,
+ * is needed by the kernel to have early display and
+ * thus provided by the bootloader
+ */
+#define VIDEO_BASE            0xf9001000
 
 #define MAC_CLOCK  3686418 //783300
 
@@ -130,6 +137,8 @@ static void q800_init(QEMUMachineInitArgs *args)
     SysBusDevice *sysbus;
     BusState *adb_bus;
     qemu_irq  esp_reset_irq, esp_dma_enable;
+    NubusBus *nubus;
+    NubusDevice *nubus_dev;
 
     if (graphic_depth != 8) {
             hw_error("qemu: unknown guest depth %d\n", graphic_depth);
@@ -200,23 +209,25 @@ static void q800_init(QEMUMachineInitArgs *args)
     sysbus_connect_irq(SYS_BUS_DEVICE(dev), 0,
                        qdev_get_gpio_in(via_dev, VIA2_IRQ_ASC_BIT));
 
-    /* framebuffer */
-
-    dev = qdev_create(NULL, "sysbus-macfb");
-    qdev_prop_set_uint32(dev, "width", graphic_width);
-    qdev_prop_set_uint32(dev, "height", graphic_height);
-    qdev_prop_set_uint8(dev, "depth", graphic_depth);
-    qdev_init_nofail(dev);
-    sysbus = SYS_BUS_DEVICE(dev);
-    sysbus_mmio_map(sysbus, 0, DAFB_BASE);
-    sysbus_mmio_map(sysbus, 1, VIDEO_BASE);
-
     /* SCSI */
 
     esp_init_pdma(ESP_BASE, 4, ESP_PDMA,
                   qdev_get_gpio_in(via_dev, VIA2_IRQ_SCSI_BIT),
                   qdev_get_gpio_in(via_dev, VIA2_IRQ_SCSI_DATA_BIT),
                   &esp_reset_irq, &esp_dma_enable);
+
+    /* NuBus */
+
+    nubus = nubus_mac_new(NUBUS_SUPER_SLOT_BASE, NUBUS_SLOT_BASE);
+
+    /* framebuffer in nubus slot #9 */
+
+    nubus_dev = nubus_create(nubus, "nubus-macfb");
+    qdev_prop_set_uint32(&nubus_dev->qdev, "width", graphic_width);
+    qdev_prop_set_uint32(&nubus_dev->qdev, "height", graphic_height);
+    qdev_prop_set_uint8(&nubus_dev->qdev, "depth", graphic_depth);
+    qdev_init_nofail(&nubus_dev->qdev);
+
     if (linux_boot) {
         uint64_t high;
         kernel_size = load_elf(kernel_filename, NULL, NULL,
