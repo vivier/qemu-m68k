@@ -47,6 +47,8 @@ typedef struct NetClientState NetClientState;
 typedef struct I2CBus I2CBus;
 typedef struct ISABus ISABus;
 typedef struct ISADevice ISADevice;
+typedef struct NubusBus NubusBus;
+typedef struct NubusDevice NubusDevice;
 typedef struct SMBusDevice SMBusDevice;
 typedef struct PCIHostState PCIHostState;
 typedef struct PCIExpressHost PCIExpressHost;
