@@ -28,9 +28,12 @@
 #include "hw/sysbus.h"
 #include "ui/console.h"
 #include "ui/pixel_ops.h"
+#include "hw/nubus/nubus.h"
+
+#define VIDEO_BASE 0x00001000
+#define DAFB_BASE  0x00800000
 
 struct MacfbState {
-    SysBusDevice busdev;
     MemoryRegion mem_vram;
     MemoryRegion mem_ctrl;
     QemuConsole *con;
@@ -230,9 +233,9 @@ static void macfb_init(DeviceState *dev, MacfbState *s)
 
     s->con = graphic_console_init(dev, 0, &macfb_ops, s);
 
-    memory_region_init_io(&s->mem_ctrl, NULL, &macfb_ctrl_ops, s, "ctrl",
+    memory_region_init_io(&s->mem_ctrl, NULL, &macfb_ctrl_ops, s, "macfb-ctrl",
                           0x1000);
-    memory_region_init_ram_ptr(&s->mem_vram, NULL, "vram", MACFB_VRAM_SIZE,
+    memory_region_init_ram_ptr(&s->mem_vram, NULL, "macfb-vram", MACFB_VRAM_SIZE,
                                s->vram);
     vmstate_register_ram(&s->mem_vram, dev);
     memory_region_set_coalescing(&s->mem_vram);
@@ -242,6 +245,11 @@ typedef struct {
     SysBusDevice busdev;
     MacfbState macfb;
 } MacfbSysBusState;
+
+typedef struct {
+    NubusDevice busdev;
+    MacfbState macfb;
+} MacfbNubusState;
 
 static int macfb_sysbus_init(SysBusDevice *dev)
 {
@@ -254,9 +262,31 @@ static int macfb_sysbus_init(SysBusDevice *dev)
     return 0;
 }
 
+const uint8_t macfb_rom[] = {
+    255, 0, 0, 0,
+};
+
+static int macfb_nubus_init(NubusDevice *dev)
+{
+    MacfbState *s = &DO_UPCAST(MacfbNubusState, busdev, dev)->macfb;
+
+    macfb_init(DEVICE(dev), s);
+    nubus_add_slot_mmio(dev, DAFB_BASE, &s->mem_ctrl);
+    nubus_add_slot_mmio(dev, VIDEO_BASE, &s->mem_vram);
+    nubus_register_rom(dev, macfb_rom, sizeof(macfb_rom), 1, 9, 0xf);
+
+    return 0;
+}
+
 static void macfb_sysbus_reset(DeviceState *d)
 {
     MacfbSysBusState *s = MACFB(d);
+    macfb_reset(&s->macfb);
+}
+
+static void macfb_nubus_reset(DeviceState *d)
+{
+    MacfbNubusState *s = DO_UPCAST(MacfbNubusState, busdev.qdev, d);
     macfb_reset(&s->macfb);
 }
 
@@ -267,16 +297,35 @@ static Property macfb_sysbus_properties[] = {
     DEFINE_PROP_END_OF_LIST(),
 };
 
+static Property macfb_nubus_properties[] = {
+    DEFINE_PROP_UINT32("width", MacfbNubusState, macfb.width, 640),
+    DEFINE_PROP_UINT32("height", MacfbNubusState, macfb.height, 480),
+    DEFINE_PROP_UINT8("depth", MacfbNubusState, macfb.depth, 8),
+    DEFINE_PROP_END_OF_LIST(),
+};
+
 static void macfb_sysbus_class_init(ObjectClass *klass, void *data)
 {
     DeviceClass *dc = DEVICE_CLASS(klass);
     SysBusDeviceClass *k = SYS_BUS_DEVICE_CLASS(klass);
 
     k->init = macfb_sysbus_init;
-    dc->desc = "Macintosh framebuffer";
+    dc->desc = "SysBus Macintosh framebuffer";
     dc->reset = macfb_sysbus_reset;
     dc->vmsd = &vmstate_macfb;
     dc->props = macfb_sysbus_properties;
+}
+
+static void macfb_nubus_class_init(ObjectClass *klass, void *data)
+{
+    DeviceClass *dc = DEVICE_CLASS(klass);
+    NubusDeviceClass *k = NUBUS_DEVICE_CLASS(klass);
+
+    k->init = macfb_nubus_init;
+    dc->desc = "Nubus Macintosh framebuffer";
+    dc->reset = macfb_nubus_reset;
+    dc->vmsd = &vmstate_macfb;
+    dc->props = macfb_nubus_properties;
 }
 
 static TypeInfo macfb_sysbus_info = {
@@ -286,9 +335,17 @@ static TypeInfo macfb_sysbus_info = {
     .class_init    = macfb_sysbus_class_init,
 };
 
+static TypeInfo macfb_nubus_info = {
+    .name          = "nubus-macfb",
+    .parent        = TYPE_NUBUS_DEVICE,
+    .instance_size = sizeof(MacfbNubusState),
+    .class_init    = macfb_nubus_class_init,
+};
+
 static void macfb_register_types(void)
 {
     type_register_static(&macfb_sysbus_info);
+    type_register_static(&macfb_nubus_info);
 }
 
 type_init(macfb_register_types)
