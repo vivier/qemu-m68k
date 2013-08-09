@@ -37,6 +37,7 @@
 #include "hw/input/adb.h"
 #include "hw/audio/asc.h"
 #include "hw/nubus/mac.h"
+#include "net/net.h"
 
 #define MACROM_ADDR     0x40000000
 #define MACROM_SIZE     0x00100000
@@ -63,6 +64,8 @@
 #define Q800_MAC_CPU_ID 2
 
 #define VIA_BASE              0x50f00000
+#define SONIC_PROM_BASE       0x50f08000
+#define SONIC_BASE            0x50f0a000
 #define SCC_BASE              0x50f0c020
 #define ESP_BASE              0x50f10000
 #define ESP_PDMA              0x50f10100
@@ -186,6 +189,41 @@ static void q800_init(MachineState *machine)
     dev = qdev_create(adb_bus, TYPE_ADB_MOUSE);
     qdev_init_nofail(dev);
 
+    /* MACSONIC */
+
+    if (nb_nics != 1) {
+        hw_error("Q800 needs a dp83932 ethernet interfaces");
+    }
+    if (!nd_table[0].model) {
+        nd_table[0].model = g_strdup("dp83932");
+    }
+    if (strcmp(nd_table[0].model, "dp83932") != 0) {
+        hw_error("Q800 needs a dp83932 ethernet interfaces");
+    } else {
+        /* MacSonic driver needs an Apple MAC address
+         * Valid prefix are:
+         * 00:05:02 Apple
+         * 00:80:19 Dayna Communications, Inc.
+         * 00:A0:40 Apple
+         * 08:00:07 Apple
+         * (Q800 use the last one)
+         */
+        nd_table[0].macaddr.a[0] = 0x08;
+        nd_table[0].macaddr.a[1] = 0x00;
+        nd_table[0].macaddr.a[2] = 0x07;
+    }
+    qemu_check_nic_model(&nd_table[0], "dp83932");
+    dev = qdev_create(NULL, "dp8393x");
+    qdev_set_nic_properties(dev, &nd_table[0]);
+    qdev_prop_set_uint8(dev, "it_shift", 2);
+    qdev_prop_set_int32(dev, "regs_offset", 2);
+    qdev_prop_set_ptr(dev, "dma_mr", get_system_memory());
+    qdev_init_nofail(dev);
+    sysbus = SYS_BUS_DEVICE(dev);
+    sysbus_mmio_map(sysbus, 0, SONIC_BASE);
+    sysbus_mmio_map(sysbus, 1, SONIC_PROM_BASE);
+    sysbus_connect_irq(sysbus, 0, pic[2]);
+
     /* SCC */
 
     dev = qdev_create(NULL, "escc");
@@ -203,6 +241,13 @@ static void q800_init(MachineState *machine)
     sysbus_connect_irq(sysbus, 1, pic[3]);
     sysbus_mmio_map(sysbus, 0, SCC_BASE);
 
+    /* SCSI */
+
+    esp_init_pdma(ESP_BASE, 4, ESP_PDMA,
+                  qdev_get_gpio_in(via_dev, VIA2_IRQ_SCSI_BIT),
+                  qdev_get_gpio_in(via_dev, VIA2_IRQ_SCSI_DATA_BIT),
+                  &esp_reset_irq, &esp_dma_enable);
+
     /* Apple Sound Chip */
 
     dev = qdev_create(NULL, "apple-sound-chip");
@@ -211,13 +256,6 @@ static void q800_init(MachineState *machine)
     sysbus_mmio_map(SYS_BUS_DEVICE(dev), 0, ASC_BASE);
     sysbus_connect_irq(SYS_BUS_DEVICE(dev), 0,
                        qdev_get_gpio_in(via_dev, VIA2_IRQ_ASC_BIT));
-
-    /* SCSI */
-
-    esp_init_pdma(ESP_BASE, 4, ESP_PDMA,
-                  qdev_get_gpio_in(via_dev, VIA2_IRQ_SCSI_BIT),
-                  qdev_get_gpio_in(via_dev, VIA2_IRQ_SCSI_DATA_BIT),
-                  &esp_reset_irq, &esp_dma_enable);
 
     /* NuBus */
 
