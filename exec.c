@@ -1388,7 +1388,8 @@ static uint64_t unassigned_mem_read(void *opaque, hwaddr addr,
 #ifdef DEBUG_UNASSIGNED
     printf("Unassigned mem read " TARGET_FMT_plx "\n", addr);
 #endif
-#if defined(TARGET_ALPHA) || defined(TARGET_SPARC) || defined(TARGET_MICROBLAZE)
+#if defined(TARGET_ALPHA) || defined(TARGET_SPARC) || \
+    defined(TARGET_MICROBLAZE) || defined(TARGET_M68K)
     cpu_unassigned_access(cpu_single_env, addr, 0, 0, 0, size);
 #endif
     return 0;
@@ -1400,7 +1401,8 @@ static void unassigned_mem_write(void *opaque, hwaddr addr,
 #ifdef DEBUG_UNASSIGNED
     printf("Unassigned mem write " TARGET_FMT_plx " = 0x%"PRIx64"\n", addr, val);
 #endif
-#if defined(TARGET_ALPHA) || defined(TARGET_SPARC) || defined(TARGET_MICROBLAZE)
+#if defined(TARGET_ALPHA) || defined(TARGET_SPARC) || \
+    defined(TARGET_MICROBLAZE) || defined(TARGET_M68K)
     cpu_unassigned_access(cpu_single_env, addr, 1, 0, 0, size);
 #endif
 }

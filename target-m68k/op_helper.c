@@ -381,6 +381,48 @@ void do_interrupt_m68k_hardirq(CPUM68KState *env)
 {
     do_interrupt_all(env, 1);
 }
+
+void cpu_unassigned_access(CPUM68KState *env, hwaddr addr,
+                           int is_write, int is_exec, int is_asi, int size)
+{
+#ifdef DEBUG_UNASSIGNED
+    qemu_log_mask(CPU_LOG_INT, "Unassigned " TARGET_FMT_plx " wr=%d exe=%d\n",
+             addr, is_write, is_exec);
+#endif
+
+    env->mmu.mmusr = 0;
+    env->mmu.ssw = M68K_ATC_040;
+    /* FIXME: manage MMU table access error */
+    if (env->sr & SR_S) /* SUPERVISOR */
+        env->mmu.ssw |= 4;
+    if (is_exec) /* instruction or data */
+        env->mmu.ssw |= 2;
+    else
+        env->mmu.ssw |= 1;
+    switch (size) {
+    case 1:
+        env->mmu.ssw |= M68K_BA_SIZE_BYTE;
+        break;
+    case 2:
+        env->mmu.ssw |= M68K_BA_SIZE_WORD;
+        break;
+    case 4:
+        env->mmu.ssw |= M68K_BA_SIZE_LONG;
+        break;
+    }
+
+    if (is_write) {
+        env->mmu.wb3_status = 0x80 | env->mmu.ssw;
+    } else {
+        env->mmu.ssw |= M68K_RW_040;
+        env->mmu.wb3_status = 0;
+    }
+
+    env->mmu.ar = addr;
+
+    env->exception_index = EXCP_ACCESS;
+    cpu_loop_exit(env);
+}
 #endif
 
 static void raise_exception(CPUM68KState *env, int tt)

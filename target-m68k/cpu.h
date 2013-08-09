@@ -415,6 +415,9 @@ static inline int cpu_mmu_index (CPUM68KState *env)
 int cpu_m68k_handle_mmu_fault(CPUM68KState *env, target_ulong address, int rw,
                               int mmu_idx);
 #define cpu_handle_mmu_fault cpu_m68k_handle_mmu_fault
+void cpu_unassigned_access(CPUM68KState *env, hwaddr addr,
+                           int is_write, int is_exec, int is_asi, int size);
+
 
 #if defined(CONFIG_USER_ONLY)
 static inline void cpu_clone_regs(CPUM68KState *env, target_ulong newsp)
