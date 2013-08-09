@@ -37,6 +37,8 @@
 #include "hw/input/adb.h"
 #include "hw/audio/asc.h"
 #include "hw/nubus/mac.h"
+#include "net/net.h"
+#include "hw/net/dp8393x.h"
 
 #define MACROM_ADDR     0x40000000
 #define MACROM_SIZE     0x00100000
@@ -63,6 +65,8 @@
 #define Q800_MAC_CPU_ID 2
 
 #define VIA_BASE              0x50f00000
+#define SONIC_PROM_BASE       0x50f08000
+#define SONIC_BASE            0x50f0a000
 #define SCC_BASE              0x50f0c020
 #define ESP_BASE              0x50f10000
 #define ESP_PDMA              0x50f10100
@@ -110,6 +114,12 @@ static void main_cpu_reset(void *opaque)
     cpu_reset(CPU(cpu));
     cpu->env.aregs[7] = ldl_phys(0);
     cpu->env.pc = ldl_phys(4);
+}
+
+static void macsonic_rw(void *opaque, hwaddr addr, uint8_t *buf,
+                 int len, int is_write)
+{
+    cpu_physical_memory_rw(addr, buf, len, is_write);
 }
 
 static void q800_init(QEMUMachineInitArgs *args)
@@ -183,6 +193,20 @@ static void q800_init(QEMUMachineInitArgs *args)
     dev = qdev_create(adb_bus, TYPE_ADB_MOUSE);
     qdev_init_nofail(dev);
 
+    /* MACSONIC */
+
+    if (nb_nics != 1) {
+        hw_error("Q800 needs a dp83932 ethernet interfaces");
+    }
+    if (!nd_table[0].model) {
+        nd_table[0].model = g_strdup("dp83932");
+    }
+    if (strcmp(nd_table[0].model, "dp83932") != 0) {
+        hw_error("Q800 needs a dp83932 ethernet interfaces");
+    }
+    dp83932_init(&nd_table[0], SONIC_BASE, 2, 2, get_system_memory(),
+                 pic[5], NULL, macsonic_rw);
+
     /* SCC */
 
     dev = qdev_create(NULL, "escc");
@@ -200,6 +224,13 @@ static void q800_init(QEMUMachineInitArgs *args)
     sysbus_connect_irq(sysbus, 1, pic[3]);
     sysbus_mmio_map(sysbus, 0, SCC_BASE);
 
+    /* SCSI */
+
+    esp_init_pdma(ESP_BASE, 4, ESP_PDMA,
+                  qdev_get_gpio_in(via_dev, VIA2_IRQ_SCSI_BIT),
+                  qdev_get_gpio_in(via_dev, VIA2_IRQ_SCSI_DATA_BIT),
+                  &esp_reset_irq, &esp_dma_enable);
+
     /* Apple Sound Chip */
 
     dev = qdev_create(NULL, "apple-sound-chip");
@@ -208,13 +239,6 @@ static void q800_init(QEMUMachineInitArgs *args)
     sysbus_mmio_map(SYS_BUS_DEVICE(dev), 0, ASC_BASE);
     sysbus_connect_irq(SYS_BUS_DEVICE(dev), 0,
                        qdev_get_gpio_in(via_dev, VIA2_IRQ_ASC_BIT));
-
-    /* SCSI */
-
-    esp_init_pdma(ESP_BASE, 4, ESP_PDMA,
-                  qdev_get_gpio_in(via_dev, VIA2_IRQ_SCSI_BIT),
-                  qdev_get_gpio_in(via_dev, VIA2_IRQ_SCSI_DATA_BIT),
-                  &esp_reset_irq, &esp_dma_enable);
 
     /* NuBus */
 
