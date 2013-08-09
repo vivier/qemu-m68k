@@ -416,6 +416,10 @@ static inline int cpu_mmu_index (CPUM68KState *env)
 
 int m68k_cpu_handle_mmu_fault(CPUState *cpu, vaddr address, int rw,
                               int mmu_idx);
+void m68k_cpu_unassigned_access(CPUState *cs, hwaddr addr,
+                                bool is_write, bool is_exec, int is_asi,
+                                unsigned size);
+
 
 #include "exec/cpu-all.h"
 
