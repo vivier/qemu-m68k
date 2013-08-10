@@ -535,6 +535,101 @@ int cpu_m68k_handle_mmu_fault (CPUM68KState *env, target_ulong address, int rw,
 
 /* MMU: 68040 only */
 
+static void print_address_zone(FILE *f, fprintf_function cpu_fprintf,
+                               uint32_t logical, uint32_t physical,
+                               uint32_t size, int attr)
+{
+    cpu_fprintf(f, "%08x - %08x -> %08x - %08x %c ",
+                logical, logical + size - 1,
+                physical, physical + size - 1,
+                attr & 4 ? 'W' : '-');
+    size >>= 10;
+    if (size < 1024) {
+        cpu_fprintf(f, "(%d KiB)\n", size);
+    } else {
+        size >>= 10;
+        if (size < 1024) {
+            cpu_fprintf(f, "(%d MiB)\n", size);
+        } else {
+            size >>= 10;
+            cpu_fprintf(f, "(%d GiB)\n", size);
+        }
+    }
+}
+
+static void dump_address_map(FILE *f, fprintf_function cpu_fprintf,
+                             CPUM68KState *env, uint32_t root_pointer)
+{
+    int i, j, k;
+    int tic_size, tic_shift;
+    uint32_t tib_mask;
+    uint32_t tia, tib, tic;
+    uint32_t logical = 0xffffffff, physical = 0xffffffff;
+    uint32_t first_logical = 0xffffffff, first_physical = 0xffffffff;
+    uint32_t last_logical, last_physical;
+    int32_t size;
+    int last_attr = -1, attr = -1;
+
+    if (env->mmu.tcr & 0x4000) {
+        /* 8k page */
+        tic_size = 32;
+        tic_shift = 13;
+        tib_mask = 0xffffff80;
+    } else {
+        /* 4k page */
+        tic_size = 64;
+        tic_shift = 12;
+        tib_mask = 0xffffff00;
+    }
+    for (i = 0; i < 128; i++) {
+        tia = ldl_phys(root_pointer + i * 4);
+        if ((tia & 2) == 0) /* INVALID */
+            continue;
+        for (j = 0; j < 128; j++) {
+            tib = ldl_phys((tia & 0xffffff00) + j * 4);
+            if ((tib & 2) == 0) /* INVALID */
+                continue;
+
+            for (k = 0; k < tic_size; k++) {
+                tic = ldl_phys((tib & tib_mask) + k * 4);
+                if ((tic & 3) == 0 || (tic & 3) == 3)
+                    continue;
+                if ((tic & 3) == 2) {
+                    tic = ldl_phys(tic & ~3);
+                }
+
+                last_logical = logical;
+                logical = (i << 25) | (j << 18) | (k << tic_shift);
+
+                last_physical = physical;
+                physical = tic & ~((1 << tic_shift) - 1);
+
+                last_attr = attr;
+                attr = tic & ((1 << tic_shift) - 1);
+
+                if ((logical != (last_logical + (1 << tic_shift))) ||
+                    (physical != (last_physical + (1 << tic_shift))) ||
+                    (attr & 4) != (last_attr & 4)) {
+
+                    if (first_logical != 0xffffffff) {
+                        size = last_logical + (1 << tic_shift) -
+                               first_logical;
+                        print_address_zone(f, cpu_fprintf, first_logical,
+                                           first_physical, size, last_attr);
+                    }
+                    first_logical = logical;
+                    first_physical = physical;
+                }
+            }
+        }
+    }
+    if (first_logical != logical || (attr & 4) != (last_attr & 4)) {
+        size = logical + (1 << tic_shift) - first_logical;
+        print_address_zone(f, cpu_fprintf, first_logical, first_physical, size,
+                           last_attr);
+    }
+}
+
 #define DUMP_CACHEFLAGS(a) \
     switch (a) { \
     case 0: /* cachable, write-through */ \
@@ -644,6 +739,10 @@ void dump_mmu(FILE *f, fprintf_function cpu_fprintf, CPUM68KState *env)
     dump_ttr(f, cpu_fprintf, env->mmu.dttr1);
 
     cpu_fprintf(f, "SRP: 0x%08x\n", env->mmu.srp);
+    dump_address_map(f, cpu_fprintf, env, env->mmu.srp);
+
+    cpu_fprintf(f, "URP: 0x%08x\n", env->mmu.urp);
+    dump_address_map(f, cpu_fprintf, env, env->mmu.urp);
 }
 
 static int check_TTR(uint32_t ttr, hwaddr *physical, int *prot,
