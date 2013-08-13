@@ -388,6 +388,10 @@ void m68k_cpu_unassigned_access(CPUState *cs, hwaddr addr,
     qemu_log_mask(CPU_LOG_INT, "Unassigned " TARGET_FMT_plx " wr=%d exe=%d\n",
              addr, is_write, is_exec);
 #endif
+    if (env == NULL) {
+        /* when called from gdb, env is NULL */
+        return;
+    }
 
     env->mmu.mmusr = 0;
     env->mmu.ssw = M68K_ATC_040;
