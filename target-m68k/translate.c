@@ -5304,9 +5304,21 @@ void m68k_cpu_dump_state(CPUState *cs, FILE *f, fprintf_function cpu_fprintf,
       }
     cpu_fprintf (f, "PC = %08x   ", env->pc);
     sr = env->sr;
-    cpu_fprintf (f, "SR = %04x %c%c%c%c%c ", sr, (sr & 0x10) ? 'X' : '-',
+    cpu_fprintf (f, "SR = %04x T:%x I:%x %c%c %c%c%c%c%c\n", sr,
+                 (sr & SR_T) >> SR_T_SHIFT,
+                 (sr & SR_I) >> SR_I_SHIFT,
+                 (sr & SR_S) ? 'S' : 'U',
+                 (sr & SR_M) ? '%' : 'I',
+                 (sr & 0x10) ? 'X' : '-',
                  (sr & CCF_N) ? 'N' : '-', (sr & CCF_Z) ? 'Z' : '-',
                  (sr & CCF_V) ? 'V' : '-', (sr & CCF_C) ? 'C' : '-');
+   
+#ifndef CONFIG_USER_ONLY
+    cpu_fprintf(f, "A7(MSP) = %08x  A7(USP) = %08x A7(ISP) = %08x\n",
+               env->sp[M68K_SSP], env->sp[M68K_USP], env->sp[M68K_ISP]);
+    cpu_fprintf(f, "VBR = 0x%08x\n", env->vbr);
+    cpu_fprintf(f, "SFC = %x TFC %x\n", env->sfc, env->dfc);
+#endif
 }
 
 void restore_state_to_opc(CPUM68KState *env, TranslationBlock *tb, int pc_pos)
