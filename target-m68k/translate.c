@@ -1890,11 +1890,21 @@ DISAS_INSN(arith_im)
     switch (op) {
     case 0: /* ori */
         tcg_gen_ori_i32(dest, src1, im);
-        gen_logic_cc(s, dest, opsize);
+        if ((insn & 0x3f) == 0x3c) {
+            gen_set_sr(s, dest, opsize == OS_BYTE);
+        } else {
+            gen_logic_cc(s, dest, opsize);
+            DEST_EA(env, insn, opsize, dest, &addr);
+        }
         break;
     case 1: /* andi */
         tcg_gen_andi_i32(dest, src1, im);
-        gen_logic_cc(s, dest, opsize);
+        if ((insn & 0x3f) == 0x3c) {
+            gen_set_sr(s, dest, opsize == OS_BYTE);
+        } else {
+            gen_logic_cc(s, dest, opsize);
+            DEST_EA(env, insn, opsize, dest, &addr);
+        }
         break;
     case 2: /* subi */
         tcg_gen_mov_i32(dest, src1);
@@ -1902,6 +1912,7 @@ DISAS_INSN(arith_im)
         tcg_gen_subi_i32(dest, dest, im);
         gen_update_cc_add(dest, tcg_const_i32(im));
         SET_CC_OP(opsize, SUB);
+        DEST_EA(env, insn, opsize, dest, &addr);
         break;
     case 3: /* addi */
         tcg_gen_mov_i32(dest, src1);
@@ -1909,10 +1920,12 @@ DISAS_INSN(arith_im)
         gen_update_cc_add(dest, tcg_const_i32(im));
         SET_X_FLAG(opsize, dest, tcg_const_i32(im));
 	SET_CC_OP(opsize, ADD);
+        DEST_EA(env, insn, opsize, dest, &addr);
         break;
     case 5: /* eori */
         tcg_gen_xori_i32(dest, src1, im);
         gen_logic_cc(s, dest, opsize);
+        DEST_EA(env, insn, opsize, dest, &addr);
         break;
     case 6: /* cmpi */
         tcg_gen_mov_i32(dest, src1);
@@ -1922,14 +1935,6 @@ DISAS_INSN(arith_im)
         break;
     default:
         abort();
-    }
-    if (op != 6) {
-        if ((op == 0 || op == 1) &&
-            (insn & 0x3f) == 0x3c) {
-            gen_set_sr(s, dest, opsize == OS_BYTE);
-        } else {
-            DEST_EA(env, insn, opsize, dest, &addr);
-        }
     }
 }
 
