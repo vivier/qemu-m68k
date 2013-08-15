@@ -148,9 +148,6 @@ typedef struct DisasContext {
 #endif
 
 /* XXX: move that elsewhere */
-/* ??? Fix exceptions.  */
-static void *gen_throws_exception;
-#define gen_last_qop NULL
 
 #define OS_BYTE     1
 #define OS_WORD     2
@@ -274,7 +271,6 @@ static inline TCGv gen_load(DisasContext *s, int opsize, TCGv addr,
     default:
         qemu_assert(0, "bad load size");
     }
-    gen_throws_exception = gen_last_qop;
     return tmp;
 }
 
@@ -295,7 +291,6 @@ static inline void gen_store(DisasContext *s, int opsize, TCGv addr, TCGv val,
     default:
         qemu_assert(0, "bad store size");
     }
-    gen_throws_exception = gen_last_qop;
 }
 
 typedef enum {
@@ -899,7 +894,6 @@ static inline void gen_load_FP0(DisasContext * s, int opsize, TCGv addr)
     default:
         qemu_assert(0, "Bad operand size");
     }
-    gen_throws_exception = gen_last_qop;
 }
 
 static inline void gen_store_FP0(DisasContext *s, int opsize, TCGv addr)
@@ -946,7 +940,6 @@ static inline void gen_store_FP0(DisasContext *s, int opsize, TCGv addr)
     default:
         qemu_assert(0, "Bad operand size");
     }
-    gen_throws_exception = gen_last_qop;
 }
 
 static void gen_op_load_ea_FP0(CPUM68KState *env, DisasContext *s,
@@ -5143,7 +5136,6 @@ gen_intermediate_code_internal(M68kCPU *cpu, TranslationBlock *tb,
     gen_tb_start();
     do {
         pc_offset = dc->pc - pc_start;
-        gen_throws_exception = NULL;
         if (unlikely(!QTAILQ_EMPTY(&env->breakpoints))) {
             QTAILQ_FOREACH(bp, &env->breakpoints, entry) {
                 if (bp->pc == dc->pc) {
