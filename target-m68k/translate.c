@@ -1368,17 +1368,17 @@ DISAS_INSN(dbcc)
 
 DISAS_INSN(undef_mac)
 {
-    gen_exception(s, s->pc - 2, EXCP_LINEA);
+    gen_exception(s, s->insn_pc, EXCP_LINEA);
 }
 
 DISAS_INSN(undef_fpu)
 {
-    gen_exception(s, s->pc - 2, EXCP_LINEF);
+    gen_exception(s, s->insn_pc, EXCP_LINEF);
 }
 
 DISAS_INSN(undef)
 {
-    gen_exception(s, s->pc - 2, EXCP_UNSUPPORTED);
+    gen_exception(s, s->insn_pc, EXCP_UNSUPPORTED);
 }
 
 DISAS_INSN(mulw)
@@ -1449,7 +1449,7 @@ DISAS_INSN(divl)
     ext = read_im16(env, s);
     if (ext & 0x400) {
         if (!m68k_feature(s->env, M68K_FEATURE_QUAD_MULDIV)) {
-            gen_exception(s, s->pc - 4, EXCP_UNSUPPORTED);
+            gen_exception(s, s->insn_pc, EXCP_UNSUPPORTED);
             return;
         }
         num = DREG(ext, 12);
@@ -1874,7 +1874,7 @@ DISAS_INSN(arith_im)
             src1 = gen_get_ccr(s);
         } else {
             if (IS_USER(s)) {
-                gen_exception(s, s->pc - 2, EXCP_PRIVILEGE);
+                gen_exception(s, s->insn_pc, EXCP_PRIVILEGE);
                 return;
             }
             src1 = gen_get_sr(s);
@@ -1949,7 +1949,7 @@ DISAS_INSN(cas)
 
     if ((insn & 0x3f) == 0x3c) {
         /* CAS2: Not yet implemented */
-        gen_exception(s, s->pc - 4, EXCP_UNSUPPORTED);
+        gen_exception(s, s->insn_pc, EXCP_UNSUPPORTED);
     }
 
     switch((insn >> 9) & 3) {
@@ -2018,7 +2018,7 @@ DISAS_INSN(moves)
     TCGLabel *l1, *l2;
 
     if (IS_USER(s)) {
-        gen_exception(s, s->pc - 2, EXCP_PRIVILEGE);
+        gen_exception(s, s->insn_pc, EXCP_PRIVILEGE);
         return;
     }
 
@@ -2256,7 +2256,7 @@ DISAS_INSN(swap)
 
 DISAS_INSN(bkpt)
 {
-    gen_exception(s, s->pc - 2, EXCP_DEBUG);
+    gen_exception(s, s->insn_pc, EXCP_DEBUG);
 }
 
 DISAS_INSN(pea)
@@ -2308,7 +2308,7 @@ DISAS_INSN(pulse)
 
 DISAS_INSN(illegal)
 {
-    gen_exception(s, s->pc - 2, EXCP_ILLEGAL);
+    gen_exception(s, s->insn_pc, EXCP_ILLEGAL);
 }
 
 /* ??? This should be atomic.  */
@@ -2338,7 +2338,7 @@ DISAS_INSN(mull)
     ext = read_im16(env, s);
     if (ext & 0x400) {
        if (!m68k_feature(s->env, M68K_FEATURE_QUAD_MULDIV)) {
-           gen_exception(s, s->pc - 4, EXCP_UNSUPPORTED);
+           gen_exception(s, s->insn_pc, EXCP_UNSUPPORTED);
            return;
        }
        reg = DREG(ext, 12);
@@ -3627,7 +3627,7 @@ DISAS_INSN(chk)
         opsize = OS_WORD;
         break;
     default:
-        gen_exception(s, s->pc - 2, EXCP_ILLEGAL);
+        gen_exception(s, s->insn_pc, EXCP_ILLEGAL);
         return;
     }
     SRC_EA(env, src, opsize, -1, NULL);
@@ -3638,13 +3638,13 @@ DISAS_INSN(chk)
     tcg_gen_brcondi_i32(TCG_COND_GE, reg, 0, l1);
     s->cc_op = CC_OP_FLAGS;
     tcg_gen_ori_i32(QREG_CC_DEST, QREG_CC_DEST, CCF_N);
-    gen_exception(s, s->pc - 2, EXCP_CHK);
+    gen_exception(s, s->insn_pc, EXCP_CHK);
     tcg_gen_br(l2);
     gen_set_label(l1);
     tcg_gen_brcond_i32(TCG_COND_LE, reg, src, l2);
     s->cc_op = CC_OP_FLAGS;
     tcg_gen_andi_i32(QREG_CC_DEST, QREG_CC_DEST, ~CCF_N);
-    gen_exception(s, s->pc - 2, EXCP_CHK);
+    gen_exception(s, s->insn_pc, EXCP_CHK);
     gen_set_label(l2);
 }
 
@@ -3673,7 +3673,7 @@ DISAS_INSN(move_from_sr)
     TCGv sr;
 
     if (IS_USER(s)) {    /* FIXME: not privileged on 68000 */
-        gen_exception(s, s->pc - 2, EXCP_PRIVILEGE);
+        gen_exception(s, s->insn_pc, EXCP_PRIVILEGE);
         return;
     }
     sr = gen_get_sr(s);
@@ -3683,7 +3683,7 @@ DISAS_INSN(move_from_sr)
 DISAS_INSN(move_to_sr)
 {
     if (IS_USER(s)) {
-        gen_exception(s, s->pc - 2, EXCP_PRIVILEGE);
+        gen_exception(s, s->insn_pc, EXCP_PRIVILEGE);
         return;
     }
     gen_move_to_sr(env, s, insn, 0);
@@ -3695,7 +3695,7 @@ DISAS_INSN(move_from_usp)
     TCGv reg;
 
     if (IS_USER(s)) {
-        gen_exception(s, s->pc - 2, EXCP_PRIVILEGE);
+        gen_exception(s, s->insn_pc, EXCP_PRIVILEGE);
         return;
     }
 
@@ -3708,7 +3708,7 @@ DISAS_INSN(move_to_usp)
     TCGv reg;
 
     if (IS_USER(s)) {
-        gen_exception(s, s->pc - 2, EXCP_PRIVILEGE);
+        gen_exception(s, s->insn_pc, EXCP_PRIVILEGE);
         return;
     }
 
@@ -3726,7 +3726,7 @@ DISAS_INSN(stop)
     uint16_t ext;
 
     if (IS_USER(s)) {
-        gen_exception(s, s->pc - 2, EXCP_PRIVILEGE);
+        gen_exception(s, s->insn_pc, EXCP_PRIVILEGE);
         return;
     }
 
@@ -3740,10 +3740,10 @@ DISAS_INSN(stop)
 DISAS_INSN(rte)
 {
     if (IS_USER(s)) {
-        gen_exception(s, s->pc - 2, EXCP_PRIVILEGE);
+        gen_exception(s, s->insn_pc, EXCP_PRIVILEGE);
         return;
     }
-    gen_exception(s, s->pc - 2, EXCP_RTE);
+    gen_exception(s, s->insn_pc, EXCP_RTE);
 }
 
 DISAS_INSN(movec)
@@ -3752,7 +3752,7 @@ DISAS_INSN(movec)
     TCGv reg;
 
     if (IS_USER(s)) {
-        gen_exception(s, s->pc - 2, EXCP_PRIVILEGE);
+        gen_exception(s, s->insn_pc, EXCP_PRIVILEGE);
         return;
     }
 
@@ -3774,7 +3774,7 @@ DISAS_INSN(movec)
 DISAS_INSN(intouch)
 {
     if (IS_USER(s)) {
-        gen_exception(s, s->pc - 2, EXCP_PRIVILEGE);
+        gen_exception(s, s->insn_pc, EXCP_PRIVILEGE);
         return;
     }
     /* ICache fetch.  Implement as no-op.  */
@@ -3783,7 +3783,7 @@ DISAS_INSN(intouch)
 DISAS_INSN(cpushl)
 {
     if (IS_USER(s)) {
-        gen_exception(s, s->pc - 2, EXCP_PRIVILEGE);
+        gen_exception(s, s->insn_pc, EXCP_PRIVILEGE);
         return;
     }
     /* Cache push/invalidate.  Implement as no-op.  */
@@ -3792,7 +3792,7 @@ DISAS_INSN(cpushl)
 DISAS_INSN(cpush)
 {
     if (IS_USER(s)) {
-        gen_exception(s, s->pc - 2, EXCP_PRIVILEGE);
+        gen_exception(s, s->insn_pc, EXCP_PRIVILEGE);
         return;
     }
     /* Cache push/invalidate.  Implement as no-op.  */
@@ -3801,7 +3801,7 @@ DISAS_INSN(cpush)
 DISAS_INSN(cinv)
 {
     if (IS_USER(s)) {
-        gen_exception(s, s->pc - 2, EXCP_PRIVILEGE);
+        gen_exception(s, s->insn_pc, EXCP_PRIVILEGE);
         return;
     }
     /* Invalidate cache line.  Implement as no-op.  */
@@ -3814,7 +3814,7 @@ DISAS_INSN(pflush)
     int opmode;
 
     if (IS_USER(s)) {
-        gen_exception(s, s->pc - 2, EXCP_PRIVILEGE);
+        gen_exception(s, s->insn_pc, EXCP_PRIVILEGE);
         return;
     }
 
@@ -3828,7 +3828,7 @@ DISAS_INSN(ptest)
     TCGv reg;
 
     if (IS_USER(s)) {
-        gen_exception(s, s->pc - 2, EXCP_PRIVILEGE);
+        gen_exception(s, s->insn_pc, EXCP_PRIVILEGE);
         return;
     }
     reg = AREG(insn, 0);
@@ -3852,7 +3852,7 @@ DISAS_INSN(move16)
 
         ext = read_im16(env, s);
         if ((ext & (1 << 15)) == 0) {
-            gen_exception(s, s->pc - 2, EXCP_ILLEGAL);
+            gen_exception(s, s->insn_pc, EXCP_ILLEGAL);
         }
 
         src = AREG(insn, 0);
@@ -3915,7 +3915,7 @@ DISAS_INSN(move16)
 
 DISAS_INSN(wddata)
 {
-    gen_exception(s, s->pc - 2, EXCP_PRIVILEGE);
+    gen_exception(s, s->insn_pc, EXCP_PRIVILEGE);
 }
 
 DISAS_INSN(wdebug)
@@ -3923,7 +3923,7 @@ DISAS_INSN(wdebug)
     M68kCPU *cpu = m68k_env_get_cpu(env);
 
     if (IS_USER(s)) {
-        gen_exception(s, s->pc - 2, EXCP_PRIVILEGE);
+        gen_exception(s, s->insn_pc, EXCP_PRIVILEGE);
         return;
     }
     /* TODO: Implement wdebug.  */
@@ -3932,7 +3932,7 @@ DISAS_INSN(wdebug)
 
 DISAS_INSN(trap)
 {
-    gen_exception(s, s->pc - 2, EXCP_TRAP0 + (insn & 0xf));
+    gen_exception(s, s->pc, EXCP_TRAP0 + (insn & 0xf));
 }
 
 static void gen_op_fmovem(CPUM68KState *env, DisasContext *s,
@@ -4849,7 +4849,7 @@ DISAS_INSN(to_mext)
 #ifdef CONFIG_EMULOP
 DISAS_INSN(emulop_exec_return)
 {
-    gen_exception(s, s->pc - 2, EXCP_EXEC_RETURN);
+    gen_exception(s, s->insn_pc, EXCP_EXEC_RETURN);
 }
 #endif
 
