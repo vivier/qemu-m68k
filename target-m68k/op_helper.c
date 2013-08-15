@@ -188,11 +188,6 @@ static void do_interrupt_all(CPUM68KState *env, int is_hw)
             cpu_loop_exit(env);
             return;
         }
-        if (env->exception_index >= EXCP_TRAP0
-            && env->exception_index <= EXCP_TRAP15) {
-            /* Move the PC after the trap instruction.  */
-            retaddr += 2;
-        }
     }
 
     vector = env->exception_index << 2;
