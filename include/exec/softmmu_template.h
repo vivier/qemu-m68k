@@ -393,7 +393,6 @@ void helper_le_st_name(CPUArchState *env, target_ulong addr, DATA_TYPE val,
             env->mmu.ssw = M68K_BA_SIZE_LONG;
             break;
         }
-        env->mmu.wb3_data = val;
 #endif
 #ifdef ALIGNED_ONLY
         if ((addr & (DATA_SIZE - 1)) != 0) {
@@ -483,7 +482,6 @@ void helper_be_st_name(CPUArchState *env, target_ulong addr, DATA_TYPE val,
             env->mmu.ssw = M68K_BA_SIZE_LONG;
             break;
         }
-        env->mmu.wb3_data = val;
 #endif
 #ifdef ALIGNED_ONLY
         if ((addr & (DATA_SIZE - 1)) != 0) {
