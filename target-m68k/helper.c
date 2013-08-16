@@ -1002,11 +1002,7 @@ int cpu_m68k_handle_mmu_fault (CPUM68KState *env, target_ulong address, int rw,
     } else {
         env->mmu.ssw |= 1;
     }
-    env->mmu.wb3_status = 0;
-    if (access_type & ACCESS_STORE) {
-        env->mmu.wb3_status = env->mmu.ssw & 0x7f;
-        env->mmu.wb3_status |= 0x80; /* valid */
-    } else {
+    if (!(access_type & ACCESS_STORE)) {
         env->mmu.ssw |= M68K_RW_040;
     }
     env->mmu.ar = address;
