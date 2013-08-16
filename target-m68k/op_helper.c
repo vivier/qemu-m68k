@@ -301,7 +301,7 @@ static void do_interrupt_all(CPUM68KState *env, int is_hw)
             sp -= 4;
             cpu_stl_kernel(env, sp, 0); /* write back 2 address */
             sp -= 4;
-            cpu_stl_kernel(env, sp, env->mmu.wb3_data); /* write back 3 data */
+            cpu_stl_kernel(env, sp, 0); /* write back 3 data */
             sp -= 4;
             cpu_stl_kernel(env, sp, env->mmu.ar); /* write back 3 address */
             sp -= 4;
@@ -311,7 +311,7 @@ static void do_interrupt_all(CPUM68KState *env, int is_hw)
             sp -= 2;
             cpu_stw_kernel(env, sp, 0); /* write back 2 status */
             sp -= 2;
-            cpu_stw_kernel(env, sp, env->mmu.wb3_status); /* write back 3 status */
+            cpu_stw_kernel(env, sp, 0); /* write back 3 status */
             sp -= 2;
             cpu_stw_kernel(env, sp, env->mmu.ssw); /* special status word */
             sp -= 4;
@@ -319,9 +319,7 @@ static void do_interrupt_all(CPUM68KState *env, int is_hw)
             do_stack_frame(env, &sp, 7, oldsr, 0, retaddr);
             mmu_fault = 0;
             if (qemu_loglevel_mask(CPU_LOG_INT)) {
-                qemu_log("            wb3d: %08x wb3a: %08x wb3s: %04x\n"
-                         "            ssw:  %08x ea:   %08x sfc:  %d    dfc: %d\n",
-                         env->mmu.wb3_data, env->mmu.ar, env->mmu.wb3_status,
+                qemu_log("            ssw:  %08x ea:   %08x sfc:  %d    dfc: %d\n",
                          env->mmu.ssw, env->mmu.ar, env->sfc, env->dfc);
             }
         } else if (env->exception_index == 3) {
@@ -410,11 +408,8 @@ void cpu_unassigned_access(CPUM68KState *env, hwaddr addr,
         break;
     }
 
-    if (is_write) {
-        env->mmu.wb3_status = 0x80 | env->mmu.ssw;
-    } else {
+    if (!is_write) {
         env->mmu.ssw |= M68K_RW_040;
-        env->mmu.wb3_status = 0;
     }
 
     env->mmu.ar = addr;
