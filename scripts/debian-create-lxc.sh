@@ -13,7 +13,6 @@ QEMU_PATH=$(dirname $(dirname $(readlink -f $0)))
 
 TARGET_LIST="i386 m68k alpha sparc mips ppc raspberrypi"
 check_target() {
-    CONTAINER_NAME=virt${1}
     CHECK_BIN=check_default
     case "$1" in
     i386)
@@ -23,9 +22,12 @@ check_target() {
         DEBIAN_TARGET=i386
         ;;
     m68k)
-        MIRROR=http://archive.debian.org/debian
-        SUITE=etch-m68k
-        DEB_SIGN=55BE302B
+#        MIRROR=http://archive.debian.org/debian
+#        SUITE=etch-m68k
+#        DEB_SIGN=55BE302B
+        MIRROR=http://ftp.debian-ports.org/debian
+        SUITE=unstable
+        DEB_SIGN=1C466F272FF7A9F4
         CONFIGURE_PARAMS=--m68k-default-cpu=m68040
         QEMU_TARGET=m68k
         DEBIAN_TARGET=m68k
@@ -67,6 +69,7 @@ check_target() {
         exit 1
         ;;
     esac
+    CONTAINER_NAME=virt${1}-${SUITE}
     QEMU_BIN=${QEMU_PATH}/build-${QEMU_TARGET}/${QEMU_TARGET}-linux-user/qemu-${QEMU_TARGET}
 }
 
