@@ -43,11 +43,14 @@ create_root() {
 
     # Debian bootstrap
 
-    debootstrap --foreign \
-                --arch=$arch \
-                --include=locales,openssh-server \
-                ${SUITE} "$rootfs" \
-                ${MIRROR}
+    if ! debootstrap --foreign \
+                     --arch=$arch \
+                     --include=locales,openssh-server,gnupg,apt \
+                     ${SUITE} "$rootfs" \
+                     ${MIRROR} ; then
+        echo "ERROR: failed to debootstrap to $rootfs" 1>&2
+        exit 1
+    fi
 
     # adding qemu binary
 
