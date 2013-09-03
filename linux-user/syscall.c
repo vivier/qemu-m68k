@@ -107,6 +107,7 @@ int __clone2(int (*fn)(void *), void *child_stack_base,
 #include <linux/reboot.h>
 #include <linux/route.h>
 #include <linux/filter.h>
+#include <sys/capability.h>
 #include "linux_loop.h"
 #include "cpu-uname.h"
 
@@ -7666,9 +7667,59 @@ abi_long do_syscall(void *cpu_env, int num, abi_long arg1,
         unlock_user(p, arg1, ret);
         break;
     case TARGET_NR_capget:
-        goto unimplemented;
+        {
+            cap_user_header_t target_hdr;
+            struct __user_cap_header_struct hdr;
+            cap_user_data_t target_data;
+            struct __user_cap_data_struct data;
+            target_hdr = lock_user(VERIFY_READ, arg1,
+                                   sizeof(*target_hdr), 0);
+            if (!target_hdr) {
+                goto efault;
+            }
+            target_data = lock_user(VERIFY_WRITE, arg2,
+                                    sizeof(*target_data), 0);
+            if (!target_data) {
+                unlock_user(target_hdr, arg1, ret);
+                goto efault;
+            }
+            hdr.version = tswap32(target_hdr->version);
+            hdr.pid = tswap32(target_hdr->pid);
+            ret = get_errno(capget(&hdr, &data));
+            target_data->effective = tswap32(data.effective);
+            target_data->permitted = tswap32(data.permitted);
+            target_data->inheritable = tswap32(data.inheritable);
+            unlock_user(target_data, arg2, ret);
+            unlock_user(target_hdr, arg1, ret);
+        }
+        break;
     case TARGET_NR_capset:
-        goto unimplemented;
+        {
+            cap_user_header_t target_hdr;
+            struct __user_cap_header_struct hdr;
+            cap_user_data_t target_data;
+            struct __user_cap_data_struct data;
+            target_hdr = lock_user(VERIFY_READ, arg1,
+                                   sizeof(*target_hdr), 0);
+            if (!target_hdr) {
+                goto efault;
+            }
+            target_data = lock_user(VERIFY_READ, arg2,
+                                    sizeof(*target_data), 0);
+            if (!target_data) {
+                unlock_user(target_hdr, arg1, ret);
+                goto efault;
+            }
+            hdr.version = tswap32(target_hdr->version);
+            hdr.pid = tswap32(target_hdr->pid);
+            data.effective = tswap32(target_data->effective);
+            data.permitted = tswap32(target_data->permitted);
+            data.inheritable = tswap32(target_data->inheritable);
+            ret = get_errno(capset(&hdr, &data));
+            unlock_user(target_data, arg2, ret);
+            unlock_user(target_hdr, arg1, ret);
+        }
+        break;
     case TARGET_NR_sigaltstack:
 #if defined(TARGET_I386) || defined(TARGET_ARM) || defined(TARGET_MIPS) || \
     defined(TARGET_SPARC) || defined(TARGET_PPC) || defined(TARGET_ALPHA) || \
