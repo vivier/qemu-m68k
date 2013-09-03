@@ -2432,6 +2432,21 @@ static abi_long do_socketcall(int num, abi_ulong vptr)
             ret = do_getsockopt(sockfd, level, optname, optval, optlen);
         }
         break;
+    case SOCKOP_accept4:
+        {
+            abi_ulong sockfd;
+            abi_ulong target_addr, target_addrlen;
+            abi_ulong flags;
+
+            if (get_user_ual(sockfd, vptr)
+                || get_user_ual(target_addr, vptr + n)
+                || get_user_ual(target_addrlen, vptr + 2 * n)
+                || get_user_ual(flags, vptr + 3 * n))
+                return -TARGET_EFAULT;
+
+            ret = do_accept4(sockfd, target_addr, target_addrlen, flags);
+        }
+        break;
     default:
         gemu_log("Unsupported socketcall: %d\n", num);
         ret = -TARGET_ENOSYS;
