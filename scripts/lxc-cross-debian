@@ -271,7 +271,7 @@ Usage: $1 --path PATH --name NAME --arch ARCH --interpreter-path QEMU
 !EOF
 }
 
-options=$(getopt -o hp:n:I:a:s:m:k:i: -l help,path:,name:,interpreter-path:,arch:,suite:,mirror:,deb-sign:,include: -- "$@")
+options=$(getopt -o hp:n:I:a:s:m:k:i: -l help,rootfs:,path:,name:,interpreter-path:,arch:,suite:,mirror:,deb-sign:,include: -- "$@")
 if [ $? -ne 0 ]; then
         usage $(basename $0)
         exit 1
@@ -283,6 +283,10 @@ while true ; do
     -p|--path)
         shift
         path="$1"
+        ;;
+    --rootfs)
+        shift
+        rootfs="$1"
         ;;
     -n|--name)
         shift
@@ -345,7 +349,9 @@ if [ $? -ne 0 ] ; then
     exit 1
 fi
 
-rootfs=$(get_rootfs $path)
+if [ "$rootfs" = "" ] ; then
+    rootfs=$(get_rootfs $path)
+fi
 
 create_root "$rootfs" "$name" "$qemu" "$arch" "$interpreter_path" "$include"
 
