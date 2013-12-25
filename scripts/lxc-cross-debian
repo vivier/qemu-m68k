@@ -12,7 +12,7 @@ SUITE=${SUITE:-stable}
 MIRROR=${MIRROR:-http://ftp.debian.org/debian}
 
 find_interpreter() {
-    qemu=$(basename "$1")
+    given_interpreter=$(basename "$1")
 
     if [ ! -d /proc/sys/fs/binfmt_misc/ ] ; then
         return 1
@@ -25,7 +25,7 @@ find_interpreter() {
         interpreter_path=$(sed -n "/^interpreter/s/interpreter \([^[:space:]]*\)/\1/p" "$file")
         interpreter=$(basename $interpreter_path)
          
-        if [ "$qemu" = "$interpreter" ] ; then
+        if [ "$given_interpreter" = "$interpreter" ] ; then
             echo "$interpreter_path"
             return 0
         fi
@@ -102,7 +102,7 @@ install_debian()
 
         return 0
 
-    ) 200>/var/lock/subsys/lxc-debian
+    ) 200>/var/lock/subsys/lxc-cross-debian
 
     return $?
 }
@@ -111,7 +111,7 @@ create_root() {
 
     rootfs="$1"
     hostname="$2"
-    qemu="$3"
+    interpreter="$3"
     arch="$4"
     interpreter_path="$5"
     include="$6"
@@ -138,10 +138,10 @@ create_root() {
         exit 1
     fi
 
-    # adding qemu binary
+    # adding interpreter binary
 
-    if ! cp "$qemu" "$rootfs/$interpreter_path" ; then
-        echo "ERROR: failed to copy $qemu to $rootfs/$interpreter_path" 1>&2
+    if ! cp "$interpreter" "$rootfs/$interpreter_path" ; then
+        echo "ERROR: failed to copy $interpreter to $rootfs/$interpreter_path" 1>&2
         exit 1
     fi
 
@@ -298,7 +298,7 @@ while true ; do
         ;;
     -I|--interpreter-path)
         shift
-        qemu="$1"
+        interpreter="$1"
         ;;
     -s|--suite)
         shift
@@ -327,7 +327,7 @@ while true ; do
     shift
 done
 
-if [ "$path" = "" -o "$name" = "" -o "$arch" = "" -o "$qemu" = "" ] ; then
+if [ "$path" = "" -o "$name" = "" -o "$arch" = "" -o "$interpreter" = "" ] ; then
     echo "ERROR: missing parameter" 1>&2
     usage
     exit 1
@@ -338,14 +338,14 @@ if ! type debootstrap ; then
     exit 1
 fi
 
-if ! file -b "${qemu}" |grep -q "statically linked" ; then
-    echo "ERROR: '${qemu}' must be statically linked" 1>&2
+if ! file -b "${interpreter}" |grep -q "statically linked" ; then
+    echo "ERROR: '${interpreter}' must be statically linked" 1>&2
     exit 1
 fi
 
-interpreter_path=$(find_interpreter "$qemu")
+interpreter_path=$(find_interpreter "$interpreter")
 if [ $? -ne 0 ] ; then
-    echo "ERROR: no binfmt interpreter using $(basename $qemu)" 1>&2
+    echo "ERROR: no binfmt interpreter using $(basename $interpreter)" 1>&2
     exit 1
 fi
 
@@ -353,7 +353,7 @@ if [ "$rootfs" = "" ] ; then
     rootfs=$(get_rootfs $path)
 fi
 
-create_root "$rootfs" "$name" "$qemu" "$arch" "$interpreter_path" "$include"
+create_root "$rootfs" "$name" "$interpreter" "$arch" "$interpreter_path" "$include"
 
 configure_debian "$rootfs" "$name" "$debian_sign"
 
