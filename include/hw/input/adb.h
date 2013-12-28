@@ -114,6 +114,6 @@ int adb_poll(ADBBusState *s, uint8_t *buf_out);
 #define TYPE_ADB_KEYBOARD "adb-keyboard"
 #define TYPE_ADB_MOUSE "adb-mouse"
 
-void adb_send(ADBBusState *adb, int state, uint8_t data);
-void adb_receive(ADBBusState *adb, int state, uint8_t *data);
+int adb_send(ADBBusState *adb, int state, uint8_t data);
+int adb_receive(ADBBusState *adb, int state, uint8_t *data);
 #endif /* !defined(__ADB_H__) */
