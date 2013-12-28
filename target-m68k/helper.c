@@ -993,7 +993,18 @@ int cpu_m68k_handle_mmu_fault (CPUM68KState *env, target_ulong address, int rw,
         return 0;
     }
     /* page fault */
-    env->mmu.ssw |= M68K_ATC_040;
+    env->mmu.ssw = M68K_ATC_040;
+    switch (env->data_size) {
+    case 1:
+        env->mmu.ssw |= M68K_BA_SIZE_BYTE;
+        break;
+    case 2:
+        env->mmu.ssw |= M68K_BA_SIZE_WORD;
+        break;
+    case 4:
+        env->mmu.ssw |= M68K_BA_SIZE_LONG;
+        break;
+    }
     if (access_type & ACCESS_SUPER) {
         env->mmu.ssw |= 4;
     }

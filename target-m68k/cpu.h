@@ -154,6 +154,8 @@ typedef struct CPUM68KState {
     uint32_t quadh;
 
     /* MMU status.  */
+
+    int data_size;
     struct {
         uint32_t ar;
         uint32_t ssw;
