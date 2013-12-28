@@ -526,7 +526,7 @@ void m68k_switch_sp(CPUM68KState *env)
 
 #if defined(CONFIG_USER_ONLY)
 
-int m68k_cpu_handle_mmu_fault(CPUState *cs, vaddr address, int rw,
+int m68k_cpu_handle_mmu_fault(CPUState *cs, vaddr address, int size, int rw,
                               int mmu_idx)
 {
     M68kCPU *cpu = M68K_CPU(cs);
@@ -961,7 +961,7 @@ hwaddr m68k_cpu_get_phys_page_debug(CPUState *cs, vaddr addr)
     return phys_addr;
 }
 
-int m68k_cpu_handle_mmu_fault(CPUState *cs, vaddr address, int rw,
+int m68k_cpu_handle_mmu_fault(CPUState *cs, vaddr address, int size, int rw,
                               int mmu_idx)
 {
     M68kCPU *cpu = M68K_CPU(cs);
@@ -1004,7 +1004,18 @@ int m68k_cpu_handle_mmu_fault(CPUState *cs, vaddr address, int rw,
         return 0;
     }
     /* page fault */
-    env->mmu.ssw |= M68K_ATC_040;
+    env->mmu.ssw = M68K_ATC_040;
+    switch (size) {
+    case 1:
+        env->mmu.ssw |= M68K_BA_SIZE_BYTE;
+        break;
+    case 2:
+        env->mmu.ssw |= M68K_BA_SIZE_WORD;
+        break;
+    case 4:
+        env->mmu.ssw |= M68K_BA_SIZE_LONG;
+        break;
+    }
     if (access_type & ACCESS_SUPER) {
         env->mmu.ssw |= 4;
     }

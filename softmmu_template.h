@@ -183,26 +183,13 @@ WORD_TYPE helper_le_ld_name(CPUArchState *env, target_ulong addr,
     /* If the TLB entry is for a different page, reload and try again.  */
     if ((addr & TARGET_PAGE_MASK)
          != (tlb_addr & (TARGET_PAGE_MASK | TLB_INVALID_MASK))) {
-#ifdef TARGET_M68K
-        switch (DATA_SIZE) {
-        case 1:
-            env->mmu.ssw = M68K_BA_SIZE_BYTE;
-            break;
-        case 2:
-            env->mmu.ssw = M68K_BA_SIZE_WORD;
-            break;
-        case 4:
-            env->mmu.ssw = M68K_BA_SIZE_LONG;
-            break;
-        }
-#endif
         if ((addr & (DATA_SIZE - 1)) != 0
             && (get_memop(oi) & MO_AMASK) == MO_ALIGN) {
             cpu_unaligned_access(ENV_GET_CPU(env), addr, READ_ACCESS_TYPE,
                                  mmu_idx, retaddr);
         }
         if (!VICTIM_TLB_HIT(ADDR_READ)) {
-            tlb_fill(ENV_GET_CPU(env), addr, READ_ACCESS_TYPE,
+            tlb_fill(ENV_GET_CPU(env), addr, DATA_SIZE, READ_ACCESS_TYPE,
                      mmu_idx, retaddr);
         }
         tlb_addr = env->tlb_table[mmu_idx][index].ADDR_READ;
@@ -288,21 +275,8 @@ WORD_TYPE helper_be_ld_name(CPUArchState *env, target_ulong addr,
             cpu_unaligned_access(ENV_GET_CPU(env), addr, READ_ACCESS_TYPE,
                                  mmu_idx, retaddr);
         }
-#ifdef TARGET_M68K
-        switch (DATA_SIZE) {
-        case 1:
-            env->mmu.ssw = M68K_BA_SIZE_BYTE;
-            break;
-        case 2:
-            env->mmu.ssw = M68K_BA_SIZE_WORD;
-            break;
-        case 4:
-            env->mmu.ssw = M68K_BA_SIZE_LONG;
-            break;
-        }
-#endif
         if (!VICTIM_TLB_HIT(ADDR_READ)) {
-            tlb_fill(ENV_GET_CPU(env), addr, READ_ACCESS_TYPE,
+            tlb_fill(ENV_GET_CPU(env), addr, DATA_SIZE, READ_ACCESS_TYPE,
                      mmu_idx, retaddr);
         }
         tlb_addr = env->tlb_table[mmu_idx][index].ADDR_READ;
@@ -424,26 +398,14 @@ void helper_le_st_name(CPUArchState *env, target_ulong addr, DATA_TYPE val,
     /* If the TLB entry is for a different page, reload and try again.  */
     if ((addr & TARGET_PAGE_MASK)
         != (tlb_addr & (TARGET_PAGE_MASK | TLB_INVALID_MASK))) {
-#ifdef TARGET_M68K
-        switch (DATA_SIZE) {
-        case 1:
-            env->mmu.ssw = M68K_BA_SIZE_BYTE;
-            break;
-        case 2:
-            env->mmu.ssw = M68K_BA_SIZE_WORD;
-            break;
-        case 4:
-            env->mmu.ssw = M68K_BA_SIZE_LONG;
-            break;
-        }
-#endif
         if ((addr & (DATA_SIZE - 1)) != 0
             && (get_memop(oi) & MO_AMASK) == MO_ALIGN) {
             cpu_unaligned_access(ENV_GET_CPU(env), addr, MMU_DATA_STORE,
                                  mmu_idx, retaddr);
         }
         if (!VICTIM_TLB_HIT(addr_write)) {
-            tlb_fill(ENV_GET_CPU(env), addr, MMU_DATA_STORE, mmu_idx, retaddr);
+            tlb_fill(ENV_GET_CPU(env), addr, DATA_SIZE, MMU_DATA_STORE,
+                     mmu_idx, retaddr);
         }
         tlb_addr = env->tlb_table[mmu_idx][index].addr_write;
     }
@@ -517,26 +479,14 @@ void helper_be_st_name(CPUArchState *env, target_ulong addr, DATA_TYPE val,
     /* If the TLB entry is for a different page, reload and try again.  */
     if ((addr & TARGET_PAGE_MASK)
         != (tlb_addr & (TARGET_PAGE_MASK | TLB_INVALID_MASK))) {
-#ifdef TARGET_M68K
-        switch (DATA_SIZE) {
-        case 1:
-            env->mmu.ssw = M68K_BA_SIZE_BYTE;
-            break;
-        case 2:
-            env->mmu.ssw = M68K_BA_SIZE_WORD;
-            break;
-        case 4:
-            env->mmu.ssw = M68K_BA_SIZE_LONG;
-            break;
-        }
-#endif
         if ((addr & (DATA_SIZE - 1)) != 0
             && (get_memop(oi) & MO_AMASK) == MO_ALIGN) {
             cpu_unaligned_access(ENV_GET_CPU(env), addr, MMU_DATA_STORE,
                                  mmu_idx, retaddr);
         }
         if (!VICTIM_TLB_HIT(addr_write)) {
-            tlb_fill(ENV_GET_CPU(env), addr, MMU_DATA_STORE, mmu_idx, retaddr);
+            tlb_fill(ENV_GET_CPU(env), addr, DATA_SIZE, MMU_DATA_STORE,
+                     mmu_idx, retaddr);
         }
         tlb_addr = env->tlb_table[mmu_idx][index].addr_write;
     }
@@ -617,7 +567,8 @@ void probe_write(CPUArchState *env, target_ulong addr, int mmu_idx,
         != (tlb_addr & (TARGET_PAGE_MASK | TLB_INVALID_MASK))) {
         /* TLB entry is for a different page */
         if (!VICTIM_TLB_HIT(addr_write)) {
-            tlb_fill(ENV_GET_CPU(env), addr, MMU_DATA_STORE, mmu_idx, retaddr);
+            tlb_fill(ENV_GET_CPU(env), addr, DATA_SIZE, MMU_DATA_STORE,
+                     mmu_idx, retaddr);
         }
     }
 }
