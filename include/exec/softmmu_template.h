@@ -154,17 +154,7 @@ WORD_TYPE helper_le_ld_name(CPUArchState *env, target_ulong addr, int mmu_idx,
     if ((addr & TARGET_PAGE_MASK)
          != (tlb_addr & (TARGET_PAGE_MASK | TLB_INVALID_MASK))) {
 #ifdef TARGET_M68K
-        switch (DATA_SIZE) {
-        case 1:
-            env->mmu.ssw = M68K_BA_SIZE_BYTE;
-            break;
-        case 2:
-            env->mmu.ssw = M68K_BA_SIZE_WORD;
-            break;
-        case 4:
-            env->mmu.ssw = M68K_BA_SIZE_LONG;
-            break;
-        }
+        env->data_size = DATA_SIZE;
 #endif
 #ifdef ALIGNED_ONLY
         if ((addr & (DATA_SIZE - 1)) != 0) {
@@ -254,17 +244,7 @@ WORD_TYPE helper_be_ld_name(CPUArchState *env, target_ulong addr, int mmu_idx,
         }
 #endif
 #ifdef TARGET_M68K
-        switch (DATA_SIZE) {
-        case 1:
-            env->mmu.ssw = M68K_BA_SIZE_BYTE;
-            break;
-        case 2:
-            env->mmu.ssw = M68K_BA_SIZE_WORD;
-            break;
-        case 4:
-            env->mmu.ssw = M68K_BA_SIZE_LONG;
-            break;
-        }
+        env->data_size = DATA_SIZE;
 #endif
         tlb_fill(ENV_GET_CPU(env), addr, READ_ACCESS_TYPE, mmu_idx, retaddr);
         tlb_addr = env->tlb_table[mmu_idx][index].ADDR_READ;
@@ -382,17 +362,7 @@ void helper_le_st_name(CPUArchState *env, target_ulong addr, DATA_TYPE val,
     if ((addr & TARGET_PAGE_MASK)
         != (tlb_addr & (TARGET_PAGE_MASK | TLB_INVALID_MASK))) {
 #ifdef TARGET_M68K
-        switch (DATA_SIZE) {
-        case 1:
-            env->mmu.ssw = M68K_BA_SIZE_BYTE;
-            break;
-        case 2:
-            env->mmu.ssw = M68K_BA_SIZE_WORD;
-            break;
-        case 4:
-            env->mmu.ssw = M68K_BA_SIZE_LONG;
-            break;
-        }
+        env->data_size = DATA_SIZE;
 #endif
 #ifdef ALIGNED_ONLY
         if ((addr & (DATA_SIZE - 1)) != 0) {
@@ -471,17 +441,7 @@ void helper_be_st_name(CPUArchState *env, target_ulong addr, DATA_TYPE val,
     if ((addr & TARGET_PAGE_MASK)
         != (tlb_addr & (TARGET_PAGE_MASK | TLB_INVALID_MASK))) {
 #ifdef TARGET_M68K
-        switch (DATA_SIZE) {
-        case 1:
-            env->mmu.ssw = M68K_BA_SIZE_BYTE;
-            break;
-        case 2:
-            env->mmu.ssw = M68K_BA_SIZE_WORD;
-            break;
-        case 4:
-            env->mmu.ssw = M68K_BA_SIZE_LONG;
-            break;
-        }
+        env->data_size = DATA_SIZE;
 #endif
 #ifdef ALIGNED_ONLY
         if ((addr & (DATA_SIZE - 1)) != 0) {
