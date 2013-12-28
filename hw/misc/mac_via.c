@@ -41,7 +41,7 @@
 
 #ifdef DEBUG_VIA
 #define VIA_DPRINTF(fmt, ...)                                  \
-    do { printf("VIA%d: " fmt , s->type, ## __VA_ARGS__); } while (0)
+    do { printf("VIA%d: " fmt , via, ## __VA_ARGS__); } while (0)
 #else
 #define VIA_DPRINTF(fmt, ...)
 #endif
@@ -605,8 +605,8 @@ static void via1_adb_update(MacVIAState *m)
         /* output mode */
         adb_send(&m->adb_bus, state, s->sr);
     } else {
-	    if (s->b & VIA1B_vADBInt)
-            	return;
+        if (s->b & VIA1B_vADBInt)
+            return;
         /* input mode */
         adb_receive(&m->adb_bus, state, &s->sr);
     }
@@ -626,10 +626,11 @@ static void via_write(void *opaque, hwaddr addr,
 
     switch (addr) {
     case vBufA: /* Buffer A */
-        VIA_DPRINTF("writeb: vBufA = %02x\n", val);
+        VIA_DPRINTF("writeb: vBufA = %02"PRIx64"\n", val);
         s->a = (s->a & ~s->dira) | (val & s->dira);
         break;
     case vBufB:  /* Register B */
+        VIA_DPRINTF("writeb: vBufB = %02"PRIx64"\n", val);
         s->b = (s->b & ~s->dirb) | (val & s->dirb);
         if (via == 0) {
             via1_rtc_update(m);
@@ -638,55 +639,55 @@ static void via_write(void *opaque, hwaddr addr,
         }
         break;
     case vDirA:  /* Data Direction Register A. */
-        VIA_DPRINTF("writeb: vDirA = %02x\n", val);
+        VIA_DPRINTF("writeb: vDirA = %02"PRIx64"\n", val);
         s->dira = val;
         break;
     case vDirB:  /* Data Direction Register B. */
-        VIA_DPRINTF("writeb: vDirB = %02x\n", val);
+        VIA_DPRINTF("writeb: vDirB = %02"PRIx64"\n", val);
         s->dirb = val;
         break;
     case vT1CL:  /* Timer one counter low. */
-        VIA_DPRINTF("writeb: vT1CL = %02x\n", val);
+        VIA_DPRINTF("writeb: vT1CL = %02"PRIx64"\n", val);
         s->timers[0].counter = (s->timers[0].counter & 0xff00) | val;
         break;
     case vT1CH:  /* Timer one counter high. */
-        VIA_DPRINTF("writeb: vT1CH = %02x\n", val);
+        VIA_DPRINTF("writeb: vT1CH = %02"PRIx64"\n", val);
         s->timers[0].counter = (s->timers[0].counter & 0x00ff) | (val << 8);
         via_arm_timer(&s->timers[0], qemu_clock_get_ns(QEMU_CLOCK_VIRTUAL));
         break;
     case vT1LL:  /* Timer one latches low. */
-        VIA_DPRINTF("writeb: vT1LL = %02x\n", val);
+        VIA_DPRINTF("writeb: vT1LL = %02"PRIx64"\n", val);
         s->timers[0].latch = (s->timers[0].latch & 0xff00) | val;
         break;
     case vT1LH:  /* Timer one latches high. */
-        VIA_DPRINTF("writeb: vT1LH = %02x\n", val);
+        VIA_DPRINTF("writeb: vT1LH = %02"PRIx64"\n", val);
         s->timers[0].latch = (s->timers[0].latch & 0x00ff) | (val << 8);
         via_arm_timer(&s->timers[0], qemu_clock_get_ns(QEMU_CLOCK_VIRTUAL));
         break;
     case vT2CL:  /* Timer two counter low. */
-        VIA_DPRINTF("writeb: vT2CL = %02x\n", val);
+        VIA_DPRINTF("writeb: vT2CL = %02"PRIx64"\n", val);
         s->timers[1].counter = (s->timers[1].counter & 0xff00) | val;
         break;
     case vT2CH:  /* Timer two counter high. */
-        VIA_DPRINTF("writeb: vT2CH = %02x\n", val);
+        VIA_DPRINTF("writeb: vT2CH = %02"PRIx64"\n", val);
         s->timers[1].counter = (s->timers[1].counter & 0x00ff) | (val << 8);
         via_arm_timer(&s->timers[1], qemu_clock_get_ns(QEMU_CLOCK_VIRTUAL));
         break;
     case vSR:    /* Shift register. */
-        VIA_DPRINTF("writeb: vSR = %02x\n", val);
+        VIA_DPRINTF("writeb: vSR = %02"PRIx64"\n", val);
         s->sr = val;
         break;
     case vACR:   /* Auxilary control register. */
-        VIA_DPRINTF("writeb: vACR = %02x\n", val);
+        VIA_DPRINTF("writeb: vACR = %02"PRIx64"\n", val);
         s->acr = val;
         via_timer_update(s, &s->timers[0], qemu_clock_get_ns(QEMU_CLOCK_VIRTUAL));
         break;
     case vPCR:   /* Peripheral control register. */
-        VIA_DPRINTF("writeb: vPCR = %02x\n", val);
+        VIA_DPRINTF("writeb: vPCR = %02"PRIx64"\n", val);
         s->pcr = val;
         break;
     case vIFR:   /* Interrupt flag register. */
-        VIA_DPRINTF("writeb: vIFR = %02x\n", val);
+        VIA_DPRINTF("writeb: vIFR = %02"PRIx64"\n", val);
         if (val & IRQ_SET) {
             /* set bits */
             s->ifr |= val & 0x7f;
@@ -699,7 +700,7 @@ static void via_write(void *opaque, hwaddr addr,
         via_irq_update(m, via);
         break;
     case vIER:   /* Interrupt enable register. */
-        VIA_DPRINTF("writeb: vIER = %02x\n", val);
+        VIA_DPRINTF("writeb: vIER = %02"PRIx64"\n", val);
         if (val & IRQ_SET) {
             /* set bits */
             s->ier |= val & 0x7f;
@@ -712,7 +713,7 @@ static void via_write(void *opaque, hwaddr addr,
         via_irq_update(m, via);
         break;
     default:
-        VIA_DPRINTF("writeb: addr 0x%08x val %02x\n", addr, val);
+        VIA_DPRINTF("writeb: addr 0x%08lx val %02"PRIx64"\n", (long)addr, val);
         break;
     }
 }
@@ -793,7 +794,7 @@ static uint64_t via_read(void *opaque, hwaddr addr,
         break;
     default:
         val = 0;
-        VIA_DPRINTF("readb:  addr 0x%08x val ??\n", addr);
+        VIA_DPRINTF("readb:  addr 0x%08lx val ??\n", (long)addr);
         break;
     }
     return val;
