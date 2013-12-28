@@ -346,8 +346,8 @@ bool io_mem_read(struct MemoryRegion *mr, hwaddr addr,
 bool io_mem_write(struct MemoryRegion *mr, hwaddr addr,
                   uint64_t value, unsigned size);
 
-void tlb_fill(CPUState *cpu, target_ulong addr, int is_write, int mmu_idx,
-              uintptr_t retaddr);
+void tlb_fill(CPUState *cpu, target_ulong addr, int size, int is_write,
+              int mmu_idx, uintptr_t retaddr);
 
 #endif
 

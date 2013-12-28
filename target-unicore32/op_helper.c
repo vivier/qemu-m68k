@@ -242,7 +242,7 @@ uint32_t HELPER(ror_cc)(CPUUniCore32State *env, uint32_t x, uint32_t i)
 }
 
 #ifndef CONFIG_USER_ONLY
-void tlb_fill(CPUState *cs, target_ulong addr, int is_write,
+void tlb_fill(CPUState *cs, target_ulong addr, int size, int is_write,
               int mmu_idx, uintptr_t retaddr)
 {
     int ret;
