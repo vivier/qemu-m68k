@@ -284,7 +284,8 @@ static int adb_kbd_request(ADBDevice *d, uint8_t *obuf,
         case 3:
             obuf[0] = d->handler;
             obuf[1] = d->devaddr;
-            olen = 2;
+            obuf[2] = 0x01; /* ANSI keyboard type */
+            olen = 3;
             break;
         }
         break;
