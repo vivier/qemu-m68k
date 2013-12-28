@@ -96,7 +96,7 @@ int adb_poll(ADBBusState *s, uint8_t *obuf, uint16_t poll_mask)
     return olen;
 }
 
-void adb_send(ADBBusState *adb, int state, uint8_t data)
+int adb_send(ADBBusState *adb, int state, uint8_t data)
 {
     switch(state) {
     case STATE_NEW:
@@ -105,49 +105,74 @@ void adb_send(ADBBusState *adb, int state, uint8_t data)
         break;
     case STATE_EVEN:
         if ((adb->data_out_index & 1) == 0)
-            return;
+            return 0;
         adb->data_out[adb->data_out_index++] = data;
         break;
     case STATE_ODD:
         if (adb->data_out_index & 1)
-            return;
+            return 0;
         adb->data_out[adb->data_out_index++] = data;
         break;
     case STATE_IDLE:
-        if (adb->data_out_index == 0)
-            return;
-         adb->data_in_size = adb_request(adb, adb->data_in,
-                                         adb->data_out, adb->data_out_index);
-        if (adb->data_in_size <= 0)
-            return;
-        break;
+        return 0;
     }
     qemu_irq_raise(adb->data_ready);
+    return 1;
 }
 
-void adb_receive(ADBBusState *adb, int state, uint8_t *data)
+int adb_receive(ADBBusState *adb, int state, uint8_t *data)
 {
-    if (adb->data_in_index >= adb->data_in_size)
-        return;
     switch(state) {
     case STATE_NEW:
-        return;
+        return 0;
     case STATE_EVEN:
+        if (adb->data_in_size <= 0) {
+            qemu_irq_raise(adb->data_ready);
+            return 0;
+        }
+        if (adb->data_in_index >= adb->data_in_size) {
+            *data = 0;
+            qemu_irq_raise(adb->data_ready);
+            return 1;
+        }
         if ((adb->data_in_index & 1) == 0)
-            return;
+            return 0;
         *data = adb->data_in[adb->data_in_index++];
         break;
     case STATE_ODD:
+        if (adb->data_in_size <= 0) {
+            qemu_irq_raise(adb->data_ready);
+            return 0;
+        }
+        if (adb->data_in_index >= adb->data_in_size) {
+            *data = 0;
+            qemu_irq_raise(adb->data_ready);
+            return 1;
+        }
         if (adb->data_in_index & 1)
-            return;
+            return 0;
         *data = adb->data_in[adb->data_in_index++];
         break;
     case STATE_IDLE:
+        if (adb->data_out_index == 0)
+            return 0;
+        adb->data_in_size = adb_request(adb, adb->data_in,
+                                        adb->data_out, adb->data_out_index);
+        adb->data_out_index = 0;
+        if (adb->data_in_size < 0) {
+            *data = 0xff;
+            qemu_irq_raise(adb->data_ready);
+            return -1;
+        }
+        if (adb->data_in_size == 0) {
+            return 0;
+        }
         *data = adb->data_in[0];
-         adb->data_in_index = 1;
+        adb->data_in_index = 1;
         break;
     }
     qemu_irq_raise(adb->data_ready);
+    return 1;
 }
 
 static const TypeInfo adb_bus_type_info = {

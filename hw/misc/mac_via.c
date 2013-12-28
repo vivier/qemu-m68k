@@ -414,10 +414,6 @@ static void via1_irq_request(VIAState *s, int irq, int level)
     } else {
         s->ifr &= ~(1 << irq);
     }
-    if ((s->ier & (1 << VIA1_IRQ_ADB_READY_BIT)) &&
-        irq == VIA1_IRQ_ADB_READY_BIT) {
-        s->b &= ~VIA1B_vADBInt;
-    }
     via_update_irq(s);
 }
 
@@ -599,17 +595,26 @@ static void via1_adb_update(MacVIAState *m)
 {
     VIAState *s = &m->via[0];
     int state;
+    int ret;
 
     state = (s->b & VIA1B_vADB_StateMask) >> VIA1B_vADB_StateShift;
 
     if (s->acr & VIA1ACR_vShiftOut) {
         /* output mode */
-        adb_send(&m->adb_bus, state, s->sr);
+        ret = adb_send(&m->adb_bus, state, s->sr);
+        if (ret > 0) {
+            s->b &= ~VIA1B_vADBInt;
+        } else {
+            s->b |= VIA1B_vADBInt;
+        }
     } else {
-        if (s->b & VIA1B_vADBInt)
-            return;
         /* input mode */
-        adb_receive(&m->adb_bus, state, &s->sr);
+        ret = adb_receive(&m->adb_bus, state, &s->sr);
+        if (ret > 0) {
+            s->b &= ~VIA1B_vADBInt;
+        } else {
+            s->b |= VIA1B_vADBInt;
+        }
     }
 }
 
