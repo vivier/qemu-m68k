@@ -260,6 +260,8 @@
 #define VIA1B_vADB_StateMask	(VIA1B_vADBS1 | VIA1B_vADBS2)
 #define VIA1B_vADB_StateShift	4
 
+#define VIA_ADB_POLL_FREQ 50 /* XXX: not real */
+
 typedef struct VIATimer {
     int index;
     uint16_t counter; /* Timer counter */
@@ -318,6 +320,7 @@ typedef struct MacVIAState {
     /* ADB */
 
     ADBBusState adb_bus;
+    QEMUTimer *adb_poll_timer;
 
     /* external timers */
 
@@ -609,12 +612,30 @@ static void via1_adb_update(MacVIAState *m)
     } else {
         /* input mode */
         ret = adb_receive(&m->adb_bus, state, &s->sr);
-        if (ret > 0) {
+        if (ret > 0 && s->sr != 0xff) {
             s->b &= ~VIA1B_vADBInt;
         } else {
             s->b |= VIA1B_vADBInt;
         }
     }
+}
+
+static void via_adb_poll(void *opaque)
+{
+    MacVIAState *m = opaque;
+    VIAState *s = &m->via[0];
+    int state;
+
+    if ((s->b & VIA1B_vADBInt) == 0)
+        return;
+
+    state = (s->b & VIA1B_vADB_StateMask) >> VIA1B_vADB_StateShift;
+    if (adb_via_poll(&m->adb_bus, state, &s->sr)) {
+        s->b &= ~VIA1B_vADBInt;
+    }
+    timer_mod(m->adb_poll_timer,
+              qemu_clock_get_ns(QEMU_CLOCK_VIRTUAL) +
+              (get_ticks_per_sec() / VIA_ADB_POLL_FREQ));
 }
 
 static void via_write(void *opaque, hwaddr addr,
@@ -858,6 +879,10 @@ static void mac_via_reset(DeviceState *dev)
     m->cmd = 0;
     m->wprotect = 0;
     m->alt = 0;
+
+    timer_mod(m->adb_poll_timer,
+              qemu_clock_get_ns(QEMU_CLOCK_VIRTUAL) +
+              (get_ticks_per_sec() / VIA_ADB_POLL_FREQ));
 }
 
 static void mac_via_realizefn(DeviceState *dev, Error **errp)
@@ -872,6 +897,7 @@ static void mac_via_realizefn(DeviceState *dev, Error **errp)
 
     qemu_get_timedate(&tm, 0);
     m->tick_offset = (uint32_t)mktimegm(&tm) + RTC_OFFSET;
+    m->adb_poll_timer = timer_new_ns(QEMU_CLOCK_VIRTUAL, via_adb_poll, m);
 
     /* ouput IRQs */
 
