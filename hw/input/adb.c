@@ -186,6 +186,8 @@ int adb_receive(ADBBusState *adb, int state, uint8_t *data)
     }
     *data = adb->data_in[adb->data_in_index++];
     qemu_irq_raise(adb->data_ready);
+    if (*data == 0xff || *data == 0)
+        return 0;
     return 1;
 }
 
