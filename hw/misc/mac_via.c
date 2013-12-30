@@ -613,7 +613,7 @@ static void via1_adb_update(MacVIAState *m)
     } else {
         /* input mode */
         ret = adb_receive(&m->adb_bus, state, &s->sr);
-        if (ret > 0 && s->sr != 0xff) {
+        if (ret > 0) {
             s->b &= ~VIA1B_vADBInt;
         } else {
             s->b |= VIA1B_vADBInt;
