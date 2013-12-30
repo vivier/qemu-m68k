@@ -801,7 +801,6 @@ static uint64_t sysbus_esp_pdma_read(void *opaque, hwaddr addr,
     SysBusESPState *sysbus = opaque;
     ESPState *s = &sysbus->esp;
     uint64_t val = 0;
-    uint32_t dmalen;
 
     if (s->pdma_len == 0)
         return 0;
@@ -809,13 +808,11 @@ static uint64_t sysbus_esp_pdma_read(void *opaque, hwaddr addr,
     case 1:
         val = *s->pdma_cur++;
         s->pdma_len--;
-        dmalen++;
         break;
     case 2:
         val = *s->pdma_cur++;
         val = (val << 8) | *s->pdma_cur++;
         s->pdma_len -= 2;
-        dmalen += 2;
         break;
     }
 
