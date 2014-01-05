@@ -891,6 +891,7 @@ void dp83932_init(NICInfo *nd, hwaddr base, int it_shift, int regs_offset,
                   void (*memory_rw)(void *opaque, hwaddr addr, uint8_t *buf, int len, int is_write))
 {
     dp8393xState *s;
+    int i;
 
     qemu_check_nic_model(nd, "dp83932");
 
@@ -907,6 +908,8 @@ void dp83932_init(NICInfo *nd, hwaddr base, int it_shift, int regs_offset,
 
     s->conf.macaddr = nd->macaddr;
     s->conf.peers.ncs[0] = nd->netdev;
+    for (i = 0; i < 6; i++)
+        s->cam[15][i] = s->conf.macaddr.a[i];
 
     s->nic = qemu_new_nic(&net_dp83932_info, &s->conf, nd->model, nd->name, s);
 
