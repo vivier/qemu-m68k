@@ -203,6 +203,18 @@ static void q800_init(QEMUMachineInitArgs *args)
     }
     if (strcmp(nd_table[0].model, "dp83932") != 0) {
         hw_error("Q800 needs a dp83932 ethernet interfaces");
+    } else {
+        /* MacSonic driver needs an Apple MAC address
+         * Valid prefix are:
+         * 00:05:02 Apple
+         * 00:80:19 Dayna Communications, Inc.
+         * 00:A0:40 Apple
+         * 08:00:07 Apple
+         * (Q800 use the last one)
+         */
+        nd_table[0].macaddr.a[0] = 0x08;
+        nd_table[0].macaddr.a[1] = 0x00;
+        nd_table[0].macaddr.a[2] = 0x07;
     }
     dp83932_init(&nd_table[0], SONIC_BASE, 2, 2, get_system_memory(),
                  pic[5], NULL, macsonic_rw);
