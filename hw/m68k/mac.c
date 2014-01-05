@@ -220,7 +220,7 @@ static void q800_init(QEMUMachineInitArgs *args)
         nd_table[0].macaddr.a[2] = 0x07;
     }
     dp83932_init(&nd_table[0], SONIC_BASE, 2, 2, get_system_memory(),
-                 pic[5], NULL, macsonic_rw);
+                 pic[2], NULL, macsonic_rw);
 
     /* SCC */
 
