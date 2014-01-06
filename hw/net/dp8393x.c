@@ -173,6 +173,26 @@ typedef struct dp8393xState {
     AddressSpace as;
 } dp8393xState;
 
+static void convert_to_be(uint8_t *buf, int len)
+{
+    int i;
+    uint32_t data;
+    for (i = 0; i < len; i += 4) {
+        data = be32_to_cpu(*(uint32_t*)(buf + i));
+        *(uint32_t*)(buf + i) = data;
+    }
+}
+
+static void convert_from_be(uint8_t *buf, int len)
+{
+    int i;
+    uint32_t data;
+    for (i = 0; i < len; i += 4) {
+        data = cpu_to_be32(*(uint32_t*)(buf + i));
+        *(uint32_t*)(buf + i) = data;
+    }
+}
+
 static void dp8393x_update_irq(dp8393xState *s)
 {
     int level = (s->regs[SONIC_IMR] & s->regs[SONIC_ISR]) ? 1 : 0;
@@ -205,6 +225,7 @@ static void dp8393x_do_load_cam(dp8393xState *s)
         address_space_rw(&s->as,
             (s->regs[SONIC_URRA] << 16) | s->regs[SONIC_CDP],
             MEMTXATTRS_UNSPECIFIED, (uint8_t *)data, size, 0);
+        convert_to_be((uint8_t *)data, size);
         s->cam[index][0] = data[1 * width] & 0xff;
         s->cam[index][1] = data[1 * width] >> 8;
         s->cam[index][2] = data[2 * width] & 0xff;
@@ -224,6 +245,7 @@ static void dp8393x_do_load_cam(dp8393xState *s)
     address_space_rw(&s->as,
         (s->regs[SONIC_URRA] << 16) | s->regs[SONIC_CDP],
         MEMTXATTRS_UNSPECIFIED, (uint8_t *)data, size, 0);
+    convert_to_be((uint8_t *)data, size);
     s->regs[SONIC_CE] = data[0 * width];
     DPRINTF("load cam done. cam enable mask 0x%04x\n", s->regs[SONIC_CE]);
 
@@ -244,6 +266,7 @@ static void dp8393x_do_read_rra(dp8393xState *s)
     address_space_rw(&s->as,
         (s->regs[SONIC_URRA] << 16) | s->regs[SONIC_RRP],
         MEMTXATTRS_UNSPECIFIED, (uint8_t *)data, size, 0);
+    convert_to_be((uint8_t *)data, size);
 
     /* Update SONIC registers */
     s->regs[SONIC_CRBA0] = data[0 * width];
@@ -362,6 +385,7 @@ static void dp8393x_do_transmit_packets(dp8393xState *s)
         address_space_rw(&s->as,
             ((s->regs[SONIC_UTDA] << 16) | s->regs[SONIC_TTDA]) + sizeof(uint16_t) * width,
             MEMTXATTRS_UNSPECIFIED, (uint8_t *)data, size, 0);
+        convert_to_be((uint8_t *)data, size);
         tx_len = 0;
 
         /* Update registers */
@@ -397,6 +421,7 @@ static void dp8393x_do_transmit_packets(dp8393xState *s)
                 address_space_rw(&s->as,
                     ((s->regs[SONIC_UTDA] << 16) | s->regs[SONIC_TTDA]) + sizeof(uint16_t) * (4 + 3 * i) * width,
                     MEMTXATTRS_UNSPECIFIED, (uint8_t *)data, size, 0);
+                convert_to_be((uint8_t *)data, size);
                 s->regs[SONIC_TSA0] = data[0 * width];
                 s->regs[SONIC_TSA1] = data[1 * width];
                 s->regs[SONIC_TFS] = data[2 * width];
@@ -428,6 +453,7 @@ static void dp8393x_do_transmit_packets(dp8393xState *s)
         /* Write status */
         data[0 * width] = s->regs[SONIC_TCR] & 0x0fff; /* status */
         size = sizeof(uint16_t) * width;
+        convert_from_be((uint8_t *)data, size);
         address_space_rw(&s->as,
             (s->regs[SONIC_UTDA] << 16) | s->regs[SONIC_TTDA],
             MEMTXATTRS_UNSPECIFIED, (uint8_t *)data, size, 1);
@@ -438,6 +464,7 @@ static void dp8393x_do_transmit_packets(dp8393xState *s)
             address_space_rw(&s->as,
                 ((s->regs[SONIC_UTDA] << 16) | s->regs[SONIC_TTDA]) + sizeof(uint16_t) * (4 + 3 * s->regs[SONIC_TFC]) * width,
                 MEMTXATTRS_UNSPECIFIED, (uint8_t *)data, size, 0);
+            convert_to_be((uint8_t *)data, size);
             s->regs[SONIC_CTDA] = data[0 * width] & ~0x1;
             if (data[0 * width] & 0x1) {
                 /* EOL detected */
@@ -707,6 +734,7 @@ static ssize_t dp8393x_receive(NetClientState *nc, const uint8_t * buf,
         address = ((s->regs[SONIC_URDA] << 16) | s->regs[SONIC_CRDA]) + sizeof(uint16_t) * 5 * width;
         address_space_rw(&s->as, address, MEMTXATTRS_UNSPECIFIED,
                          (uint8_t *)data, size, 0);
+        convert_to_be((uint8_t *)data, size);
         if (data[0 * width] & 0x1) {
             /* Still EOL ; stop reception */
             return -1;
@@ -757,6 +785,7 @@ static ssize_t dp8393x_receive(NetClientState *nc, const uint8_t * buf,
     data[3 * width] = s->regs[SONIC_TRBA1]; /* pkt_ptr1 */
     data[4 * width] = s->regs[SONIC_RSC]; /* seq_no */
     size = sizeof(uint16_t) * 5 * width;
+    convert_from_be((uint8_t *)data, size);
     address_space_rw(&s->as, (s->regs[SONIC_URDA] << 16) | s->regs[SONIC_CRDA],
         MEMTXATTRS_UNSPECIFIED, (uint8_t *)data, size, 1);
 
@@ -765,12 +794,14 @@ static ssize_t dp8393x_receive(NetClientState *nc, const uint8_t * buf,
     address_space_rw(&s->as,
         ((s->regs[SONIC_URDA] << 16) | s->regs[SONIC_CRDA]) + sizeof(uint16_t) * 5 * width,
         MEMTXATTRS_UNSPECIFIED, (uint8_t *)data, size, 0);
+    convert_to_be((uint8_t *)data, size);
     s->regs[SONIC_LLFA] = data[0 * width];
     if (s->regs[SONIC_LLFA] & 0x1) {
         /* EOL detected */
         s->regs[SONIC_ISR] |= SONIC_ISR_RDE;
     } else {
         data[0 * width] = 0; /* in_use */
+        convert_from_be((uint8_t *)data, size);
         address_space_rw(&s->as,
             ((s->regs[SONIC_URDA] << 16) | s->regs[SONIC_CRDA]) + sizeof(uint16_t) * 6 * width,
             MEMTXATTRS_UNSPECIFIED, (uint8_t *)data, sizeof(uint16_t), 1);
