@@ -372,6 +372,9 @@ static void esp_do_dma(ESPState *s)
         return;
     }
     if (s->async_len == 0) {
+        if (s->dma_left == 0) {
+            esp_dma_done(s);
+        }
         /* Defer until data is available.  */
         return;
     }
