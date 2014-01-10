@@ -498,7 +498,7 @@ static void via1_rtc_update(MacVIAState *m)
             !(s->b & VIA1B_vRTCClk) &&
             m->data_in_cnt) {
             s->b = (s->b & ~VIA1B_vRTCData) |
-                   ((m->data_in >> 8) & VIA1B_vRTCData);
+                   ((m->data_in >> 7) & VIA1B_vRTCData);
             m->data_in <<= 1;
             m->data_in_cnt--;
         }
