@@ -330,17 +330,15 @@ static void do_interrupt_all(CPUM68KState *env, int is_hw)
                    env->exception_index == 9) {
             /* FIXME: addr is not only env->pc */
             do_stack_frame(env, &sp, 2, oldsr, env->pc, retaddr);
-        } else if (is_hw && env->exception_index >= 24 &&
-                   env->exception_index < 32) {
+        } else if (is_hw && oldsr & SR_M && env->exception_index >= 24
+                         && env->exception_index < 32) {
             do_stack_frame(env, &sp, 0, oldsr, 0, retaddr);
-            if (env->sr & SR_M) {
-                oldsr = env->sr;
-                env->sr &= ~SR_M;
-                env->aregs[7] = sp;
-                m68k_switch_sp(env);
-                sp = env->aregs[7] & ~1;
-                do_stack_frame(env, &sp, 1, oldsr, 0, retaddr);
-            }
+            oldsr = env->sr;
+            env->sr &= ~SR_M;
+            env->aregs[7] = sp;
+            m68k_switch_sp(env);
+            sp = env->aregs[7] & ~1;
+            do_stack_frame(env, &sp, 1, oldsr, 0, retaddr);
         } else {
             do_stack_frame(env, &sp, 0, oldsr, 0, retaddr);
         }
