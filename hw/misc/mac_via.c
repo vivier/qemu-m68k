@@ -35,6 +35,7 @@
 #include "qemu/timer.h"
 #include "hw/misc/mac_via.h"
 #include "hw/input/adb.h"
+#include "sysemu/sysemu.h"
 
 /* debug VIA */
 #undef DEBUG_VIA
@@ -658,10 +659,19 @@ static void via_write(void *opaque, hwaddr addr,
     case vBufB:  /* Register B */
         VIA_DPRINTF("writeb: vBufB = %02"PRIx64"\n", val);
         s->b = (s->b & ~s->dirb) | (val & s->dirb);
-        if (via == 0) {
+        switch(via) {
+        case 0:
             via1_rtc_update(m);
             via1_adb_update(m);
             s->last_b = s->b;
+            break;
+        case 1:
+            if (s->dirb & VIA2B_vPower &&
+                (val & VIA2B_vPower) == 0) {
+                /* shutdown */
+                qemu_system_shutdown_request();
+            }
+            break;
         }
         break;
     case vDirA:  /* Data Direction Register A. */
