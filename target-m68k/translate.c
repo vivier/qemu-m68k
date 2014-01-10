@@ -5313,8 +5313,20 @@ void m68k_cpu_dump_state(CPUState *cs, FILE *f, fprintf_function cpu_fprintf,
 #ifndef CONFIG_USER_ONLY
     cpu_fprintf(f, "A7(MSP) = %08x  A7(USP) = %08x A7(ISP) = %08x\n",
                env->sp[M68K_SSP], env->sp[M68K_USP], env->sp[M68K_ISP]);
+    cpu_fprintf(f, "Current stack ");
+    switch(env->current_sp) {
+    case M68K_SSP: cpu_fprintf(f, "MSP\n"); break;
+    case M68K_USP: cpu_fprintf(f, "USP\n"); break;
+    case M68K_ISP: cpu_fprintf(f, "ISP\n"); break;
+    }
     cpu_fprintf(f, "VBR = 0x%08x\n", env->vbr);
     cpu_fprintf(f, "SFC = %x TFC %x\n", env->sfc, env->dfc);
+    cpu_fprintf(f, "SSW %08x TCR %08x URP %08x SRP %08x\n",
+                env->mmu.ssw, env->mmu.tcr, env->mmu.urp, env->mmu.srp);
+    cpu_fprintf(f, "DTTR0/1: %08x/%08x ITTR0/1: %08x/%08x\n",
+                env->mmu.dttr0, env->mmu.dttr1, env->mmu.ittr0, env->mmu.ittr1);
+    cpu_fprintf(f, "MMUSR %08x, fault at %08x\n", 
+                env->mmu.mmusr, env->mmu.ar);
 #endif
 }
 
