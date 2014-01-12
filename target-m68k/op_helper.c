@@ -92,8 +92,6 @@ throwaway:
                 sp += 52;
                 break;
             }
-            env->aregs[7] = sp;
-            m68k_switch_sp(env);
         }
     } else {
         fmt = cpu_ldl_kernel(env, sp);
@@ -101,9 +99,9 @@ throwaway:
         sp |= (fmt >> 28) & 3;
         env->sr = fmt & 0xffff;
         sp += 8;
-        env->aregs[7] = sp;
-        m68k_switch_sp(env);
     }
+    env->aregs[7] = sp;
+    m68k_switch_sp(env);
 }
 
 static inline void do_stack_frame(CPUM68KState *env, uint32_t *sp,
