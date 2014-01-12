@@ -510,10 +510,12 @@ void m68k_switch_sp(CPUM68KState *env)
     int new_sp;
 
     env->sp[env->current_sp] = env->aregs[7];
-    if (env->sr & SR_S && env->sr & SR_M) {
-        new_sp = M68K_SSP;
-    } else if (env->sr & SR_S && !(env->sr & SR_M)) {
-        new_sp = M68K_ISP;
+    if (env->sr & SR_S) {
+        if (env->sr & SR_M) {
+            new_sp = M68K_SSP;
+        } else {
+            new_sp = M68K_ISP;
+        }
     } else {
         new_sp = M68K_USP;
     }
