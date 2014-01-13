@@ -728,12 +728,22 @@ static inline TCGv gen_ea_once(CPUM68KState *env, DisasContext *s,
     return gen_ldst(s, opsize, tmp, val, what, index);
 }
 
+static void gen_ea_post(uint16_t insn, TCGv post)
+{
+    switch ((insn >> 3) & 7) {
+    case 3: /* Indirect postincrement.  */
+    case 4: /* Indirect predecrememnt.  */
+        tcg_gen_mov_i32(AREG(insn, 0), post);
+        break;
+    }
+}
+
 /* Generate code to load/store a value from/into an EA.  If VAL > 0 this is
    a write otherwise it is a read (0 == sign extend, -1 == zero extend).
    ADDRP is non-null for readwrite operands.  */
 static TCGv gen_ea(CPUM68KState *env, DisasContext *s, uint16_t insn,
-                   int opsize, TCGv val,
-                   TCGv *addrp, ea_what what, int index)
+                   int opsize, TCGv val, TCGv *addrp,
+                   TCGv *post, ea_what what, int index)
 {
     TCGv reg;
     TCGv result;
@@ -762,13 +772,19 @@ static TCGv gen_ea(CPUM68KState *env, DisasContext *s, uint16_t insn,
     case 3: /* Indirect postincrement.  */
         reg = AREG(insn, 0);
         result = gen_ldst(s, opsize, reg, val, what, index);
-        /* ??? This is not exception safe.  The instruction may still
-           fault after this point.  */
-        if (what == EA_STORE || !addrp)
-            tcg_gen_addi_i32(reg, reg,
+        if (!post) {
+            if (what == EA_STORE || !addrp)
+                tcg_gen_addi_i32(reg, reg,
+                                 REG(insn, 0) == 7 && opsize == OS_BYTE
+                                 ? 2
+                                 : opsize_bytes(opsize));
+        } else {
+            *post = tcg_temp_new();
+            tcg_gen_addi_i32(*post, reg,
                              REG(insn, 0) == 7 && opsize == OS_BYTE
                              ? 2
                              : opsize_bytes(opsize));
+        }
         return result;
     case 4: /* Indirect predecrememnt.  */
         {
@@ -783,11 +799,13 @@ static TCGv gen_ea(CPUM68KState *env, DisasContext *s, uint16_t insn,
                     *addrp = tmp;
             }
             result = gen_ldst(s, opsize, tmp, val, what, index);
-            /* ??? This is not exception safe.  The instruction may still
-               fault after this point.  */
-            if (what == EA_STORE || !addrp) {
-                reg = AREG(insn, 0);
-                tcg_gen_mov_i32(reg, tmp);
+            if (!post) {
+                if (what == EA_STORE || !addrp) {
+                    reg = AREG(insn, 0);
+                    tcg_gen_mov_i32(reg, tmp);
+                }
+            } else {
+                *post = tmp;
             }
         }
         return result;
@@ -1284,7 +1302,7 @@ static void gen_jmp(DisasContext *s, TCGv dest)
 
 #define SRC_EA(env, result, opsize, op_sign, addrp) do { \
     result = gen_ea(env, s, insn, opsize, NULL_QREG, addrp, \
-                    op_sign ? EA_LOADS : EA_LOADU, IS_USER(s)); \
+                    NULL, op_sign ? EA_LOADS : EA_LOADU, IS_USER(s)); \
     if (IS_NULL_QREG(result)) { \
         gen_addr_fault(s); \
         return; \
@@ -1292,7 +1310,8 @@ static void gen_jmp(DisasContext *s, TCGv dest)
     } while (0)
 
 #define DEST_EA(env, insn, opsize, val, addrp) do { \
-    TCGv ea_result = gen_ea(env, s, insn, opsize, val, addrp, EA_STORE, IS_USER(s));\
+    TCGv ea_result = gen_ea(env, s, insn, opsize, val, addrp, \
+                            NULL, EA_STORE, IS_USER(s));\
     if (IS_NULL_QREG(ea_result)) { \
         gen_addr_fault(s); \
         return; \
@@ -1720,6 +1739,30 @@ DISAS_INSN(movem)
            }
        }
        tcg_gen_mov_i32(AREG(insn, 0), addr);
+    } else if (is_load) {
+        uint16_t mask2 = mask;
+        TCGv r[16];
+        for (i = 0; i < 16; i++, mask >>= 1) {
+            if (mask & 1) {
+                r[i] = gen_load(s, opsize, addr, 1, IS_USER(s));
+                if (mask != 1 || (insn & 070) == 030) {
+                    tcg_gen_addi_i32(addr, addr, incr);
+                }
+            }
+        }
+        for (i = 0; i < 16; i++, mask2 >>= 1) {
+            if (mask2 & 1) {
+                if (i < 8) {
+                    reg = DREG(i, 0);
+                } else {
+                    reg = AREG(i, 0);
+                }
+                tcg_gen_mov_i32(reg, r[i]);
+            }
+        }
+        if ((insn & 070) == 030) {
+            tcg_gen_mov_i32(AREG(insn, 0), addr);
+        }
     } else {
         for (i = 0; i < 16; i++, mask >>= 1) {
             if (mask & 1) {
@@ -1728,12 +1771,7 @@ DISAS_INSN(movem)
                 } else {
                     reg = AREG(i, 0);
                 }
-                if (is_load) {
-                    tmp = gen_load(s, opsize, addr, 1, IS_USER(s));
-                    tcg_gen_mov_i32(reg, tmp);
-                } else {
-                    gen_store(s, opsize, addr, reg, IS_USER(s));
-                }
+                gen_store(s, opsize, addr, reg, IS_USER(s));
                 if (mask != 1 || (insn & 070) == 030) {
                     tcg_gen_addi_i32(addr, addr, incr);
                 }
@@ -2100,18 +2138,41 @@ DISAS_INSN(move)
     default:
         abort();
     }
-    SRC_EA(env, src, opsize, 1, NULL);
     op = (insn >> 6) & 7;
     if (op == 1) {
         /* movea */
+        SRC_EA(env, src, opsize, 1, NULL);
         /* The value will already have been sign extended.  */
         dest = AREG(insn, 9);
         tcg_gen_mov_i32(dest, src);
     } else {
         /* normal move */
         uint16_t dest_ea;
+        TCGv ea_result;
+        TCGv post;
         dest_ea = ((insn >> 9) & 7) | (op << 3);
-        DEST_EA(env, dest_ea, opsize, src, NULL);
+
+        switch ((dest_ea >> 3) & 7) {
+        case 0:
+        case 1:
+            SRC_EA(env, src, opsize, 1, NULL);
+            DEST_EA(env, dest_ea, opsize, src, NULL);
+            break;
+        default:
+            src = gen_ea(env, s, insn, opsize, NULL_QREG, NULL,
+                         &post, EA_LOADS, IS_USER(s));
+            if (IS_NULL_QREG(src)) {
+                gen_addr_fault(s);
+                return;
+            }
+            ea_result = gen_ea(env, s, dest_ea, opsize, src, NULL, NULL,
+                               EA_STORE, IS_USER(s));
+            if (IS_NULL_QREG(ea_result)) {
+                gen_addr_fault(s);
+                return;
+            }
+            gen_ea_post(insn, post);
+        }
         /* This will be correct because loads sign extend.  */
         gen_logic_cc(s, src, opsize);
     }
