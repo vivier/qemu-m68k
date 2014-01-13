@@ -25,6 +25,8 @@
 
 //#define DEBUG_SONIC
 
+#define SONIC_PROM_SIZE 0x1000
+
 /* Calculate CRCs properly on Rx packets */
 #define SONIC_CALCULATE_RXCRC
 
@@ -160,6 +162,7 @@ typedef struct dp8393xState {
     NICState *nic;
     MemoryRegion *address_space;
     MemoryRegion mmio;
+    MemoryRegion prom;
 
     /* Registers */
     uint8_t cam[16][6];
@@ -905,13 +908,15 @@ static NetClientInfo net_dp83932_info = {
     .receive = nic_receive,
 };
 
-void dp83932_init(NICInfo *nd, hwaddr base, int it_shift, int regs_offset,
+void dp83932_init(NICInfo *nd, hwaddr base, hwaddr prombase,
+                  int it_shift, int regs_offset,
                   MemoryRegion *address_space,
                   qemu_irq irq, void* mem_opaque,
                   void (*memory_rw)(void *opaque, hwaddr addr, uint8_t *buf, int len, int is_write))
 {
     dp8393xState *s;
-    int i;
+    int i, checksum;
+    uint8_t *prom;
 
     qemu_check_nic_model(nd, "dp83932");
 
@@ -928,8 +933,6 @@ void dp83932_init(NICInfo *nd, hwaddr base, int it_shift, int regs_offset,
 
     s->conf.macaddr = nd->macaddr;
     s->conf.peers.ncs[0] = nd->netdev;
-    for (i = 0; i < 6; i++)
-        s->cam[15][i] = s->conf.macaddr.a[i];
 
     s->nic = qemu_new_nic(&net_dp83932_info, &s->conf, nd->model, nd->name, s);
 
@@ -940,4 +943,20 @@ void dp83932_init(NICInfo *nd, hwaddr base, int it_shift, int regs_offset,
     memory_region_init_io(&s->mmio, NULL, &dp8393x_ops, s,
                           "dp8393x", 0x40 << it_shift);
     memory_region_add_subregion(address_space, base, &s->mmio);
+
+    if (prombase) {
+        memory_region_init_rom_device(&s->prom, NULL, NULL, NULL,
+                                      "dp8393x-prom", SONIC_PROM_SIZE, NULL);
+        prom = memory_region_get_ram_ptr(&s->prom);
+        checksum = 0;
+        for (i = 0; i < 6; i++) {
+            prom[i] = s->conf.macaddr.a[i];
+            checksum += prom[i];
+            if (checksum > 0xff) {
+                checksum = (checksum + 1) & 0xff;
+            }
+        }
+        prom[7] = 0xff - checksum;
+        memory_region_add_subregion(address_space, prombase, &s->prom);
+    }
 }
