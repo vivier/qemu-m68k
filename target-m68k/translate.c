@@ -1758,6 +1758,7 @@ DISAS_INSN(movem)
                     reg = AREG(i, 0);
                 }
                 tcg_gen_mov_i32(reg, r[i]);
+                tcg_temp_free(r[i]);
             }
         }
         if ((insn & 070) == 030) {
@@ -4048,9 +4049,7 @@ static void gen_op_fmovem(CPUM68KState *env, DisasContext *s,
                     gen_op_load_fpr_FP0(i);
                     gen_store_FP0(s, opsize, addr);
                 }
-                if ((mask & 0xff) != 0x80) {
-                    tcg_gen_addi_i32(addr, addr, incr);
-                }
+                tcg_gen_addi_i32(addr, addr, incr);
             }
         }
         if ((insn & 070) == 030)
