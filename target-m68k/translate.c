@@ -3654,7 +3654,7 @@ static void gen_op_fmovem(CPUM68KState *env, DisasContext *s,
             }
         }
         tcg_gen_mov_i32(AREG(insn, 0), addr);
-    } else{
+    } else {
         for (i = 0; i < 8; i++, mask <<=1) {
             if (mask & 0x80) {
                 if (is_load) {
@@ -3664,8 +3664,7 @@ static void gen_op_fmovem(CPUM68KState *env, DisasContext *s,
                     gen_op_load_fpr_FP0(i);
                     gen_store_FP0(s, opsize, addr);
                 }
-               if ((mask & 0xff) != 0x80 || (insn & 070) == 030)
-                   tcg_gen_addi_i32(addr, addr, incr);
+                tcg_gen_addi_i32(addr, addr, incr);
             }
         }
         if ((insn & 070) == 030)
