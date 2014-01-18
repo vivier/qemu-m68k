@@ -4135,7 +4135,7 @@ DISAS_INSN(fpu)
             if ((insn & 070) == 040) {
                 tcg_gen_subi_i32(addr, addr, 4);
             }
-            gen_ldst(s, OS_LONG, addr, val, EA_LOADU, IS_USER(s));
+            gen_load(s, OS_LONG, addr, 0, IS_USER(s));
             if ((insn & 070) != 040) {
                 tcg_gen_addi_i32(addr, addr, 4);
             }
@@ -4145,7 +4145,7 @@ DISAS_INSN(fpu)
             if ((insn & 070) == 040) {
                 tcg_gen_subi_i32(addr, addr, 4);
             }
-            gen_ldst(s, OS_LONG, addr, QEMU_FPSR, EA_LOADU, IS_USER(s));
+            gen_load(s, OS_LONG, addr, 0, IS_USER(s));
             if ((insn & 070) != 040) {
                 tcg_gen_addi_i32(addr, addr, 4);
             }
@@ -4154,7 +4154,7 @@ DISAS_INSN(fpu)
             if ((insn & 070) == 040) {
                 tcg_gen_subi_i32(addr, addr, 4);
             }
-            gen_ldst(s, OS_LONG, addr, val, EA_LOADU, IS_USER(s));
+            gen_load(s, OS_LONG, addr, 0, IS_USER(s));
             if ((insn & 070) != 040) {
                 tcg_gen_addi_i32(addr, addr, 4);
             }
@@ -4198,7 +4198,7 @@ DISAS_INSN(fpu)
             if ((insn & 070) == 040) {
                 tcg_gen_subi_i32(addr, addr, 4);
             }
-            gen_ldst(s, OS_LONG, addr, tcg_const_i32(0), EA_STORE, IS_USER(s));
+            gen_store(s, OS_LONG, addr, tcg_const_i32(0), IS_USER(s));
             if ((insn & 070) != 040) {
                 tcg_gen_addi_i32(addr, addr, 4);
             }
@@ -4208,7 +4208,7 @@ DISAS_INSN(fpu)
                 tcg_gen_subi_i32(addr, addr, 4);
             }
             gen_helper_update_fpsr(cpu_env);
-            gen_ldst(s, OS_LONG, addr, QEMU_FPSR, EA_STORE, IS_USER(s));
+            gen_store(s, OS_LONG, addr, QEMU_FPSR, IS_USER(s));
             if ((insn & 070) != 040) {
                 tcg_gen_addi_i32(addr, addr, 4);
             }
@@ -4217,7 +4217,7 @@ DISAS_INSN(fpu)
             if ((insn & 070) == 040) {
                 tcg_gen_subi_i32(addr, addr, 4);
             }
-            gen_ldst(s, OS_LONG, addr, QEMU_FPCR, EA_STORE, IS_USER(s));
+            gen_store(s, OS_LONG, addr, QEMU_FPCR, IS_USER(s));
             if ((insn & 070) != 040) {
                 tcg_gen_addi_i32(addr, addr, 4);
             }
