@@ -51,6 +51,7 @@ static TCGv QEMU_FPSR;
 static TCGv QEMU_FPCR;
 
 #define REG(insn, pos) (((insn) >> (pos)) & 7)
+#define MODE(insn) REG(insn, 3)
 #define DREG(insn, pos) cpu_dregs[REG(insn, pos)]
 #define AREG(insn, pos) cpu_aregs[REG(insn, pos)]
 #define MACREG(acc) cpu_macc[acc]
@@ -618,7 +619,7 @@ static TCGv gen_lea(CPUM68KState *env, DisasContext *s, uint16_t insn,
     uint16_t ext;
     uint32_t offset;
 
-    switch ((insn >> 3) & 7) {
+    switch (MODE(insn)) {
     case 0: /* Data register direct.  */
     case 1: /* Address register direct.  */
         return NULL_QREG;
@@ -689,7 +690,7 @@ static inline TCGv gen_ea_once(CPUM68KState *env, DisasContext *s,
 
 static void gen_ea_post(uint16_t insn, TCGv post)
 {
-    switch ((insn >> 3) & 7) {
+    switch (MODE(insn)) {
     case 3: /* Indirect postincrement.  */
     case 4: /* Indirect predecrememnt.  */
         tcg_gen_mov_i32(AREG(insn, 0), post);
@@ -708,7 +709,7 @@ static TCGv gen_ea(CPUM68KState *env, DisasContext *s, uint16_t insn,
     TCGv result;
     uint32_t offset;
 
-    switch ((insn >> 3) & 7) {
+    switch (MODE(insn)) {
     case 0: /* Data register direct.  */
         reg = DREG(insn, 0);
         if (what == EA_STORE) {
@@ -967,7 +968,7 @@ static void gen_op_load_ea_FP0(CPUM68KState *env, DisasContext *s,
     TCGv addr;
     uint64_t val;
 
-    switch ((insn >> 3) & 7) {
+    switch (MODE(insn)) {
     case 0: /* Data register direct.  */
         tcg_gen_mov_i32(QREG_FP0H, DREG(insn, 0));
         gen_extend_FP0(opsize);
@@ -1065,7 +1066,7 @@ static void gen_op_store_ea_FP0(CPUM68KState *env, DisasContext *s,
     TCGv reg;
     TCGv addr;
 
-    switch ((insn >> 3) & 7) {
+    switch (MODE(insn)) {
     case 0: /* Data register direct.  */
         gen_reduce_FP0(opsize);
         tcg_gen_mov_i32(DREG(insn, 0), QREG_FP0H);
@@ -2057,7 +2058,7 @@ DISAS_INSN(moves)
         tcg_gen_mov_i32(reg, tmp);
         gen_set_label(l2);
     }
-    switch ((insn >> 3) & 7) {
+    switch (MODE(insn)) {
     case 3: /* Indirect postincrement.  */
         tcg_gen_addi_i32(AREG(insn, 0), addr,
                          REG(insn, 0) == 7 && opsize == OS_BYTE
@@ -2731,7 +2732,7 @@ DISAS_INSN(eor)
 
     opsize = insn_opsize(insn, 6);
 
-    if (((insn >> 3) & 7) == 1 ) {
+    if (MODE(insn) == 1 ) {
         /* cmpm */
         reg = AREG(insn, 0);
         src = gen_load(s, opsize, reg, 1, IS_USER(s));
@@ -4044,7 +4045,7 @@ DISAS_INSN(fpu)
         return;
     case 4: /* fmove to control register.  */
         ctrl = (ext >> 10) & 7;
-        if (((insn >> 3) & 7)  == 0) {
+        if (MODE(insn) == 0) {
             /* Data register direct.  */
             if (ctrl & 4) { /* FPCR */
                 tcg_gen_mov_i32(QEMU_FPCR, DREG(insn, 0));
@@ -4057,7 +4058,7 @@ DISAS_INSN(fpu)
             }
             return;
         }
-        if (((insn >> 3) & 7)  == 1) {
+        if (MODE(insn) == 1) {
             /* Address register direct.  */
             if (ctrl & 1) { /* FPIAR */
                 /* do nothing */
@@ -4107,7 +4108,7 @@ DISAS_INSN(fpu)
         return;
     case 5: /* fmove from control register.  */
         ctrl = (ext >> 10) & 7;
-        if (((insn >> 3) & 7)  == 0) {
+        if (MODE(insn) == 0) {
             /* Data register direct.  */
             if (ctrl & 4) { /* FPCR */
                 tcg_gen_mov_i32(DREG(insn, 0), QEMU_FPCR);
@@ -4121,7 +4122,7 @@ DISAS_INSN(fpu)
             }
             return;
         }
-        if (((insn >> 3) & 7)  == 1) {
+        if (MODE(insn) == 1) {
             /* Address register direct.  */
             if (ctrl & 1) { /* FPIAR */
                 tcg_gen_movi_i32(AREG(insn, 0), 0);
@@ -4718,7 +4719,7 @@ DISAS_INSN(mac)
         tcg_gen_mov_i32(rw, loadval);
         /* FIXME: Should address writeback happen with the masked or
            unmasked value?  */
-        switch ((insn >> 3) & 7) {
+        switch (MODE(insn)) {
         case 3: /* Post-increment.  */
             tcg_gen_addi_i32(AREG(insn, 0), addr, 4);
             break;
