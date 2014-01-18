@@ -1516,18 +1516,29 @@ DISAS_INSN(abcd_mem)
     TCGv dest;
     TCGv addr_dest;
 
-    addr_src = AREG(insn, 0);
-    tcg_gen_subi_i32(addr_src, addr_src, OS_BYTE);
+    /* XXX */
+
+    addr_src = tcg_temp_new();
+    tcg_gen_subi_i32(addr_src, AREG(insn, 0), OS_BYTE);
     src = gen_load(s, OS_BYTE, addr_src, 0, IS_USER(s));
 
-    addr_dest = AREG(insn, 9);
-    tcg_gen_subi_i32(addr_dest, addr_dest, OS_BYTE);
+    if (REG(insn, 0) == REG(insn, 9)) {
+        addr_dest = addr_src;
+        tcg_gen_subi_i32(addr_dest, addr_dest, OS_BYTE);
+    } else {
+        addr_dest = tcg_temp_new();
+        tcg_gen_subi_i32(addr_dest, AREG(insn, 9), OS_BYTE);
+    }
     dest = gen_load(s, OS_BYTE, addr_dest, 0, IS_USER(s));
 
     gen_flush_flags(s);
     gen_helper_abcd_cc(dest, cpu_env, src, dest);
 
     gen_store(s, OS_BYTE, addr_dest, dest, IS_USER(s));
+    tcg_gen_mov_i32(AREG(insn, 0), addr_src);
+    if (REG(insn, 0) != REG(insn, 9)) {
+        tcg_gen_mov_i32(AREG(insn, 9), addr_dest);
+    }
 }
 
 DISAS_INSN(sbcd_reg)
@@ -1548,18 +1559,27 @@ DISAS_INSN(sbcd_mem)
     TCGv dest;
     TCGv addr_dest;
 
-    addr_src = AREG(insn, 0);
-    tcg_gen_subi_i32(addr_src, addr_src, OS_BYTE);
+    addr_src = tcg_temp_new();
+    tcg_gen_subi_i32(addr_src, AREG(insn, 0), OS_BYTE);
     src = gen_load(s, OS_BYTE, addr_src, 0, IS_USER(s));
 
-    addr_dest = AREG(insn, 9);
-    tcg_gen_subi_i32(addr_dest, addr_dest, OS_BYTE);
+    if (REG(insn, 0) == REG(insn, 9)) {
+        addr_dest = addr_src;
+        tcg_gen_subi_i32(addr_dest, addr_dest, OS_BYTE);
+    } else {
+        addr_dest = tcg_temp_new();
+        tcg_gen_subi_i32(addr_dest, AREG(insn, 9), OS_BYTE);
+    }
     dest = gen_load(s, OS_BYTE, addr_dest, 0, IS_USER(s));
 
     gen_flush_flags(s);
     gen_helper_sbcd_cc(dest, cpu_env, src, dest);
 
     gen_store(s, OS_BYTE, addr_dest, dest, IS_USER(s));
+    tcg_gen_mov_i32(AREG(insn, 0), addr_src);
+    if (REG(insn, 0) != REG(insn, 9)) {
+        tcg_gen_mov_i32(AREG(insn, 9), addr_dest);
+    }
 }
 
 DISAS_INSN(nbcd)
@@ -2008,9 +2028,8 @@ DISAS_INSN(cas)
     addr = tcg_temp_local_new ();
     tcg_gen_mov_i32(addr, taddr);
 
-    res = tcg_temp_new();
+    res = tcg_temp_local_new();
     tcg_gen_sub_i32(res, dest, cmp);
-    gen_logic_cc(s, res, opsize);
 
     l1 = gen_new_label();
     l2 = gen_new_label();
@@ -2021,6 +2040,9 @@ DISAS_INSN(cas)
     gen_set_label(l1);
     tcg_gen_mov_i32(cmp, dest);
     gen_set_label(l2);
+    gen_logic_cc(s, res, opsize);
+
+    tcg_temp_free(res);
     tcg_temp_free(dest);
     tcg_temp_free(addr);
 }
@@ -2761,12 +2783,17 @@ DISAS_INSN(subx_mem)
 
     gen_flush_flags(s);
 
-    addr_src = AREG(insn, 0);
-    tcg_gen_subi_i32(addr_src, addr_src, opsize);
+    addr_src = tcg_temp_new();
+    tcg_gen_subi_i32(addr_src, AREG(insn, 0), opsize);
     src = gen_load(s, opsize, addr_src, 0, IS_USER(s));
 
-    addr_reg = AREG(insn, 9);
-    tcg_gen_subi_i32(addr_reg, addr_reg, opsize);
+    if (REG(insn, 0) == REG(insn, 9)) {
+        addr_reg = addr_src,
+        tcg_gen_subi_i32(addr_reg, addr_reg, opsize);
+    } else {
+        addr_reg = tcg_temp_new();
+        tcg_gen_subi_i32(addr_reg, AREG(insn, 9), opsize);
+    }
     reg = gen_load(s, opsize, addr_reg, 0, IS_USER(s));
 
     switch(opsize) {
@@ -2783,6 +2810,10 @@ DISAS_INSN(subx_mem)
     set_cc_op(s, CC_OP_FLAGS);
 
     gen_store(s, opsize, addr_reg, reg, IS_USER(s));
+    tcg_gen_mov_i32(AREG(insn, 0), addr_src);
+    if (REG(insn, 0) != REG(insn, 9)) {
+        tcg_gen_mov_i32(AREG(insn, 9), addr_reg);
+    }
 }
 
 DISAS_INSN(mov3q)
@@ -2847,12 +2878,19 @@ DISAS_INSN(eor)
     if (MODE(insn) == 1 ) {
         /* cmpm */
         reg = AREG(insn, 0);
+        TCGv tmp;
         src = gen_load(s, opsize, reg, 1, IS_USER(s));
-        tcg_gen_addi_i32(reg, reg, opsize_bytes(opsize));
+        tmp = tcg_temp_new();
+        tcg_gen_addi_i32(tmp, reg, opsize_bytes(opsize));
 
-        reg = AREG(insn, 9);
+        if (AREG(insn, 0) == AREG(insn, 9)) {
+            reg = tmp;
+        } else {
+            reg = AREG(insn, 9);
+        }
         dest = gen_load(s, opsize, reg, 1, IS_USER(s));
-        tcg_gen_addi_i32(reg, reg, opsize_bytes(opsize));
+        tcg_gen_mov_i32(AREG(insn, 0), tmp);
+        tcg_gen_addi_i32(AREG(insn, 9), reg, opsize_bytes(opsize));
 
         reg = tcg_temp_new();
         tcg_gen_sub_i32(reg, dest, src);
@@ -2971,12 +3009,17 @@ DISAS_INSN(addx_mem)
 
     gen_flush_flags(s);
 
-    addr_src = AREG(insn, 0);
-    tcg_gen_subi_i32(addr_src, addr_src, opsize);
+    addr_src = tcg_temp_new();
+    tcg_gen_subi_i32(addr_src, AREG(insn, 0), opsize);
     src = gen_load(s, opsize, addr_src, 0, IS_USER(s));
 
-    addr_reg = AREG(insn, 9);
-    tcg_gen_subi_i32(addr_reg, addr_reg, opsize);
+    if (AREG(insn, 0) == AREG(insn, 9)) {
+        addr_reg = addr_src;
+        tcg_gen_subi_i32(addr_reg, addr_src, opsize);
+    } else {
+        addr_reg = tcg_temp_new();
+        tcg_gen_subi_i32(addr_reg, AREG(insn, 9), opsize);
+    }
     reg = gen_load(s, opsize, addr_reg, 0, IS_USER(s));
 
     switch(opsize) {
@@ -2992,6 +3035,10 @@ DISAS_INSN(addx_mem)
     }
 
     gen_store(s, opsize, addr_reg, reg, IS_USER(s));
+    tcg_gen_mov_i32(AREG(insn, 0), addr_src);
+    if (AREG(insn, 0) != AREG(insn, 9)) {
+        tcg_gen_mov_i32(AREG(insn, 9), addr_reg);
+    }
     set_cc_op(s, CC_OP_FLAGS);
 }
 
