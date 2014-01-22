@@ -77,10 +77,10 @@ void tlb_fill(CPUState *cs, target_ulong addr, int is_write, int mmu_idx,
 static void do_rte(CPUM68KState *env)
 {
     uint32_t sp;
-    uint16_t fmt;
 
     sp = env->aregs[7];
     if (m68k_feature(env, M68K_FEATURE_M68000)) {
+        uint16_t fmt;
 throwaway:
         env->sr = cpu_lduw_kernel(env, sp);
         sp += 2;
@@ -110,6 +110,7 @@ throwaway:
             }
         }
     } else {
+        uint32_t fmt;
         fmt = cpu_ldl_kernel(env, sp);
         env->pc = cpu_ldl_kernel(env, sp + 4);
         sp |= (fmt >> 28) & 3;
