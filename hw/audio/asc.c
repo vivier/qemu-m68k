@@ -277,7 +277,7 @@ static uint64_t asc_read(void *opaque, hwaddr addr,
 
     addr -= 0x800;
 
-    if (addr > 0x030) {
+    if (addr >= 0x030) {
         return 0;
     }
 
@@ -366,7 +366,7 @@ static void asc_write(void *opaque, hwaddr addr, uint64_t value,
     }
 
     addr -= 0x800;
-    if (addr > 0x30) {
+    if (addr >= 0x30) {
         return;
     }
     switch(addr) {
