@@ -3969,8 +3969,10 @@ DISAS_INSN(move16)
             gen_exception(s, s->insn_pc, EXCP_ILLEGAL);
         }
 
-        src = AREG(insn, 0);
-        dst = AREG(ext, 12);
+        src = tcg_temp_new_i32();
+        tcg_gen_mov_i32(src, AREG(insn, 0));
+        dst = tcg_temp_new_i32();
+        tcg_gen_mov_i32(dst, AREG(ext, 12));
 
         tmp = tcg_temp_new_i32();
         for (i = 0; i < 4; i++) {
@@ -3979,6 +3981,8 @@ DISAS_INSN(move16)
             tcg_gen_addi_i32(src, src, 4);
             tcg_gen_addi_i32(dst, dst, 4);
         }
+        tcg_gen_mov_i32(AREG(insn, 0), src);
+        tcg_gen_mov_i32(AREG(ext, 12), dst);
     } else {
         uint32_t addr;
         TCGv reg;
@@ -3992,18 +3996,24 @@ DISAS_INSN(move16)
         tmp = tcg_temp_new_i32();
         switch (mode) {
         case 0: /* MOVE16 (Ay)+, (xxx).L */
+            val = tcg_temp_new_i32();
+            tcg_gen_mov_i32(val, reg);
             for (i = 0; i < 4; i++) {
-                tcg_gen_qemu_ld32u(tmp, reg, index);
+                tcg_gen_qemu_ld32u(tmp, val, index);
                 tcg_gen_qemu_st32(tmp, tcg_const_i32(addr + i * 4), index);
-                tcg_gen_addi_i32(reg, reg, 4);
+                tcg_gen_addi_i32(val, val, 4);
             }
+            tcg_gen_mov_i32(reg, val);
             break;
         case 1: /* MOVE16 (xxx).L, (Ay)+ */
+            val = tcg_temp_new_i32();
+            tcg_gen_mov_i32(val, reg);
             for (i = 0; i < 4; i++) {
                 tcg_gen_qemu_ld32u(tmp, tcg_const_i32(addr + i * 4), index);
-                tcg_gen_qemu_st32(tmp, reg, index);
-                tcg_gen_addi_i32(reg, reg, 4);
+                tcg_gen_qemu_st32(tmp, val, index);
+                tcg_gen_addi_i32(val, val, 4);
             }
+            tcg_gen_mov_i32(reg, val);
             break;
         case 2: /* MOVE16 (Ay), (xxx).L */
             val = tcg_temp_new_i32();
