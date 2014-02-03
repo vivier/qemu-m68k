@@ -4166,7 +4166,7 @@ DISAS_INSN(fpu)
         if (MODE(insn) == 0) {
             /* Data register direct.  */
             if (ctrl & 4) { /* FPCR */
-                tcg_gen_mov_i32(QEMU_FPCR, DREG(insn, 0));
+                gen_helper_set_fpcr(cpu_env, DREG(insn, 0));
             }
             if (ctrl & 2) { /* FPSR */
                 tcg_gen_mov_i32(QEMU_FPSR, DREG(insn, 0));
@@ -4188,14 +4188,13 @@ DISAS_INSN(fpu)
             gen_addr_fault(s);
             return;
         }
-        val = tcg_temp_new();
         addr = tcg_temp_new();
         tcg_gen_mov_i32(addr, tmp);
         if (ctrl & 4) { /* FPCR */
             if ((insn & 070) == 040) {
                 tcg_gen_subi_i32(addr, addr, 4);
             }
-            gen_load(s, OS_LONG, addr, 0, IS_USER(s));
+            val = gen_load(s, OS_LONG, addr, 0, IS_USER(s));
             if ((insn & 070) != 040) {
                 tcg_gen_addi_i32(addr, addr, 4);
             }
@@ -4205,16 +4204,17 @@ DISAS_INSN(fpu)
             if ((insn & 070) == 040) {
                 tcg_gen_subi_i32(addr, addr, 4);
             }
-            gen_load(s, OS_LONG, addr, 0, IS_USER(s));
+            val = gen_load(s, OS_LONG, addr, 0, IS_USER(s));
             if ((insn & 070) != 040) {
                 tcg_gen_addi_i32(addr, addr, 4);
             }
+            tcg_gen_mov_i32(QEMU_FPSR, val);
         }
         if (ctrl & 1) { /* FPIAR */
             if ((insn & 070) == 040) {
                 tcg_gen_subi_i32(addr, addr, 4);
             }
-            gen_load(s, OS_LONG, addr, 0, IS_USER(s));
+            val = gen_load(s, OS_LONG, addr, 0, IS_USER(s));
             if ((insn & 070) != 040) {
                 tcg_gen_addi_i32(addr, addr, 4);
             }
