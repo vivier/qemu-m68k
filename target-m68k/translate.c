@@ -890,14 +890,12 @@ static inline void gen_load_FP0(DisasContext * s, int opsize, TCGv addr)
         tmp = tcg_temp_new();
         tcg_gen_addi_i32(tmp, addr, 4);
         tcg_gen_qemu_ld64(QREG_FP0L, tmp, index);
-        tcg_temp_free(tmp);
         break;
     case OS_PACKED:
         tcg_gen_qemu_ld32u(QREG_FP0H, addr, index);
         tmp = tcg_temp_new();
         tcg_gen_addi_i32(tmp, addr, 4);
         tcg_gen_qemu_ld64(QREG_FP0L, tmp, index);
-        tcg_temp_free(tmp);
         gen_helper_extp96_FP0(cpu_env);
         break;
     default:
@@ -936,7 +934,6 @@ static inline void gen_store_FP0(DisasContext *s, int opsize, TCGv addr)
         tmp = tcg_temp_new();
         tcg_gen_addi_i32(tmp, addr, 4);
         tcg_gen_qemu_st64(QREG_FP0L, tmp, index);
-        tcg_temp_free(tmp);
         break;
     case OS_PACKED:
         gen_helper_redp96_FP0(cpu_env);
@@ -944,7 +941,6 @@ static inline void gen_store_FP0(DisasContext *s, int opsize, TCGv addr)
         tmp = tcg_temp_new();
         tcg_gen_addi_i32(tmp, addr, 4);
         tcg_gen_qemu_st64(QREG_FP0L, tmp, index);
-        tcg_temp_free(tmp);
         break;
     default:
         qemu_assert(0, "Bad operand size");
@@ -1664,7 +1660,6 @@ static void gen_push(DisasContext *s, TCGv val)
     tcg_gen_subi_i32(tmp, QREG_SP, 4);
     gen_store(s, OS_LONG, tmp, val, IS_USER(s));
     tcg_gen_mov_i32(QREG_SP, tmp);
-    tcg_temp_free(tmp);
 }
 
 DISAS_INSN(movem)
@@ -1721,7 +1716,6 @@ DISAS_INSN(movem)
                     reg = AREG(i, 0);
                 }
                 tcg_gen_mov_i32(reg, r[i]);
-                tcg_temp_free(r[i]);
             }
         }
         if ((insn & 070) == 030) {
@@ -3466,8 +3460,6 @@ DISAS_INSN(bitfield_reg)
         tcg_gen_shl_i32(tmp2, reg2, tmp2);
         tcg_gen_and_i32(tmp2, tmp2, mask);
         gen_logic_cc(s, tmp2, OS_LONG);
-
-        tcg_temp_free_i32(tmp1);
     } else {
         gen_logic_cc(s, tmp1, OS_LONG);
     }
@@ -3670,8 +3662,6 @@ DISAS_INSN(bitfield_mem)
         tcg_gen_shl_i32(tmp1, reg, tmp1);
         tcg_gen_and_i32(tmp1, tmp1, mask_cc);
         gen_logic_cc(s, tmp1, OS_LONG);
-
-        tcg_temp_free_i32(tmp1);
     } else {
         gen_logic_cc(s, val, OS_LONG);
     }
@@ -4121,7 +4111,6 @@ static void gen_op_fmovem(CPUM68KState *env, DisasContext *s,
         if ((insn & 070) == 030)
             tcg_gen_mov_i32(AREG(insn, 0), addr);
     }
-    tcg_temp_free_i32(addr);
 }
 
 /* ??? FP exceptions are not implemented.  Most exceptions are deferred until
@@ -4440,7 +4429,6 @@ DISAS_INSN(fpu)
         TCGv tmp = tcg_temp_new_i32();
         gen_helper_f64_to_f32(tmp, cpu_env, res);
         gen_helper_f32_to_f64(res, cpu_env, tmp);
-        tcg_temp_free_i32(tmp);
 #endif
     }
     if (set_dest) {
