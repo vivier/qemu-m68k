@@ -3769,6 +3769,7 @@ DISAS_INSN(ff1)
 
 DISAS_INSN(chk)
 {
+    TCGv tsrc;
     TCGv src;
     TCGv reg;
     int opsize;
@@ -3785,7 +3786,10 @@ DISAS_INSN(chk)
         gen_exception(s, s->insn_pc, EXCP_ILLEGAL);
         return;
     }
-    SRC_EA(env, src, opsize, -1, NULL);
+    SRC_EA(env, tsrc, opsize, -1, NULL);
+    src = tcg_temp_local_new ();
+    tcg_gen_mov_i32(src, tsrc);
+
     reg = DREG(insn, 9);
 
     l1 = gen_new_label();
@@ -3801,6 +3805,7 @@ DISAS_INSN(chk)
     tcg_gen_andi_i32(QREG_CC_DEST, QREG_CC_DEST, ~CCF_N);
     gen_exception(s, s->insn_pc, EXCP_CHK);
     gen_set_label(l2);
+    tcg_temp_free(src);
 }
 
 DISAS_INSN(strldsr)
