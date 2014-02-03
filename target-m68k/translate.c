@@ -2883,7 +2883,7 @@ DISAS_INSN(eor)
         tmp = tcg_temp_new();
         tcg_gen_addi_i32(tmp, reg, opsize_bytes(opsize));
 
-        if (AREG(insn, 0) == AREG(insn, 9)) {
+        if (REG(insn, 0) == REG(insn, 9)) {
             reg = tmp;
         } else {
             reg = AREG(insn, 9);
@@ -3013,7 +3013,7 @@ DISAS_INSN(addx_mem)
     tcg_gen_subi_i32(addr_src, AREG(insn, 0), opsize);
     src = gen_load(s, opsize, addr_src, 0, IS_USER(s));
 
-    if (AREG(insn, 0) == AREG(insn, 9)) {
+    if (REG(insn, 0) == REG(insn, 9)) {
         addr_reg = addr_src;
         tcg_gen_subi_i32(addr_reg, addr_src, opsize);
     } else {
@@ -3036,7 +3036,7 @@ DISAS_INSN(addx_mem)
 
     gen_store(s, opsize, addr_reg, reg, IS_USER(s));
     tcg_gen_mov_i32(AREG(insn, 0), addr_src);
-    if (AREG(insn, 0) != AREG(insn, 9)) {
+    if (REG(insn, 0) != REG(insn, 9)) {
         tcg_gen_mov_i32(AREG(insn, 9), addr_reg);
     }
     set_cc_op(s, CC_OP_FLAGS);
