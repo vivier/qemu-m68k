@@ -1671,7 +1671,7 @@ DISAS_INSN(movem)
     TCGv tmp;
     int is_load;
     int opsize;
-    int32_t incr;
+    TCGv incr;
 
     mask = read_im16(env, s);
     tmp = gen_lea(env, s, insn, OS_LONG);
@@ -1683,7 +1683,7 @@ DISAS_INSN(movem)
     tcg_gen_mov_i32(addr, tmp);
     is_load = ((insn & 0x0400) != 0);
     opsize = (insn & 0x40) != 0 ? OS_LONG : OS_WORD;
-    incr = opsize_bytes(opsize);
+    incr = tcg_const_i32(opsize_bytes(opsize));
     if (!is_load && (insn & 070) == 040) {
        for (i = 15; i >= 0; i--, mask >>= 1) {
            if (mask & 1) {
@@ -1693,7 +1693,7 @@ DISAS_INSN(movem)
                    reg = AREG(i, 0);
                gen_store(s, opsize, addr, reg, IS_USER(s));
                if (mask != 1)
-                   tcg_gen_subi_i32(addr, addr, incr);
+                   tcg_gen_sub_i32(addr, addr, incr);
            }
        }
        tcg_gen_mov_i32(AREG(insn, 0), addr);
@@ -1704,7 +1704,7 @@ DISAS_INSN(movem)
             if (mask & 1) {
                 r[i] = gen_load(s, opsize, addr, 1, IS_USER(s));
                 if (mask != 1 || (insn & 070) == 030) {
-                    tcg_gen_addi_i32(addr, addr, incr);
+                    tcg_gen_add_i32(addr, addr, incr);
                 }
             }
         }
@@ -1731,7 +1731,7 @@ DISAS_INSN(movem)
                 }
                 gen_store(s, opsize, addr, reg, IS_USER(s));
                 if (mask != 1 || (insn & 070) == 030) {
-                    tcg_gen_addi_i32(addr, addr, incr);
+                    tcg_gen_add_i32(addr, addr, incr);
                 }
             }
         }
