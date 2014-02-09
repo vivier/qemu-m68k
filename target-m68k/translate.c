@@ -2285,10 +2285,10 @@ DISAS_INSN(jump)
 
 DISAS_INSN(addsubq)
 {
-    TCGv src1;
-    TCGv src2;
+    TCGv src;
     TCGv dest;
-    int val;
+    TCGv val;
+    int imm;
     TCGv addr;
     int opsize;
 
@@ -2297,32 +2297,32 @@ DISAS_INSN(addsubq)
         opsize = OS_LONG;
     } else
         opsize = insn_opsize(insn, 6);
-    SRC_EA(env, src1, opsize, -1, &addr);
-    val = (insn >> 9) & 7;
-    if (val == 0)
-        val = 8;
+    SRC_EA(env, src, opsize, -1, &addr);
+    imm = (insn >> 9) & 7;
+    if (imm == 0)
+        imm = 8;
+    val = tcg_const_i32(imm);
     dest = tcg_temp_new();
-    tcg_gen_mov_i32(dest, src1);
+    tcg_gen_mov_i32(dest, src);
     if ((insn & 0x38) == 0x08) {
         /* Don't update condition codes if the destination is an
            address register.  */
         if (insn & 0x0100) {
-            tcg_gen_subi_i32(dest, dest, val);
+            tcg_gen_sub_i32(dest, dest, val);
         } else {
-            tcg_gen_addi_i32(dest, dest, val);
+            tcg_gen_add_i32(dest, dest, val);
         }
     } else {
-        src2 = tcg_const_i32(val);
         if (insn & 0x0100) {
-            SET_X_FLAG(opsize, dest, src2);
-            tcg_gen_subi_i32(dest, dest, val);
+            SET_X_FLAG(opsize, dest, val);
+            tcg_gen_sub_i32(dest, dest, val);
             SET_CC_OP(opsize, SUB);
         } else {
-            tcg_gen_addi_i32(dest, dest, val);
-            SET_X_FLAG(opsize, dest, src2);
+            tcg_gen_add_i32(dest, dest, val);
+            SET_X_FLAG(opsize, dest, val);
             SET_CC_OP(opsize, ADD);
         }
-        gen_update_cc_add(dest, src2);
+        gen_update_cc_add(dest, val);
     }
     DEST_EA(env, insn, opsize, dest, &addr);
 }
@@ -2379,11 +2379,11 @@ DISAS_INSN(branch)
 
 DISAS_INSN(moveq)
 {
-    uint32_t val;
+    TCGv val;
 
-    val = (int8_t)insn;
-    tcg_gen_movi_i32(DREG(insn, 9), val);
-    gen_logic_cc(s, tcg_const_i32(val), OS_LONG);
+    val = tcg_const_i32((int8_t)insn);
+    tcg_gen_mov_i32(DREG(insn, 9), val);
+    gen_logic_cc(s, val, OS_LONG);
 }
 
 DISAS_INSN(mvzs)
