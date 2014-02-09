@@ -2011,6 +2011,7 @@ DISAS_INSN(moves)
     TCGv idx;
     TCGv tmp;
     int l1, l2;
+    int sign;
 
     if (IS_USER(s)) {
         gen_exception(s, s->insn_pc, EXCP_PRIVILEGE);
@@ -2024,9 +2025,11 @@ DISAS_INSN(moves)
     if (ext & 0x8000) {
         /* address register */
         reg = AREG(ext, 12);
+        sign = 1;
     } else {
         /* data register */
         reg = DREG(ext, 12);
+        sign = 0;
     }
 
     taddr = gen_lea(env, s, insn, opsize);
@@ -2056,11 +2059,11 @@ DISAS_INSN(moves)
         tcg_gen_brcondi_i32(TCG_COND_EQ, idx, 4, l1);
         /* FIXME: manage data  = (s->env->dfc & 3) != 2 */
 
-        tmp = gen_load(s, opsize, addr, 1, MMU_USER_IDX);
+        tmp = gen_load(s, opsize, addr, sign, MMU_USER_IDX);
         tcg_gen_mov_i32(reg, tmp);
         tcg_gen_br(l2);
         gen_set_label(l1);
-        tmp = gen_load(s, opsize, addr, 1, MMU_KERNEL_IDX);
+        tmp = gen_load(s, opsize, addr, sign, MMU_KERNEL_IDX);
         tcg_gen_mov_i32(reg, tmp);
         gen_set_label(l2);
     }
