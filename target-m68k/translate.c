@@ -1974,10 +1974,13 @@ DISAS_INSN(lea)
 DISAS_INSN(clr)
 {
     int opsize;
+    TCGv zero;
+
+    zero = tcg_const_i32(0);
 
     opsize = insn_opsize(insn, 6);
-    DEST_EA(env, insn, opsize, tcg_const_i32(0), NULL);
-    gen_logic_cc(s, tcg_const_i32(0), opsize);
+    DEST_EA(env, insn, opsize, zero, NULL);
+    gen_logic_cc(s, zero, opsize);
 }
 
 static TCGv gen_get_ccr(DisasContext *s)
