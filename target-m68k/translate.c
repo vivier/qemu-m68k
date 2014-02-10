@@ -1840,7 +1840,7 @@ static void gen_set_sr(DisasContext *s, TCGv val, int ccr_only)
 DISAS_INSN(arith_im)
 {
     int op;
-    uint32_t im;
+    TCGv im;
     TCGv src1;
     TCGv dest;
     TCGv addr;
@@ -1850,13 +1850,13 @@ DISAS_INSN(arith_im)
     opsize = insn_opsize(insn, 6);
     switch (opsize) {
     case OS_BYTE:
-        im = read_im8(env, s);
+        im = tcg_const_i32(read_im8(env, s));
         break;
     case OS_WORD:
-        im = read_im16(env, s);
+        im = tcg_const_i32(read_im16(env, s));
         break;
     case OS_LONG:
-        im = read_im32(env, s);
+        im = tcg_const_i32(read_im32(env, s));
         break;
     default:
        abort();
@@ -1878,7 +1878,7 @@ DISAS_INSN(arith_im)
     dest = tcg_temp_new();
     switch (op) {
     case 0: /* ori */
-        tcg_gen_ori_i32(dest, src1, im);
+        tcg_gen_or_i32(dest, src1, im);
         if ((insn & 0x3f) == 0x3c) {
             gen_set_sr(s, dest, opsize == OS_BYTE);
         } else {
@@ -1887,7 +1887,7 @@ DISAS_INSN(arith_im)
         }
         break;
     case 1: /* andi */
-        tcg_gen_andi_i32(dest, src1, im);
+        tcg_gen_and_i32(dest, src1, im);
         if ((insn & 0x3f) == 0x3c) {
             gen_set_sr(s, dest, opsize == OS_BYTE);
         } else {
@@ -1897,29 +1897,29 @@ DISAS_INSN(arith_im)
         break;
     case 2: /* subi */
         tcg_gen_mov_i32(dest, src1);
-        SET_X_FLAG(opsize, dest, tcg_const_i32(im));
-        tcg_gen_subi_i32(dest, dest, im);
-        gen_update_cc_add(dest, tcg_const_i32(im));
+        SET_X_FLAG(opsize, dest, im);
+        tcg_gen_sub_i32(dest, dest, im);
+        gen_update_cc_add(dest, im);
         SET_CC_OP(opsize, SUB);
         DEST_EA(env, insn, opsize, dest, &addr);
         break;
     case 3: /* addi */
         tcg_gen_mov_i32(dest, src1);
-        tcg_gen_addi_i32(dest, dest, im);
-        gen_update_cc_add(dest, tcg_const_i32(im));
-        SET_X_FLAG(opsize, dest, tcg_const_i32(im));
+        tcg_gen_add_i32(dest, dest, im);
+        gen_update_cc_add(dest, im);
+        SET_X_FLAG(opsize, dest, im);
 	SET_CC_OP(opsize, ADD);
         DEST_EA(env, insn, opsize, dest, &addr);
         break;
     case 5: /* eori */
-        tcg_gen_xori_i32(dest, src1, im);
+        tcg_gen_xor_i32(dest, src1, im);
         gen_logic_cc(s, dest, opsize);
         DEST_EA(env, insn, opsize, dest, &addr);
         break;
     case 6: /* cmpi */
         tcg_gen_mov_i32(dest, src1);
-        tcg_gen_subi_i32(dest, dest, im);
-        gen_update_cc_add(dest, tcg_const_i32(im));
+        tcg_gen_sub_i32(dest, dest, im);
+        gen_update_cc_add(dest, im);
         SET_CC_OP(opsize, SUB);
         break;
     default:
