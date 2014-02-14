@@ -274,12 +274,19 @@ enum {
 /* bits for 68040 MMU status register (mmusr) */
 #define M68K_MMU_B_040   (0x0800)
 #define M68K_MMU_G_040   (0x0400)
+#define M68K_MMU_U1_040  (0x0200)
+#define M68K_MMU_U0_040  (0x0100)
 #define M68K_MMU_S_040   (0x0080)
 #define M68K_MMU_CM_040  (0x0060)
 #define M68K_MMU_M_040   (0x0010)
 #define M68K_MMU_WP_040  (0x0004)
 #define M68K_MMU_T_040   (0x0002)
 #define M68K_MMU_R_040   (0x0001)
+
+#define M68K_MMU_SR_MASK_040 (M68K_MMU_G_040 | M68K_MMU_U1_040 | \
+                              M68K_MMU_U0_040 | M68K_MMU_S_040 | \
+                              M68K_MMU_CM_040 | M68K_MMU_M_040 | \
+                              M68K_MMU_WP_040)
 
 /* m68k Control Registers */
 
