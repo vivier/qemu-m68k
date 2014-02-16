@@ -71,6 +71,7 @@
 #define ESP_BASE              0x50f10000
 #define ESP_PDMA              0x50f10100
 #define ASC_BASE              0x50F14000
+#define SWIM_BASE             0x50F1E000
 #define NUBUS_SUPER_SLOT_BASE 0x60000000
 #define NUBUS_SLOT_BASE       0xf0000000
 
@@ -152,6 +153,7 @@ static void q800_init(QEMUMachineInitArgs *args)
     qemu_irq  esp_reset_irq, esp_dma_enable;
     NubusBus *nubus;
     NubusDevice *nubus_dev;
+    DriveInfo *fds[2];
 
     if (graphic_depth != 8) {
             hw_error("qemu: unknown guest depth %d\n", graphic_depth);
@@ -254,6 +256,25 @@ static void q800_init(QEMUMachineInitArgs *args)
     sysbus_mmio_map(SYS_BUS_DEVICE(dev), 0, ASC_BASE);
     sysbus_connect_irq(SYS_BUS_DEVICE(dev), 0,
                        qdev_get_gpio_in(via_dev, VIA2_IRQ_ASC_BIT));
+
+    /* SWIM floppy controller */
+
+    if (drive_get_max_bus(IF_FLOPPY) >= 2) {
+        fprintf(stderr, "qemu: too many floppy drives\n");
+        exit(1);
+    }
+    fds[0] = drive_get(IF_FLOPPY, 0, 0);
+    fds[1] = drive_get(IF_FLOPPY, 0, 1);
+
+    dev = qdev_create(NULL, "sysbus-swim");
+    if (fds[0]) {
+        qdev_prop_set_drive_nofail(dev, "driveA", fds[0]->bdrv);
+    }
+    if (fds[1]) {
+        qdev_prop_set_drive_nofail(dev, "driveB", fds[1]->bdrv);
+    }
+    qdev_init_nofail(dev);
+    sysbus_mmio_map(SYS_BUS_DEVICE(dev), 0, SWIM_BASE);
 
     /* NuBus */
 
