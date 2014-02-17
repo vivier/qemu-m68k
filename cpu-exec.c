@@ -592,6 +592,16 @@ int cpu_exec(CPUArchState *env)
                     cpu->exception_index = EXCP_INTERRUPT;
                     cpu_loop_exit(cpu);
                 }
+#if defined(DEBUG_DISAS)
+                if (qemu_loglevel_mask(CPU_LOG_TB_CPU)) {
+                    /* restore flags in standard format */
+#if defined(TARGET_I386)
+                    log_cpu_state(cpu, CPU_DUMP_CCOP);
+#else
+                    log_cpu_state(cpu, 0);
+#endif
+                }
+#endif
                 spin_lock(&tcg_ctx.tb_ctx.tb_lock);
                 have_tb_lock = true;
                 tb = tb_find_fast(env);
