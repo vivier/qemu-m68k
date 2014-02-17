@@ -2620,7 +2620,6 @@ DISAS_INSN(branch)
         /* bsr */
         gen_push(s, tcg_const_i32(s->pc));
     }
-    gen_flush_cc_op(s);
     if (op > 1) {
         /* Bcc */
         l1 = gen_new_label();
@@ -2630,6 +2629,7 @@ DISAS_INSN(branch)
         gen_jmp_tb(s, 0, s->pc);
     } else {
         /* Unconditional branch.  */
+        gen_flush_cc_op(s);
         gen_jmp_tb(s, 0, base + offset);
     }
 }
