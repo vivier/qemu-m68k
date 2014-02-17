@@ -2680,7 +2680,7 @@ DISAS_INSN(branch)
         gen_jmp_tb(s, 0, s->pc);
     } else {
         /* Unconditional branch.  */
-        update_cc_op(s);
+        gen_flush_cc_op(s);
         gen_jmp_tb(s, 0, base + offset);
     }
 }
