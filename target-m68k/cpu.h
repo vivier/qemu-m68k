@@ -51,7 +51,6 @@
 #define EXCP_UNINITIALIZED  15
 #define EXCP_TRAP0          32   /* User trap #0.  */
 #define EXCP_TRAP15         47   /* User trap #15.  */
-#define EXCP_UNSUPPORTED    61
 #define EXCP_ICE            13
 
 #define EXCP_RTE            0x100
