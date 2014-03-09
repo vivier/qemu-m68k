@@ -131,7 +131,7 @@ typedef struct DisasContext {
     target_ulong insn_pc; /* Start of the current instruction.  */
     target_ulong pc;
     int is_jmp;
-    int cc_op;
+    CCOp cc_op;
     int user;
     uint32_t fpcr;
     struct TranslationBlock *tb;
