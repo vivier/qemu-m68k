@@ -60,6 +60,8 @@ static TCGv NULL_QREG;
 /* Used to distinguish stores from bad addressing modes.  */
 static TCGv store_dummy;
 
+static uint8_t gen_opc_cc_op[OPC_BUF_SIZE];
+
 #include "exec/gen-icount.h"
 
 void m68k_tcg_init(void)
@@ -121,7 +123,7 @@ typedef struct DisasContext {
     target_ulong insn_pc; /* Start of the current instruction.  */
     target_ulong pc;
     int is_jmp;
-    int cc_op;
+    CCOp cc_op; /* Current CC operation */
     int user;
     uint32_t fpcr;
     struct TranslationBlock *tb;
@@ -4783,6 +4785,7 @@ gen_intermediate_code_internal(M68kCPU *cpu, TranslationBlock *tb,
                     tcg_ctx.gen_opc_instr_start[lj++] = 0;
             }
             tcg_ctx.gen_opc_pc[lj] = dc->pc;
+            gen_opc_cc_op[lj] = dc->cc_op;
             tcg_ctx.gen_opc_instr_start[lj] = 1;
             tcg_ctx.gen_opc_icount[lj] = num_insns;
         }
@@ -4879,5 +4882,24 @@ void m68k_cpu_dump_state(CPUState *cs, FILE *f, fprintf_function cpu_fprintf,
 
 void restore_state_to_opc(CPUM68KState *env, TranslationBlock *tb, int pc_pos)
 {
+    int cc_op;
+#ifdef DEBUG_DISAS
+    if (qemu_loglevel_mask(CPU_LOG_TB_OP)) {
+        int i;
+        qemu_log("RESTORE:\n");
+        for(i = 0;i <= pc_pos; i++) {
+            if (tcg_ctx.gen_opc_instr_start[i]) {
+                qemu_log("0x%04x: " TARGET_FMT_lx "\n", i,
+                        tcg_ctx.gen_opc_pc[i]);
+            }
+        }
+        qemu_log("pc_pos=0x%x pc=" TARGET_FMT_lx " CC_OP %d\n",
+                pc_pos, tcg_ctx.gen_opc_pc[pc_pos],
+                gen_opc_cc_op[pc_pos]);
+    }
+#endif
     env->pc = tcg_ctx.gen_opc_pc[pc_pos];
+    cc_op = gen_opc_cc_op[pc_pos];
+    if (cc_op != CC_OP_DYNAMIC)
+        env->cc_op = cc_op;
 }
