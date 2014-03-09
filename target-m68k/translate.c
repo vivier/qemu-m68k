@@ -1381,7 +1381,7 @@ DISAS_INSN(undef_fpu)
 
 DISAS_INSN(undef)
 {
-    gen_exception(s, s->insn_pc, EXCP_UNSUPPORTED);
+    gen_exception(s, s->insn_pc, EXCP_ILLEGAL);
 }
 
 DISAS_INSN(mulw)
@@ -1452,7 +1452,7 @@ DISAS_INSN(divl)
     ext = read_im16(env, s);
     if (ext & 0x400) {
         if (!m68k_feature(s->env, M68K_FEATURE_QUAD_MULDIV)) {
-            gen_exception(s, s->insn_pc, EXCP_UNSUPPORTED);
+            gen_exception(s, s->insn_pc, EXCP_ILLEGAL);
             return;
         }
         num = DREG(ext, 12);
@@ -1990,7 +1990,7 @@ DISAS_INSN(cas)
 
     if ((insn & 0x3f) == 0x3c) {
         /* CAS2: Not yet implemented */
-        gen_exception(s, s->insn_pc, EXCP_UNSUPPORTED);
+        gen_exception(s, s->insn_pc, EXCP_ILLEGAL);
     }
 
     switch((insn >> 9) & 3) {
@@ -2475,7 +2475,7 @@ DISAS_INSN(mull)
     ext = read_im16(env, s);
     if (ext & 0x400) {
        if (!m68k_feature(s->env, M68K_FEATURE_QUAD_MULDIV)) {
-           gen_exception(s, s->insn_pc, EXCP_UNSUPPORTED);
+           gen_exception(s, s->insn_pc, EXCP_ILLEGAL);
            return;
        }
        reg = DREG(ext, 12);
@@ -2680,7 +2680,7 @@ DISAS_INSN(branch)
         gen_jmp_tb(s, 0, s->pc);
     } else {
         /* Unconditional branch.  */
-        gen_flush_cc_op(s);
+        update_cc_op(s);
         gen_jmp_tb(s, 0, base + offset);
     }
 }
@@ -3819,7 +3819,7 @@ DISAS_INSN(strldsr)
     addr = s->pc - 2;
     ext = read_im16(env, s);
     if (ext != 0x46FC) {
-        gen_exception(s, addr, EXCP_UNSUPPORTED);
+        gen_exception(s, addr, EXCP_ILLEGAL);
         return;
     }
     ext = read_im16(env, s);

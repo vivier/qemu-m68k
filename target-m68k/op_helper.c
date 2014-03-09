@@ -165,10 +165,6 @@ static void do_interrupt_all(CPUM68KState *env, int is_hw)
             /* Return from an exception.  */
             do_rte(env);
             return;
-        case EXCP_UNSUPPORTED:
-            cpu_abort(cs, "Illegal instruction: %04x @ %08x",
-                      cpu_lduw_code(env, env->pc), env->pc);
-            break;
         case EXCP_HALT_INSN:
             if (semihosting_enabled
                     && (env->sr & SR_S) != 0
@@ -275,9 +271,9 @@ static void do_interrupt_all(CPUM68KState *env, int is_hw)
     sp = env->aregs[7];
 
     if (m68k_feature(env, M68K_FEATURE_M68000)) {
-        static int mmu_fault = 0;
         sp &= ~1;
         if (cs->exception_index == 2) {
+            static int mmu_fault = 0;
             if (mmu_fault) {
                 cpu_abort(cs, "DOUBLE MMU FAULT\n");
             }
@@ -320,7 +316,8 @@ static void do_interrupt_all(CPUM68KState *env, int is_hw)
             }
         } else if (cs->exception_index == 3) {
             do_stack_frame(env, &sp, 2, oldsr, 0, retaddr);
-        } else if (cs->exception_index == 5 ||
+        } else if (cs->exception_index == 4 ||
+                   cs->exception_index == 5 ||
                    cs->exception_index == 6 ||
                    cs->exception_index == 7 ||
                    cs->exception_index == 9) {
