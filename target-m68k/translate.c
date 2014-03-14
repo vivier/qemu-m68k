@@ -175,24 +175,25 @@ typedef void (*disas_proc)(CPUM68KState *env, DisasContext *s, uint16_t insn);
 #endif
 
 /* Update the CPU env CC_OP state.  */
-static inline void gen_flush_cc_op(DisasContext *s)
+static inline void update_cc_op(DisasContext *s)
 {
-    if (s->cc_op != CC_OP_DYNAMIC)
+    if (s->cc_op != CC_OP_DYNAMIC) {
         tcg_gen_movi_i32(QREG_CC_OP, s->cc_op);
+    }
 }
 
 
 /* Generate a jump to an immediate address.  */
 static void gen_jmp_im(DisasContext *s, uint32_t dest)
 {
-    gen_flush_cc_op(s);
+    update_cc_op(s);
     tcg_gen_movi_i32(QREG_PC, dest);
     s->is_jmp = DISAS_JUMP;
 }
 
 static void gen_exception(DisasContext *s, uint32_t where, int nr)
 {
-    gen_flush_cc_op(s);
+    update_cc_op(s);
     gen_jmp_im(s, where);
     gen_helper_raise_exception(cpu_env, tcg_const_i32(nr));
 }
@@ -478,7 +479,7 @@ static inline void gen_flush_flags(DisasContext *s)
 {
     if (s->cc_op == CC_OP_FLAGS)
         return;
-    gen_flush_cc_op(s);
+    update_cc_op(s);
     gen_helper_flush_flags(cpu_env, QREG_CC_OP);
     s->cc_op = CC_OP_FLAGS;
 }
@@ -1225,7 +1226,7 @@ DISAS_INSN(scc)
 /* Force a TB lookup after an instruction that changes the CPU state.  */
 static void gen_lookup_tb(DisasContext *s)
 {
-    gen_flush_cc_op(s);
+    update_cc_op(s);
     tcg_gen_movi_i32(QREG_PC, s->pc);
     s->is_jmp = DISAS_UPDATE;
 }
@@ -1233,7 +1234,7 @@ static void gen_lookup_tb(DisasContext *s)
 /* Generate a jump to the address in qreg DEST.  */
 static void gen_jmp(DisasContext *s, TCGv dest)
 {
-    gen_flush_cc_op(s);
+    update_cc_op(s);
     tcg_gen_mov_i32(QREG_PC, dest);
     s->is_jmp = DISAS_JUMP;
 }
@@ -2379,7 +2380,7 @@ DISAS_INSN(branch)
         gen_jmp_tb(s, 0, s->pc);
     } else {
         /* Unconditional branch.  */
-        gen_flush_cc_op(s);
+        update_cc_op(s);
         gen_jmp_tb(s, 0, base + offset);
     }
 }
@@ -4810,20 +4811,20 @@ gen_intermediate_code_internal(M68kCPU *cpu, TranslationBlock *tb,
     if (unlikely(cs->singlestep_enabled)) {
         /* Make sure the pc is updated, and raise a debug exception.  */
         if (!dc->is_jmp) {
-            gen_flush_cc_op(dc);
+            update_cc_op(dc);
             tcg_gen_movi_i32(QREG_PC, dc->pc);
         }
         gen_helper_raise_exception(cpu_env, tcg_const_i32(EXCP_DEBUG));
     } else {
         switch(dc->is_jmp) {
         case DISAS_NEXT:
-            gen_flush_cc_op(dc);
+            update_cc_op(dc);
             gen_jmp_tb(dc, 0, dc->pc);
             break;
         default:
         case DISAS_JUMP:
         case DISAS_UPDATE:
-            gen_flush_cc_op(dc);
+            update_cc_op(dc);
             /* indicate that the hash table must be used to find the next TB */
             tcg_gen_exit_tb(0);
             break;
