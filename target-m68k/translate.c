@@ -1451,6 +1451,7 @@ DISAS_INSN(abcd_reg)
 
     src = DREG(insn, 0);
     dest = DREG(insn, 9);
+    gen_flush_flags(s);
     gen_helper_abcd_cc(dest, cpu_env, src, dest);
 }
 
@@ -1469,6 +1470,7 @@ DISAS_INSN(abcd_mem)
     tcg_gen_subi_i32(addr_dest, addr_dest, OS_BYTE);
     dest = gen_load(s, OS_BYTE, addr_dest, 0);
 
+    gen_flush_flags(s);
     gen_helper_abcd_cc(dest, cpu_env, src, dest);
 
     gen_store(s, OS_BYTE, addr_dest, dest);
@@ -1481,6 +1483,7 @@ DISAS_INSN(sbcd_reg)
 
     src = DREG(insn, 0);
     dest = DREG(insn, 9);
+    gen_flush_flags(s);
     gen_helper_sbcd_cc(dest, cpu_env, src, dest);
 }
 
@@ -1499,6 +1502,7 @@ DISAS_INSN(sbcd_mem)
     tcg_gen_subi_i32(addr_dest, addr_dest, OS_BYTE);
     dest = gen_load(s, OS_BYTE, addr_dest, 0);
 
+    gen_flush_flags(s);
     gen_helper_sbcd_cc(dest, cpu_env, src, dest);
 
     gen_store(s, OS_BYTE, addr_dest, dest);
@@ -1511,6 +1515,7 @@ DISAS_INSN(nbcd)
 
     SRC_EA(env, dest, OS_BYTE, -1, &addr);
 
+    gen_flush_flags(s);
     gen_helper_sbcd_cc(dest, cpu_env, dest, tcg_const_i32(0));
 
     DEST_EA(env, insn, OS_BYTE, dest, &addr);
