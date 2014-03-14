@@ -1833,6 +1833,7 @@ static TCGv gen_get_sr(DisasContext *s)
 static void gen_set_sr(DisasContext *s, TCGv val, int ccr_only)
 {
     TCGv tmp;
+    s->cc_op = CC_OP_FLAGS;
     tmp = tcg_temp_new();
     tcg_gen_andi_i32(QREG_CC_DEST, val, 0xf);
     tcg_gen_shri_i32(tmp, val, 4);
@@ -2295,6 +2296,7 @@ DISAS_INSN(neg)
 
 static void gen_set_sr_im(DisasContext *s, uint16_t val, int ccr_only)
 {
+    s->cc_op = CC_OP_FLAGS;
     tcg_gen_movi_i32(QREG_CC_DEST, val & 0xf);
     tcg_gen_movi_i32(QREG_CC_X, (val & 0x10) >> 4);
     if (!ccr_only) {
@@ -2307,7 +2309,6 @@ static void gen_move_to_sr(CPUM68KState *env, DisasContext *s, uint16_t insn,
 {
     TCGv src;
 
-    s->cc_op = CC_OP_FLAGS;
     SRC_EA(env, src, OS_WORD, 0, NULL);
     gen_set_sr(s, src, ccr_only);
 }
