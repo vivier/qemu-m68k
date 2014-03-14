@@ -2224,8 +2224,8 @@ DISAS_INSN(negx)
     int opsize;
 
     opsize = insn_opsize(insn, 6);
-    gen_flush_flags(s);
     SRC_EA(env, src, opsize, -1, &addr);
+    gen_flush_flags(s);
     dest = tcg_temp_new();
     switch(opsize) {
     case OS_BYTE:
