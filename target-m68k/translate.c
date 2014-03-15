@@ -178,6 +178,45 @@ typedef void (*disas_proc)(CPUM68KState *env, DisasContext *s, uint16_t insn);
                              uint16_t insn)
 #endif
 
+enum {
+    USES_CC_DST  = 1,
+    USES_CC_SRC  = 2,
+};
+
+static const uint8_t cc_op_live[CC_OP_NB] = {
+    [CC_OP_DYNAMIC] = USES_CC_DST | USES_CC_SRC,
+    [CC_OP_FLAGS] = USES_CC_DST,
+    [CC_OP_LOGICB ... CC_OP_LOGIC] = USES_CC_DST,
+    [CC_OP_ADDB ... CC_OP_ADD] = USES_CC_DST | USES_CC_SRC,
+    [CC_OP_SUBB ... CC_OP_SUB] = USES_CC_DST | USES_CC_SRC,
+    [CC_OP_ADDXB ... CC_OP_ADDX] = USES_CC_DST | USES_CC_SRC,
+    [CC_OP_SUBXB ... CC_OP_SUBX] = USES_CC_DST | USES_CC_SRC,
+    [CC_OP_SHIFTB ... CC_OP_SHIFT] = USES_CC_DST | USES_CC_SRC,
+};
+
+static void set_cc_op(DisasContext *s, CCOp op)
+{
+    int dead;
+
+    if (s->cc_op == op) {
+        return;
+    }
+
+    /* Discard CC computation that will no longer be used.  */
+
+    dead = cc_op_live[s->cc_op] & ~cc_op_live[op];
+    if (dead & USES_CC_DST) {
+        tcg_gen_discard_i32(QREG_CC_DEST);
+    }
+    if (dead & USES_CC_SRC) {
+        tcg_gen_discard_i32(QREG_CC_SRC);
+    }
+    if (s->cc_op == CC_OP_DYNAMIC) {
+        tcg_gen_discard_i32(QREG_CC_OP);
+    }
+    s->cc_op = op;
+}
+
 /* Update the CPU env CC_OP state.  */
 static inline void update_cc_op(DisasContext *s)
 {
@@ -474,6 +513,7 @@ static TCGv gen_lea_indexed(CPUM68KState *env, DisasContext *s, TCGv base)
 }
 
 /* Evaluate all the CC flags.  */
+
 static inline void gen_flush_flags(DisasContext *s)
 {
     if (s->cc_op == CC_OP_FLAGS)
@@ -483,14 +523,14 @@ static inline void gen_flush_flags(DisasContext *s)
     } else {
         gen_helper_flush_flags(QREG_CC_DEST, cpu_env, tcg_const_i32(s->cc_op));
     }
-    s->cc_op = CC_OP_FLAGS;
+    set_cc_op(s, CC_OP_FLAGS);
 }
 
 #define SET_CC_OP(opsize, op) do { \
     switch (opsize) { \
-    case OS_BYTE: s->cc_op = CC_OP_##op##B; break; \
-    case OS_WORD: s->cc_op = CC_OP_##op##W; break; \
-    case OS_LONG: s->cc_op = CC_OP_##op; break; \
+    case OS_BYTE: set_cc_op(s, CC_OP_##op##B); break; \
+    case OS_WORD: set_cc_op(s, CC_OP_##op##W); break; \
+    case OS_LONG: set_cc_op(s, CC_OP_##op); break; \
     default: abort(); \
     } \
 } while (0)
@@ -1393,7 +1433,7 @@ DISAS_INSN(divw)
         gen_helper_divu(cpu_env, tcg_const_i32(1));
     }
 
-    s->cc_op = CC_OP_FLAGS;
+    set_cc_op(s, CC_OP_FLAGS);
 
     l1 = gen_new_label();
     gen_jmpcc(s, 9 /* V */, l1);
@@ -1432,7 +1472,7 @@ DISAS_INSN(divl)
         tcg_gen_mov_i32(num, QREG_DIV1);
         if (!TCGV_EQUAL(num, reg))
             tcg_gen_mov_i32(reg, QREG_QUADH);
-        s->cc_op = CC_OP_FLAGS;
+        set_cc_op(s, CC_OP_FLAGS);
         return;
     }
     num = DREG(ext, 12);
@@ -1454,7 +1494,7 @@ DISAS_INSN(divl)
         /* rem */
         tcg_gen_mov_i32 (reg, QREG_DIV2);
     }
-    s->cc_op = CC_OP_FLAGS;
+    set_cc_op(s, CC_OP_FLAGS);
 }
 
 DISAS_INSN(abcd_reg)
@@ -1839,7 +1879,6 @@ static TCGv gen_get_sr(DisasContext *s)
 static void gen_set_sr(DisasContext *s, TCGv val, int ccr_only)
 {
     TCGv tmp;
-    s->cc_op = CC_OP_FLAGS;
     tmp = tcg_temp_new();
     tcg_gen_andi_i32(QREG_CC_DEST, val, 0xf);
     tcg_gen_shri_i32(tmp, val, 4);
@@ -1847,6 +1886,7 @@ static void gen_set_sr(DisasContext *s, TCGv val, int ccr_only)
     if (!ccr_only) {
         gen_helper_set_sr(cpu_env, val);
     }
+    set_cc_op(s, CC_OP_FLAGS);
 }
 
 DISAS_INSN(arith_im)
@@ -2243,8 +2283,8 @@ DISAS_INSN(negx)
         gen_helper_subx32_cc(dest, cpu_env, tcg_const_i32(0), src);
         break;
     }
-    s->cc_op = CC_OP_FLAGS;
     DEST_EA(env, insn, opsize, dest, &addr);
+    set_cc_op(s, CC_OP_FLAGS);
 }
 
 DISAS_INSN(lea)
@@ -2302,12 +2342,12 @@ DISAS_INSN(neg)
 
 static void gen_set_sr_im(DisasContext *s, uint16_t val, int ccr_only)
 {
-    s->cc_op = CC_OP_FLAGS;
     tcg_gen_movi_i32(QREG_CC_DEST, val & 0xf);
     tcg_gen_movi_i32(QREG_CC_X, (val & 0x10) >> 4);
     if (!ccr_only) {
         gen_helper_set_sr(cpu_env, tcg_const_i32(val & 0xff00));
     }
+    set_cc_op(s, CC_OP_FLAGS);
 }
 
 static void gen_move_to_sr(CPUM68KState *env, DisasContext *s, uint16_t insn,
@@ -2451,7 +2491,7 @@ DISAS_INSN(mull)
            gen_helper_mulu64(dest, cpu_env, src1, reg);
        tcg_gen_mov_i32(reg, dest);
        tcg_gen_mov_i32(regh, QREG_QUADH);
-       s->cc_op = CC_OP_FLAGS;
+       set_cc_op(s, CC_OP_FLAGS);
        return;
     }
     reg = DREG(ext, 12);
@@ -2462,7 +2502,7 @@ DISAS_INSN(mull)
            gen_helper_muls32_cc(dest, cpu_env, src1, reg);
        else
            gen_helper_mulu32_cc(dest, cpu_env, src1, reg);
-       s->cc_op = CC_OP_FLAGS;
+       set_cc_op(s, CC_OP_FLAGS);
     } else {
        tcg_gen_mul_i32(dest, src1, reg);
     }
@@ -2728,7 +2768,7 @@ DISAS_INSN(subx_reg)
         gen_helper_subx32_cc(reg, cpu_env, reg, src);
         break;
     }
-    s->cc_op = CC_OP_FLAGS;
+    set_cc_op(s, CC_OP_FLAGS);
 }
 
 DISAS_INSN(subx_mem)
@@ -2766,7 +2806,7 @@ DISAS_INSN(subx_mem)
         gen_helper_subx32_cc(reg, cpu_env, reg, src);
         break;
     }
-    s->cc_op = CC_OP_FLAGS;
+    set_cc_op(s, CC_OP_FLAGS);
 
     gen_store(s, opsize, addr_reg, reg, IS_USER(s));
     tcg_gen_mov_i32(AREG(insn, 0), addr_src);
@@ -2953,7 +2993,7 @@ DISAS_INSN(addx_reg)
         gen_helper_addx32_cc(reg, cpu_env, reg, src);
         break;
     }
-    s->cc_op = CC_OP_FLAGS;
+    set_cc_op(s, CC_OP_FLAGS);
 }
 
 DISAS_INSN(addx_mem)
@@ -2991,13 +3031,13 @@ DISAS_INSN(addx_mem)
         gen_helper_addx32_cc(reg, cpu_env, reg, src);
         break;
     }
-    s->cc_op = CC_OP_FLAGS;
 
     gen_store(s, opsize, addr_reg, reg, IS_USER(s));
     tcg_gen_mov_i32(AREG(insn, 0), addr_src);
     if (REG(insn, 0) != REG(insn, 9)) {
         tcg_gen_mov_i32(AREG(insn, 9), addr_reg);
     }
+    set_cc_op(s, CC_OP_FLAGS);
 }
 
 /* TODO: This could be implemented without helper functions.  */
@@ -3028,8 +3068,8 @@ DISAS_INSN(shift8_im)
             gen_helper_sar8_cc(dest, cpu_env, reg, shift);
         }
     }
-    s->cc_op = CC_OP_SHIFTB;
     gen_partset_reg(OS_BYTE, reg, dest);
+    set_cc_op(s, CC_OP_SHIFTB);
 }
 
 /* TODO: This could be implemented without helper functions.  */
@@ -3060,8 +3100,8 @@ DISAS_INSN(shift16_im)
             gen_helper_sar16_cc(dest, cpu_env, reg, shift);
         }
     }
-    s->cc_op = CC_OP_SHIFTW;
     gen_partset_reg(OS_WORD, reg, dest);
+    set_cc_op(s, CC_OP_SHIFTW);
 }
 
 
@@ -3091,7 +3131,7 @@ DISAS_INSN(shift_im)
             gen_helper_sar32_cc(reg, cpu_env, reg, shift);
         }
     }
-    s->cc_op = CC_OP_SHIFT;
+    set_cc_op(s, CC_OP_SHIFT);
 }
 
 DISAS_INSN(shift8_reg)
@@ -3120,8 +3160,8 @@ DISAS_INSN(shift8_reg)
             gen_helper_sar8_cc(dest, cpu_env, reg, tmp);
         }
     }
-    s->cc_op = CC_OP_SHIFTB;
     gen_partset_reg(OS_BYTE, reg, dest);
+    set_cc_op(s, CC_OP_SHIFTB);
 }
 
 DISAS_INSN(shift16_reg)
@@ -3150,8 +3190,8 @@ DISAS_INSN(shift16_reg)
             gen_helper_sar16_cc(dest, cpu_env, reg, tmp);
         }
     }
-    s->cc_op = CC_OP_SHIFTW;
     gen_partset_reg(OS_WORD, reg, dest);
+    set_cc_op(s, CC_OP_SHIFTW);
 }
 
 DISAS_INSN(shift_reg)
@@ -3175,7 +3215,7 @@ DISAS_INSN(shift_reg)
             gen_helper_sar32_cc(reg, cpu_env, reg, shift);
         }
     }
-    s->cc_op = CC_OP_SHIFT;
+    set_cc_op(s, CC_OP_SHIFT);
 }
 
 DISAS_INSN(shift_mem)
@@ -3197,8 +3237,8 @@ DISAS_INSN(shift_mem)
             gen_helper_sar16_cc(dest, cpu_env, src, shift);
         }
     }
-    s->cc_op = CC_OP_SHIFTW;
     DEST_EA(env, insn, OS_WORD, dest, &addr);
+    set_cc_op(s, CC_OP_SHIFTW);
 }
 
 DISAS_INSN(rotate_im)
@@ -3225,7 +3265,7 @@ DISAS_INSN(rotate_im)
             gen_helper_roxr32_cc(reg, cpu_env, reg, shift);
         }
     }
-    s->cc_op = CC_OP_FLAGS;
+    set_cc_op(s, CC_OP_FLAGS);
 }
 
 DISAS_INSN(rotate8_im)
@@ -3254,8 +3294,8 @@ DISAS_INSN(rotate8_im)
             gen_helper_roxr8_cc(dest, cpu_env, reg, shift);
         }
     }
-    s->cc_op = CC_OP_FLAGS;
     gen_partset_reg(OS_BYTE, reg, dest);
+    set_cc_op(s, CC_OP_FLAGS);
 }
 
 DISAS_INSN(rotate16_im)
@@ -3284,8 +3324,8 @@ DISAS_INSN(rotate16_im)
             gen_helper_roxr16_cc(dest, cpu_env, reg, shift);
         }
     }
-    s->cc_op = CC_OP_FLAGS;
     gen_partset_reg(OS_WORD, reg, dest);
+    set_cc_op(s, CC_OP_FLAGS);
 }
 
 DISAS_INSN(rotate_reg)
@@ -3311,7 +3351,7 @@ DISAS_INSN(rotate_reg)
             gen_helper_roxr32_cc(reg, cpu_env, reg, tmp);
         }
     }
-    s->cc_op = CC_OP_FLAGS;
+    set_cc_op(s, CC_OP_FLAGS);
 }
 
 DISAS_INSN(rotate8_reg)
@@ -3339,8 +3379,8 @@ DISAS_INSN(rotate8_reg)
             gen_helper_roxr8_cc(dest, cpu_env, reg, tmp);
         }
     }
-    s->cc_op = CC_OP_FLAGS;
     gen_partset_reg(OS_BYTE, reg, dest);
+    set_cc_op(s, CC_OP_FLAGS);
 }
 
 DISAS_INSN(rotate16_reg)
@@ -3368,8 +3408,8 @@ DISAS_INSN(rotate16_reg)
             gen_helper_roxr16_cc(dest, cpu_env, reg, tmp);
         }
     }
-    s->cc_op = CC_OP_FLAGS;
     gen_partset_reg(OS_WORD, reg, dest);
+    set_cc_op(s, CC_OP_FLAGS);
 }
 
 DISAS_INSN(rotate_mem)
@@ -3395,8 +3435,8 @@ DISAS_INSN(rotate_mem)
             gen_helper_roxr16_cc(dest, cpu_env, src, shift);
         }
     }
-    s->cc_op = CC_OP_FLAGS;
     DEST_EA(env, insn, OS_WORD, dest, &addr);
+    set_cc_op(s, CC_OP_FLAGS);
 }
 
 static void bitfield_param(uint16_t ext, TCGv *offset, TCGv *width, TCGv *mask)
@@ -3759,17 +3799,16 @@ DISAS_INSN(chk)
     l1 = gen_new_label();
     l2 = gen_new_label();
     tcg_gen_brcondi_i32(TCG_COND_GE, reg, 0, l1);
-    s->cc_op = CC_OP_FLAGS;
     tcg_gen_ori_i32(QREG_CC_DEST, QREG_CC_DEST, CCF_N);
     gen_exception(s, s->insn_pc, EXCP_CHK);
     tcg_gen_br(l2);
     gen_set_label(l1);
     tcg_gen_brcond_i32(TCG_COND_LE, reg, src, l2);
-    s->cc_op = CC_OP_FLAGS;
     tcg_gen_andi_i32(QREG_CC_DEST, QREG_CC_DEST, ~CCF_N);
     gen_exception(s, s->insn_pc, EXCP_CHK);
     gen_set_label(l2);
     tcg_temp_free(src);
+    set_cc_op(s, CC_OP_FLAGS);
 }
 
 DISAS_INSN(strldsr)
@@ -4921,7 +4960,7 @@ DISAS_INSN(macsr_to_ccr)
 {
     tcg_gen_movi_i32(QREG_CC_X, 0);
     tcg_gen_andi_i32(QREG_CC_DEST, QREG_MACSR, 0xf);
-    s->cc_op = CC_OP_FLAGS;
+    set_cc_op(s, CC_OP_FLAGS);
 }
 
 DISAS_INSN(to_mac)

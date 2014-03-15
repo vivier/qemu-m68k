@@ -219,6 +219,8 @@ typedef enum {
     CC_OP_SHIFTB, /* CC_DEST = result, CC_SRC = carry */
     CC_OP_SHIFTW, /* CC_DEST = result, CC_SRC = carry */
     CC_OP_SHIFT, /* CC_DEST = result, CC_SRC = carry */
+
+    CC_OP_NB,
 } CCOp;
 
 #define CCF_C 0x01
