@@ -1945,8 +1945,8 @@ DISAS_INSN(arith_im)
         if ((insn & 0x3f) == 0x3c) {
             gen_set_sr(s, dest, opsize == OS_BYTE);
         } else {
-            gen_logic_cc(s, dest, opsize);
             DEST_EA(env, insn, opsize, dest, &addr);
+            gen_logic_cc(s, dest, opsize);
         }
         break;
     case 1: /* andi */
@@ -1954,8 +1954,8 @@ DISAS_INSN(arith_im)
         if ((insn & 0x3f) == 0x3c) {
             gen_set_sr(s, dest, opsize == OS_BYTE);
         } else {
-            gen_logic_cc(s, dest, opsize);
             DEST_EA(env, insn, opsize, dest, &addr);
+            gen_logic_cc(s, dest, opsize);
         }
         break;
     case 2: /* subi */
@@ -1976,8 +1976,8 @@ DISAS_INSN(arith_im)
         break;
     case 5: /* eori */
         tcg_gen_xor_i32(dest, src1, im);
-        gen_logic_cc(s, dest, opsize);
         DEST_EA(env, insn, opsize, dest, &addr);
+        gen_logic_cc(s, dest, opsize);
         break;
     case 6: /* cmpi */
         tcg_gen_mov_i32(dest, src1);
@@ -2638,6 +2638,7 @@ DISAS_INSN(addsubq)
         } else {
             tcg_gen_add_i32(dest, dest, val);
         }
+        DEST_EA(env, insn, opsize, dest, &addr);
     } else {
         cc_x = tcg_temp_new();
         if (insn & 0x0100) {
@@ -2652,7 +2653,6 @@ DISAS_INSN(addsubq)
         DEST_EA(env, insn, opsize, dest, &addr);
         gen_update_cc_add(dest, val, cc_x);
     }
-    DEST_EA(env, insn, opsize, dest, &addr);
 }
 
 DISAS_INSN(tpf)
