@@ -2831,7 +2831,6 @@ DISAS_INSN(shift8_reg)
     tcg_gen_andi_i32(tmp, shift, 63);
     dest = tcg_temp_new_i32();
     /* Shift by zero leaves C flag unmodified.   */
-    gen_flush_flags(s);
     if (insn & 0x100) {
         if (insn & 8) {
             gen_helper_shl8_cc(dest, cpu_env, reg, tmp);
@@ -2862,7 +2861,6 @@ DISAS_INSN(shift16_reg)
     tcg_gen_andi_i32(tmp, shift, 63);
     dest = tcg_temp_new_i32();
     /* Shift by zero leaves C flag unmodified.   */
-    gen_flush_flags(s);
     if (insn & 0x100) {
         if (insn & 8) {
             gen_helper_shl16_cc(dest, cpu_env, reg, tmp);
@@ -2888,7 +2886,6 @@ DISAS_INSN(shift_reg)
     reg = DREG(insn, 0);
     shift = DREG(insn, 9);
     /* Shift by zero leaves C flag unmodified.   */
-    gen_flush_flags(s);
     if (insn & 0x100) {
         if (insn & 8) {
             gen_helper_shl32_cc(reg, cpu_env, reg, shift);
