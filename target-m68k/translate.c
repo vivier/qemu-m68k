@@ -479,8 +479,11 @@ static inline void gen_flush_flags(DisasContext *s)
 {
     if (s->cc_op == CC_OP_FLAGS)
         return;
-    update_cc_op(s);
-    gen_helper_flush_flags(cpu_env, QREG_CC_OP);
+    if (s->cc_op == CC_OP_DYNAMIC) {
+        gen_helper_flush_flags(QREG_CC_DEST, cpu_env, QREG_CC_OP);
+    } else {
+        gen_helper_flush_flags(QREG_CC_DEST, cpu_env, tcg_const_i32(s->cc_op));
+    }
     s->cc_op = CC_OP_FLAGS;
 }
 
@@ -1312,8 +1315,10 @@ DISAS_INSN(dbcc)
     tcg_gen_addi_i32(tmp, tmp, -1);
     gen_partset_reg(OS_WORD, reg, tmp);
     tcg_gen_brcondi_i32(TCG_COND_EQ, tmp, -1, l1);
+    update_cc_op(s);
     gen_jmp_tb(s, 1, base + offset);
     gen_set_label(l1);
+    update_cc_op(s);
     gen_jmp_tb(s, 0, s->pc);
 }
 
@@ -2375,8 +2380,10 @@ DISAS_INSN(branch)
         /* Bcc */
         l1 = gen_new_label();
         gen_jmpcc(s, ((insn >> 8) & 0xf) ^ 1, l1);
+        update_cc_op(s);
         gen_jmp_tb(s, 1, base + offset);
         gen_set_label(l1);
+        update_cc_op(s);
         gen_jmp_tb(s, 0, s->pc);
     } else {
         /* Unconditional branch.  */
