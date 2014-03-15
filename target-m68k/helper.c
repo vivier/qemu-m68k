@@ -302,9 +302,9 @@ static uint32_t cpu_m68k_flush_flags(CPUM68KState *env, int op)
     case CC_OP_LOGIC:
         SET_NZ(dest, int32_t);
 set_x:
-        if (env->cc_x && m68k_feature(env, M68K_FEATURE_M68000)) {
+        if (!m68k_feature(env, M68K_FEATURE_M68000)) {
             /* Unlike m68k, coldfire always clears the overflow bit.  */
-            flags |= CCF_X;
+            env->cc_x = 0;
         }
         break;
     case CC_OP_ADDB:
@@ -2043,9 +2043,10 @@ uint32_t HELPER(abcd_cc)(CPUM68KState *env, uint32_t src, uint32_t dest)
     uint16_t hi, lo;
     uint16_t res;
     uint32_t flags;
+    int extend = 0;
 
     flags = env->cc_dest;
-    flags &= ~(CCF_C|CCF_X);
+    flags &= ~CCF_C;
 
     lo = (src & 0x0f) + (dest & 0x0f);
     if (env->cc_x)
@@ -2060,7 +2061,8 @@ uint32_t HELPER(abcd_cc)(CPUM68KState *env, uint32_t src, uint32_t dest)
 
     if ((res & 0x3F0) > 0x90) {
         res += 0x60;
-        flags |= CCF_C|CCF_X;
+        flags |= CCF_C;
+        extend = 1;
     }
 
     /* Z flag: cleared if nonzero */
@@ -2070,7 +2072,7 @@ uint32_t HELPER(abcd_cc)(CPUM68KState *env, uint32_t src, uint32_t dest)
 
     dest = (dest & 0xffffff00) | (res & 0xff);
 
-    env->cc_x = (flags & CCF_X) != 0;
+    env->cc_x = extend;
     env->cc_dest = flags;
 
     return dest;
@@ -2081,10 +2083,10 @@ uint32_t HELPER(sbcd_cc)(CPUM68KState *env, uint32_t src, uint32_t dest)
     uint16_t hi, lo;
     uint16_t res;
     uint32_t flags;
-    int bcd = 0, carry = 0;
+    int bcd = 0, carry = 0, extend = 0;
 
     flags = env->cc_dest;
-    flags &= ~(CCF_C|CCF_X);
+    flags &= CCF_C;
 
     if (env->cc_x)
         carry = 1;
@@ -2105,7 +2107,8 @@ uint32_t HELPER(sbcd_cc)(CPUM68KState *env, uint32_t src, uint32_t dest)
     /* C and X flags: set if decimal carry, cleared otherwise */
 
     if ((((dest & 0xff) - (src & 0xff) - (bcd + carry)) & 0x300) > 0xff) {
-        flags |= CCF_C|CCF_X;
+        flags |= CCF_C;
+        extend = 1;
     }
 
     /* Z flag: cleared if nonzero */
@@ -2115,7 +2118,7 @@ uint32_t HELPER(sbcd_cc)(CPUM68KState *env, uint32_t src, uint32_t dest)
 
     dest = (dest & 0xffffff00) | (res & 0xff);
 
-    env->cc_x = (flags & CCF_X) != 0;
+    env->cc_x = extend;
     env->cc_dest = flags;
 
     return dest;
