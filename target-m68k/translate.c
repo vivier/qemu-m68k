@@ -2782,8 +2782,6 @@ DISAS_INSN(subx_mem)
 
     opsize = insn_opsize(insn, 6);
 
-    gen_flush_flags(s);
-
     addr_src = tcg_temp_new();
     tcg_gen_subi_i32(addr_src, AREG(insn, 0), opsize);
     src = gen_load(s, opsize, addr_src, 0, IS_USER(s));
@@ -2797,6 +2795,7 @@ DISAS_INSN(subx_mem)
     }
     reg = gen_load(s, opsize, addr_reg, 0, IS_USER(s));
 
+    gen_flush_flags(s);
     switch(opsize) {
     case OS_BYTE:
         gen_helper_subx8_cc(reg, cpu_env, reg, src);
@@ -3008,8 +3007,6 @@ DISAS_INSN(addx_mem)
 
     opsize = insn_opsize(insn, 6);
 
-    gen_flush_flags(s);
-
     addr_src = tcg_temp_new();
     tcg_gen_subi_i32(addr_src, AREG(insn, 0), opsize);
     src = gen_load(s, opsize, addr_src, 0, IS_USER(s));
@@ -3023,6 +3020,7 @@ DISAS_INSN(addx_mem)
     }
     reg = gen_load(s, opsize, addr_reg, 0, IS_USER(s));
 
+    gen_flush_flags(s);
     switch(opsize) {
     case OS_BYTE:
         gen_helper_addx8_cc(reg, cpu_env, reg, src);
