@@ -4059,8 +4059,10 @@ DISAS_INSN(fbcc)
 
     l1 = gen_new_label();
     gen_fjmpcc(s, insn & 0x3f, l1);
+    update_cc_op(s);
     gen_jmp_tb(s, 0, s->pc);
     gen_set_label(l1);
+    update_cc_op(s);
     gen_jmp_tb(s, 1, addr + offset);
 }
 
