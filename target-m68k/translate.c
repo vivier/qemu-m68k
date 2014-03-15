@@ -1876,7 +1876,6 @@ static TCGv gen_get_sr(DisasContext *s)
 static void gen_set_sr(DisasContext *s, TCGv val, int ccr_only)
 {
     TCGv tmp;
-    s->cc_op = CC_OP_FLAGS;
     tmp = tcg_temp_new();
     tcg_gen_andi_i32(QREG_CC_DEST, val, 0xf);
     tcg_gen_shri_i32(tmp, val, 4);
@@ -1884,6 +1883,7 @@ static void gen_set_sr(DisasContext *s, TCGv val, int ccr_only)
     if (!ccr_only) {
         gen_helper_set_sr(cpu_env, val);
     }
+    set_cc_op(s, CC_OP_FLAGS);
 }
 
 DISAS_INSN(arith_im)
@@ -2339,7 +2339,6 @@ DISAS_INSN(neg)
 
 static void gen_set_sr_im(DisasContext *s, uint16_t val, int ccr_only)
 {
-    s->cc_op = CC_OP_FLAGS;
     tcg_gen_movi_i32(QREG_CC_DEST, val & 0xf);
     tcg_gen_movi_i32(QREG_CC_X, (val & 0x10) >> 4);
     if (!ccr_only) {
@@ -3797,17 +3796,16 @@ DISAS_INSN(chk)
     l1 = gen_new_label();
     l2 = gen_new_label();
     tcg_gen_brcondi_i32(TCG_COND_GE, reg, 0, l1);
-    s->cc_op = CC_OP_FLAGS;
     tcg_gen_ori_i32(QREG_CC_DEST, QREG_CC_DEST, CCF_N);
     gen_exception(s, s->insn_pc, EXCP_CHK);
     tcg_gen_br(l2);
     gen_set_label(l1);
     tcg_gen_brcond_i32(TCG_COND_LE, reg, src, l2);
-    s->cc_op = CC_OP_FLAGS;
     tcg_gen_andi_i32(QREG_CC_DEST, QREG_CC_DEST, ~CCF_N);
     gen_exception(s, s->insn_pc, EXCP_CHK);
     gen_set_label(l2);
     tcg_temp_free(src);
+    set_cc_op(s, CC_OP_FLAGS);
 }
 
 DISAS_INSN(strldsr)
