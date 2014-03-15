@@ -484,6 +484,7 @@ static inline void gen_flush_flags(DisasContext *s)
     } else {
         gen_helper_flush_flags(QREG_CC_DEST, cpu_env, tcg_const_i32(s->cc_op));
     }
+    tcg_gen_discard_i32(QREG_CC_SRC);
     s->cc_op = CC_OP_FLAGS;
 }
 
@@ -507,6 +508,7 @@ static inline void gen_flush_flags(DisasContext *s)
 
 static void gen_logic_cc(DisasContext *s, TCGv val, int opsize)
 {
+    tcg_gen_discard_i32(QREG_CC_SRC);
     tcg_gen_mov_i32(QREG_CC_DEST, val);
     SET_CC_OP(opsize, LOGIC);
 }
