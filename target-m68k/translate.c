@@ -534,11 +534,11 @@ static inline void gen_flush_flags(DisasContext *s)
     } \
 } while (0)
 
-#define SET_X_FLAG(opsize, a, b) do { \
+#define SET_X_FLAG(opsize, cc_x, a, b) do { \
     switch (opsize) { \
-    case OS_BYTE: gen_helper_xflag_lt_i8(QREG_CC_X, a, b); break; \
-    case OS_WORD: gen_helper_xflag_lt_i16(QREG_CC_X, a, b); break; \
-    case OS_LONG: gen_helper_xflag_lt_i32(QREG_CC_X, a, b); break; \
+    case OS_BYTE: gen_helper_xflag_lt_i8(cc_x, a, b); break; \
+    case OS_WORD: gen_helper_xflag_lt_i16(cc_x, a, b); break; \
+    case OS_LONG: gen_helper_xflag_lt_i32(cc_x, a, b); break; \
     default: abort(); \
     } \
 } while (0)
@@ -549,10 +549,17 @@ static void gen_logic_cc(DisasContext *s, TCGv val, int opsize)
     SET_CC_OP(opsize, LOGIC);
 }
 
-static void gen_update_cc_add(TCGv dest, TCGv src)
+static void gen_update_cc_cmp(TCGv dest, TCGv src)
 {
     tcg_gen_mov_i32(QREG_CC_DEST, dest);
     tcg_gen_mov_i32(QREG_CC_SRC, src);
+}
+
+static void gen_update_cc_add(TCGv dest, TCGv src, TCGv cc_x)
+{
+    tcg_gen_mov_i32(QREG_CC_DEST, dest);
+    tcg_gen_mov_i32(QREG_CC_SRC, src);
+    tcg_gen_mov_i32(QREG_CC_X, cc_x);
 }
 
 static inline int opsize_bytes(int opsize)
@@ -1598,6 +1605,7 @@ DISAS_INSN(addsub)
     TCGv src;
     TCGv tmp;
     TCGv addr;
+    TCGv cc_x;
     int add;
     int opsize;
 
@@ -1612,21 +1620,22 @@ DISAS_INSN(addsub)
         tmp = reg;
         SRC_EA(env, src, opsize, -1, NULL);
     }
+    cc_x = tcg_temp_new();
     if (add) {
         tcg_gen_add_i32(dest, tmp, src);
-        SET_X_FLAG(opsize, dest, src);
+        SET_X_FLAG(opsize, cc_x, dest, src);
         SET_CC_OP(opsize, ADD);
     } else {
-        SET_X_FLAG(opsize, tmp, src);
+        SET_X_FLAG(opsize, cc_x, tmp, src);
         tcg_gen_sub_i32(dest, tmp, src);
         SET_CC_OP(opsize, SUB);
     }
-    gen_update_cc_add(dest, src);
     if (insn & 0x100) {
         DEST_EA(env, insn, opsize, dest, &addr);
     } else {
         gen_partset_reg(opsize, reg, dest);
     }
+    gen_update_cc_add(dest, src, cc_x);
 }
 
 
@@ -1893,6 +1902,7 @@ DISAS_INSN(arith_im)
     TCGv src1;
     TCGv dest;
     TCGv addr;
+    TCGv cc_x;
     int opsize;
 
     op = (insn >> 9) & 7;
@@ -1925,6 +1935,7 @@ DISAS_INSN(arith_im)
         SRC_EA(env, src1, opsize, -1, (op == 6) ? NULL : &addr);
     }
     dest = tcg_temp_new();
+    cc_x = tcg_temp_new();
     switch (op) {
     case 0: /* ori */
         tcg_gen_or_i32(dest, src1, im);
@@ -1946,19 +1957,19 @@ DISAS_INSN(arith_im)
         break;
     case 2: /* subi */
         tcg_gen_mov_i32(dest, src1);
-        SET_X_FLAG(opsize, dest, im);
+        SET_X_FLAG(opsize, cc_x, dest, im);
         tcg_gen_sub_i32(dest, dest, im);
-        gen_update_cc_add(dest, im);
         SET_CC_OP(opsize, SUB);
         DEST_EA(env, insn, opsize, dest, &addr);
+        gen_update_cc_add(dest, im, cc_x);
         break;
     case 3: /* addi */
         tcg_gen_mov_i32(dest, src1);
         tcg_gen_add_i32(dest, dest, im);
-        gen_update_cc_add(dest, im);
-        SET_X_FLAG(opsize, dest, im);
-	SET_CC_OP(opsize, ADD);
+        SET_X_FLAG(opsize, cc_x, dest, im);
+        SET_CC_OP(opsize, ADD);
         DEST_EA(env, insn, opsize, dest, &addr);
+        gen_update_cc_add(dest, im, cc_x);
         break;
     case 5: /* eori */
         tcg_gen_xor_i32(dest, src1, im);
@@ -1968,7 +1979,7 @@ DISAS_INSN(arith_im)
     case 6: /* cmpi */
         tcg_gen_mov_i32(dest, src1);
         tcg_gen_sub_i32(dest, dest, im);
-        gen_update_cc_add(dest, im);
+        gen_update_cc_cmp(dest, im);
         SET_CC_OP(opsize, SUB);
         break;
     default:
@@ -2325,16 +2336,21 @@ DISAS_INSN(neg)
     TCGv src1;
     TCGv dest;
     TCGv addr;
+    TCGv cc_x;
+    TCGv tmp;
     int opsize;
 
     opsize = insn_opsize(insn, 6);
     SRC_EA(env, src1, opsize, -1, &addr);
     dest = tcg_temp_new();
-    tcg_gen_neg_i32(dest, src1);
-    SET_CC_OP(opsize, SUB);
-    gen_update_cc_add(dest, src1);
-    SET_X_FLAG(opsize, tcg_const_i32(0), dest);
+    cc_x = tcg_temp_new();
+    tmp = tcg_temp_new();
+    tcg_gen_mov_i32(tmp, src1);
+    tcg_gen_neg_i32(dest, tmp);
     DEST_EA(env, insn, opsize, dest, &addr);
+    SET_CC_OP(opsize, SUB);
+    SET_X_FLAG(opsize, cc_x, tcg_const_i32(0), dest);
+    gen_update_cc_add(dest, tmp, cc_x);
 }
 
 static void gen_set_sr_im(DisasContext *s, uint16_t val, int ccr_only)
@@ -2594,6 +2610,7 @@ DISAS_INSN(addsubq)
     TCGv src;
     TCGv dest;
     TCGv val;
+    TCGv cc_x;
     int imm;
     TCGv addr;
     int opsize;
@@ -2619,16 +2636,18 @@ DISAS_INSN(addsubq)
             tcg_gen_add_i32(dest, dest, val);
         }
     } else {
+        cc_x = tcg_temp_new();
         if (insn & 0x0100) {
-            SET_X_FLAG(opsize, dest, val);
+            SET_X_FLAG(opsize, cc_x, dest, val);
             tcg_gen_sub_i32(dest, dest, val);
             SET_CC_OP(opsize, SUB);
         } else {
             tcg_gen_add_i32(dest, dest, val);
-            SET_X_FLAG(opsize, dest, val);
+            SET_X_FLAG(opsize, cc_x, dest, val);
             SET_CC_OP(opsize, ADD);
         }
-        gen_update_cc_add(dest, val);
+        DEST_EA(env, insn, opsize, dest, &addr);
+        gen_update_cc_add(dest, val, cc_x);
     }
     DEST_EA(env, insn, opsize, dest, &addr);
 }
@@ -2837,7 +2856,7 @@ DISAS_INSN(cmp)
     reg = DREG(insn, 9);
     dest = tcg_temp_new();
     tcg_gen_sub_i32(dest, reg, src);
-    gen_update_cc_add(dest, src);
+    gen_update_cc_cmp(dest, src);
     SET_CC_OP(opsize, SUB);
 }
 
@@ -2857,7 +2876,7 @@ DISAS_INSN(cmpa)
     reg = AREG(insn, 9);
     dest = tcg_temp_new();
     tcg_gen_sub_i32(dest, reg, src);
-    gen_update_cc_add(dest, src);
+    gen_update_cc_cmp(dest, src);
     SET_CC_OP(OS_LONG, SUB);
 }
 
@@ -2890,7 +2909,7 @@ DISAS_INSN(eor)
 
         reg = tcg_temp_new();
         tcg_gen_sub_i32(reg, dest, src);
-        gen_update_cc_add(reg, src);
+        gen_update_cc_cmp(reg, src);
         SET_CC_OP(opsize, SUB);
 
         return;
