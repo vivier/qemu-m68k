@@ -1878,12 +1878,13 @@ DISAS_INSN(bitop_im)
 static TCGv gen_get_ccr(DisasContext *s)
 {
     TCGv dest;
+    TCGv flags;
 
-    gen_flush_flags(s, QREG_CC_DEST);
+    flags = tcg_temp_new();
+    gen_flush_flags(s, flags);
     dest = tcg_temp_new();
     tcg_gen_shli_i32(dest, QREG_CC_X, 4);
-    tcg_gen_or_i32(dest, dest, QREG_CC_DEST);
-    set_cc_op(s, CC_OP_FLAGS);
+    tcg_gen_or_i32(dest, dest, flags);
     return dest;
 }
 
