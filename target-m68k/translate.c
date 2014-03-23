@@ -2293,24 +2293,34 @@ DISAS_INSN(negx)
     TCGv src;
     TCGv dest;
     TCGv addr;
+    TCGv tmp;
     int opsize;
 
     opsize = insn_opsize(insn, 6);
     SRC_EA(env, src, opsize, -1, &addr);
-    gen_flush_flags(s, QREG_CC_DEST);
     dest = tcg_temp_new();
+    tmp = tcg_temp_new();
+    tcg_gen_mov_i32(tmp, src);
     switch(opsize) {
     case OS_BYTE:
-        gen_helper_subx8_cc(dest, cpu_env, tcg_const_i32(0), src);
+        gen_helper_subx8(dest, cpu_env, tcg_const_i32(0), src);
+        DEST_EA(env, insn, opsize, dest, &addr);
+        gen_flush_flags(s, QREG_CC_DEST);
+        gen_helper_update_subx8_cc(cpu_env, tcg_const_i32(0), tmp, dest);
         break;
     case OS_WORD:
-        gen_helper_subx16_cc(dest, cpu_env, tcg_const_i32(0), src);
+        gen_helper_subx16(dest, cpu_env, tcg_const_i32(0), src);
+        DEST_EA(env, insn, opsize, dest, &addr);
+        gen_flush_flags(s, QREG_CC_DEST);
+        gen_helper_update_subx16_cc(cpu_env, tcg_const_i32(0), tmp, dest);
         break;
     case OS_LONG:
-        gen_helper_subx32_cc(dest, cpu_env, tcg_const_i32(0), src);
+        gen_helper_subx32(dest, cpu_env, tcg_const_i32(0), src);
+        DEST_EA(env, insn, opsize, dest, &addr);
+        gen_flush_flags(s, QREG_CC_DEST);
+        gen_helper_update_subx32_cc(cpu_env, tcg_const_i32(0), tmp, dest);
         break;
     }
-    DEST_EA(env, insn, opsize, dest, &addr);
     set_cc_op(s, CC_OP_FLAGS);
 }
 
@@ -2786,31 +2796,37 @@ DISAS_INSN(subx_reg)
 {
     TCGv reg;
     TCGv src;
+    TCGv dest;
     int opsize;
 
     opsize = insn_opsize(insn, 6);
 
     gen_flush_flags(s, QREG_CC_DEST);
-    set_cc_op(s, CC_OP_FLAGS);
+    dest = tcg_temp_new();
     reg = DREG(insn, 9);
     src = DREG(insn, 0);
     switch(opsize) {
     case OS_BYTE:
-        gen_helper_subx8_cc(reg, cpu_env, reg, src);
+        gen_helper_subx8(dest, cpu_env, reg, src);
+        gen_helper_update_subx8_cc(cpu_env, reg, src, dest);
         break;
     case OS_WORD:
-        gen_helper_subx16_cc(reg, cpu_env, reg, src);
+        gen_helper_subx16(dest, cpu_env, reg, src);
+        gen_helper_update_subx16_cc(cpu_env, reg, src, dest);
         break;
     case OS_LONG:
-        gen_helper_subx32_cc(reg, cpu_env, reg, src);
+        gen_helper_subx32(dest, cpu_env, reg, src);
+        gen_helper_update_subx32_cc(cpu_env, reg, src, dest);
         break;
     }
+    tcg_gen_mov_i32(reg, dest);
     set_cc_op(s, CC_OP_FLAGS);
 }
 
 DISAS_INSN(subx_mem)
 {
     TCGv src;
+    TCGv dest;
     TCGv addr_src;
     TCGv reg;
     TCGv addr_reg;
@@ -2831,20 +2847,31 @@ DISAS_INSN(subx_mem)
     }
     reg = gen_load(s, opsize, addr_reg, 0, IS_USER(s));
 
+    dest = tcg_temp_new();
+    switch(opsize) {
+    case OS_BYTE:
+        gen_helper_subx8(dest, cpu_env, reg, src);
+        break;
+    case OS_WORD:
+        gen_helper_subx16(dest, cpu_env, reg, src);
+        break;
+    case OS_LONG:
+        gen_helper_subx32(dest, cpu_env, reg, src);
+        break;
+    }
+    gen_store(s, opsize, addr_reg, dest, IS_USER(s));
     gen_flush_flags(s, QREG_CC_DEST);
     switch(opsize) {
     case OS_BYTE:
-        gen_helper_subx8_cc(reg, cpu_env, reg, src);
+        gen_helper_update_subx8_cc(cpu_env, reg, src, dest);
         break;
     case OS_WORD:
-        gen_helper_subx16_cc(reg, cpu_env, reg, src);
+        gen_helper_update_subx16_cc(cpu_env, reg, src, dest);
         break;
     case OS_LONG:
-        gen_helper_subx32_cc(reg, cpu_env, reg, src);
+        gen_helper_update_subx32_cc(cpu_env, reg, src, dest);
         break;
     }
-
-    gen_store(s, opsize, addr_reg, reg, IS_USER(s));
     tcg_gen_mov_i32(AREG(insn, 0), addr_src);
     if (REG(insn, 0) != REG(insn, 9)) {
         tcg_gen_mov_i32(AREG(insn, 9), addr_reg);
@@ -3012,6 +3039,7 @@ DISAS_INSN(addx_reg)
 {
     TCGv reg;
     TCGv src;
+    TCGv dest;
     int opsize;
 
     opsize = insn_opsize(insn, 6);
@@ -3019,23 +3047,29 @@ DISAS_INSN(addx_reg)
     gen_flush_flags(s, QREG_CC_DEST);
     reg = DREG(insn, 9);
     src = DREG(insn, 0);
+    dest = tcg_temp_new();
     switch(opsize) {
     case OS_BYTE:
-        gen_helper_addx8_cc(reg, cpu_env, reg, src);
+        gen_helper_addx8(dest, cpu_env, reg, src);
+        gen_helper_update_addx8_cc(cpu_env, reg, src, dest);
         break;
     case OS_WORD:
-        gen_helper_addx16_cc(reg, cpu_env, reg, src);
+        gen_helper_addx16(dest, cpu_env, reg, src);
+        gen_helper_update_addx16_cc(cpu_env, reg, src, dest);
         break;
     case OS_LONG:
-        gen_helper_addx32_cc(reg, cpu_env, reg, src);
+        gen_helper_addx32(dest, cpu_env, reg, src);
+        gen_helper_update_addx32_cc(cpu_env, reg, src, dest);
         break;
     }
+    tcg_gen_mov_i32(reg, dest);
     set_cc_op(s, CC_OP_FLAGS);
 }
 
 DISAS_INSN(addx_mem)
 {
     TCGv src;
+    TCGv dest;
     TCGv addr_src;
     TCGv reg;
     TCGv addr_reg;
@@ -3056,20 +3090,31 @@ DISAS_INSN(addx_mem)
     }
     reg = gen_load(s, opsize, addr_reg, 0, IS_USER(s));
 
+    dest = tcg_temp_new();
+    switch(opsize) {
+    case OS_BYTE:
+        gen_helper_addx8(dest, cpu_env, reg, src);
+        break;
+    case OS_WORD:
+        gen_helper_addx16(dest, cpu_env, reg, src);
+        break;
+    case OS_LONG:
+        gen_helper_addx32(dest, cpu_env, reg, src);
+        break;
+    }
+    gen_store(s, opsize, addr_reg, dest, IS_USER(s));
     gen_flush_flags(s, QREG_CC_DEST);
     switch(opsize) {
     case OS_BYTE:
-        gen_helper_addx8_cc(reg, cpu_env, reg, src);
+        gen_helper_update_addx8_cc(cpu_env, reg, src, dest);
         break;
     case OS_WORD:
-        gen_helper_addx16_cc(reg, cpu_env, reg, src);
+        gen_helper_update_addx16_cc(cpu_env, reg, src, dest);
         break;
     case OS_LONG:
-        gen_helper_addx32_cc(reg, cpu_env, reg, src);
+        gen_helper_update_addx32_cc(cpu_env, reg, src, dest);
         break;
     }
-
-    gen_store(s, opsize, addr_reg, reg, IS_USER(s));
     tcg_gen_mov_i32(AREG(insn, 0), addr_src);
     if (REG(insn, 0) != REG(insn, 9)) {
         tcg_gen_mov_i32(AREG(insn, 9), addr_reg);
