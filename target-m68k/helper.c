@@ -239,11 +239,10 @@ void m68k_cpu_init_gdb(M68kCPU *cpu)
     /* TODO: Add [E]MAC registers.  */
 }
 
-static uint32_t cpu_m68k_flush_flags(CPUM68KState *env, int op)
+static uint32_t cpu_m68k_flush_flags(CPUM68KState *env, int op, uint32_t src,
+                                     uint32_t dest)
 {
-    int flags;
-    uint32_t src;
-    uint32_t dest;
+    uint32_t flags;
     uint32_t tmp;
 
 #define HIGHBIT(type) (1u << (sizeof(type) * 8 - 1))
@@ -297,8 +296,6 @@ static uint32_t cpu_m68k_flush_flags(CPUM68KState *env, int op)
     } while(0)
 
     flags = 0;
-    src = env->cc_src;
-    dest = env->cc_dest;
     switch (op) {
     case CC_OP_FLAGS:
         flags = dest;
@@ -1116,28 +1113,34 @@ uint32_t HELPER(sats)(uint32_t val, uint32_t ccr)
 }
 
 #define HELPER_SUBX(type, bits, size) \
-uint32_t HELPER(glue(glue(subx, bits),_cc))(CPUM68KState *env,          \
-                                            uint32_t op1, uint32_t op2) \
+uint32_t HELPER(glue(subx, bits))(CPUM68KState *env,                    \
+                                  uint32_t op1, uint32_t op2)           \
 {                                                                       \
     type res;                                                           \
-    uint32_t old_flags;                                                 \
+    if (env->cc_x) {                                                    \
+        res = (type)op1 - ((type)op2 + 1);                              \
+    } else {                                                            \
+        res = (type)op1 - (type)op2;                                    \
+    }                                                                   \
+    return (op1 & ~((1UL << bits) - 1)) | res;                          \
+}                                                                       \
+void HELPER(glue(glue(update_subx, bits),_cc))(CPUM68KState *env,       \
+                                               uint32_t op1,            \
+                                               uint32_t op2,            \
+                                               uint32_t res)            \
+{                                                                       \
     int op;                                                             \
-    old_flags = env->cc_dest;                                           \
+    uint32_t old_flags = env->cc_dest;                                  \
     if (env->cc_x) {                                                    \
         env->cc_x = ((type)op1 <= (type)op2);                           \
         op = glue(CC_OP_SUBX, size);                                    \
-        res = (type)op1 - ((type)op2 + 1);                              \
     } else {                                                            \
         env->cc_x = ((type)op1 < (type)op2);                            \
         op = glue(CC_OP_SUB, size);                                     \
-        res = (type)op1 - (type)op2;                                    \
     }                                                                   \
-    env->cc_dest = res;                                                 \
-    env->cc_src = (type)op2;                                            \
-    env->cc_dest = cpu_m68k_flush_flags(env, op);                       \
+    env->cc_dest = cpu_m68k_flush_flags(env, op, (type)op2, (type)res); \
     /* !Z is sticky.  */                                                \
     env->cc_dest &= (old_flags | ~CCF_Z);                               \
-    return (op1 & ~((1UL << bits) - 1)) | res;                          \
 }
 
 HELPER_SUBX(uint8_t, 8, B)
@@ -1145,28 +1148,34 @@ HELPER_SUBX(uint16_t, 16, W)
 HELPER_SUBX(uint32_t, 32, )
 
 #define HELPER_ADDX(type, bits, size) \
-uint32_t HELPER(glue(glue(addx, bits),_cc))(CPUM68KState *env,          \
-                                            uint32_t op1, uint32_t op2) \
+uint32_t HELPER(glue(addx, bits))(CPUM68KState *env,                    \
+                                  uint32_t op1, uint32_t op2)           \
 {                                                                       \
     type res;                                                           \
-    uint32_t old_flags;                                                 \
-    int op;                                                             \
-    old_flags = env->cc_dest;                                           \
     if (env->cc_x) {                                                    \
         res = (type)op1 + (type)op2 + 1;                                \
-        env->cc_x = (res <= (type)op2);                                 \
-        op = glue(CC_OP_ADDX, size);                                    \
     } else {                                                            \
         res = (type)op1 + (type)op2;                                    \
-        env->cc_x = (res < (type)op2);                                  \
+    }                                                                   \
+    return (op1 & ~((1UL << bits) - 1)) | res;                          \
+}                                                                       \
+void HELPER(glue(glue(update_addx, bits),_cc))(CPUM68KState *env,       \
+                                               uint32_t op1,            \
+                                               uint32_t op2,            \
+                                               uint32_t res)            \
+{                                                                       \
+    uint32_t old_flags = env->cc_dest;                                  \
+    int op;                                                             \
+    if (env->cc_x) {                                                    \
+        env->cc_x = ((type)res <= (type)op2);                           \
+        op = glue(CC_OP_ADDX, size);                                    \
+    } else {                                                            \
+        env->cc_x = ((type)res < (type)op2);                            \
         op = glue(CC_OP_ADD, size);                                     \
     }                                                                   \
-    env->cc_dest = res;                                                 \
-    env->cc_src = (type)op2;                                            \
-    env->cc_dest = cpu_m68k_flush_flags(env, op);                       \
+    env->cc_dest = cpu_m68k_flush_flags(env, op, (type)op2, (type)res); \
     /* !Z is sticky.  */                                                \
     env->cc_dest &= (old_flags | ~CCF_Z);                               \
-    return (op1 & ~((1UL << bits) - 1)) | res;                          \
 }
 
 HELPER_ADDX(uint8_t, 8, B)
@@ -2386,7 +2395,7 @@ void HELPER(mac_set_flags)(CPUM68KState *env, uint32_t acc)
 
 uint32_t HELPER(flush_flags)(CPUM68KState *env, uint32_t op)
 {
-    return cpu_m68k_flush_flags(env, op);
+    return cpu_m68k_flush_flags(env, op, env->cc_src, env->cc_dest);
 }
 
 uint32_t HELPER(get_macf)(CPUM68KState *env, uint64_t val)
