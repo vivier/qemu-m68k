@@ -2886,8 +2886,8 @@ DISAS_INSN(mov3q)
     if (val == 0)
         val = -1;
     src = tcg_const_i32(val);
-    gen_logic_cc(s, src, OS_LONG);
     DEST_EA(env, insn, OS_LONG, src, NULL);
+    gen_logic_cc(s, src, OS_LONG);
 }
 
 DISAS_INSN(cmp)
