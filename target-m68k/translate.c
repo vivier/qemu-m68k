@@ -2965,8 +2965,8 @@ DISAS_INSN(eor)
     reg = DREG(insn, 9);
     dest = tcg_temp_new();
     tcg_gen_xor_i32(dest, src, reg);
-    gen_logic_cc(s, dest, opsize);
     DEST_EA(env, insn, opsize, dest, &addr);
+    gen_logic_cc(s, dest, opsize);
 }
 
 DISAS_INSN(and)
