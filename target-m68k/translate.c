@@ -1670,6 +1670,7 @@ DISAS_INSN(bitop_reg)
     TCGv tmp;
     TCGv addr;
     TCGv dest;
+    TCGv cc_nz;
 
     if ((insn & 0x38) != 0)
         opsize = OS_BYTE;
@@ -1677,25 +1678,24 @@ DISAS_INSN(bitop_reg)
         opsize = OS_LONG;
     op = (insn >> 6) & 3;
     SRC_EA(env, src1, opsize, 0, op ? &addr: NULL);
-    src2 = DREG(insn, 9);
-    dest = tcg_temp_new();
 
-    gen_flush_flags(s, QREG_CC_DEST);
-    tmp = tcg_temp_new();
+    src2 = tcg_temp_new();
     if (opsize == OS_BYTE)
-        tcg_gen_andi_i32(tmp, src2, 7);
+        tcg_gen_andi_i32(src2, DREG(insn, 9), 7);
     else
-        tcg_gen_andi_i32(tmp, src2, 31);
-    src2 = tmp;
-    tmp = tcg_temp_new();
-    tcg_gen_shr_i32(tmp, src1, src2);
-    tcg_gen_andi_i32(tmp, tmp, 1);
-    tcg_gen_shli_i32(tmp, tmp, 2);
-    /* Clear CCF_Z if bit set.  */
-    tcg_gen_ori_i32(QREG_CC_DEST, QREG_CC_DEST, CCF_Z);
-    tcg_gen_xor_i32(QREG_CC_DEST, QREG_CC_DEST, tmp);
+        tcg_gen_andi_i32(src2, DREG(insn, 9), 31);
 
+    /* compute !Z flag */
+
+    cc_nz = tcg_temp_new();
+    tcg_gen_shr_i32(cc_nz, src1, src2);
+    tcg_gen_andi_i32(cc_nz, cc_nz, 1);
+    tcg_gen_shli_i32(cc_nz, cc_nz, 2);
+
+    /* bitop */
+    tmp = tcg_temp_new();
     tcg_gen_shl_i32(tmp, tcg_const_i32(1), src2);
+    dest = tcg_temp_new();
     switch (op) {
     case 1: /* bchg */
         tcg_gen_xor_i32(dest, src1, tmp);
@@ -1712,6 +1712,10 @@ DISAS_INSN(bitop_reg)
     }
     if (op)
         DEST_EA(env, insn, opsize, dest, &addr);
+    /* Clear CCF_Z if bit set.  */
+    gen_flush_flags(s, QREG_CC_DEST);
+    tcg_gen_ori_i32(QREG_CC_DEST, QREG_CC_DEST, CCF_Z);
+    tcg_gen_xor_i32(QREG_CC_DEST, QREG_CC_DEST, cc_nz);
     set_cc_op(s, CC_OP_FLAGS);
 }
 
@@ -1822,6 +1826,7 @@ DISAS_INSN(bitop_im)
     int bitnum;
     TCGv tmp;
     TCGv addr;
+    TCGv cc_nz;
 
     if ((insn & 0x38) != 0)
         opsize = OS_BYTE;
@@ -1837,25 +1842,23 @@ DISAS_INSN(bitop_im)
 
     SRC_EA(env, src1, opsize, 0, op ? &addr: NULL);
 
-    gen_flush_flags(s, QREG_CC_DEST);
     if (opsize == OS_BYTE)
         bitnum &= 7;
     else
         bitnum &= 31;
     mask = 1 << bitnum;
-
-    tmp = tcg_temp_new();
     assert (CCF_Z == (1 << 2));
+    /* compute !Z flag */
+    cc_nz = tcg_temp_new();
     if (bitnum > 2)
-        tcg_gen_shri_i32(tmp, src1, bitnum - 2);
+        tcg_gen_shri_i32(cc_nz, src1, bitnum - 2);
     else if (bitnum < 2)
-        tcg_gen_shli_i32(tmp, src1, 2 - bitnum);
+        tcg_gen_shli_i32(cc_nz, src1, 2 - bitnum);
     else
-        tcg_gen_mov_i32(tmp, src1);
-    tcg_gen_andi_i32(tmp, tmp, CCF_Z);
-    /* Clear CCF_Z if bit set.  */
-    tcg_gen_ori_i32(QREG_CC_DEST, QREG_CC_DEST, CCF_Z);
-    tcg_gen_xor_i32(QREG_CC_DEST, QREG_CC_DEST, tmp);
+        tcg_gen_mov_i32(cc_nz, src1);
+    tcg_gen_andi_i32(cc_nz, cc_nz, CCF_Z);
+    /* bitop */
+    tmp = tcg_temp_new();
     if (op) {
         switch (op) {
         case 1: /* bchg */
@@ -1872,6 +1875,10 @@ DISAS_INSN(bitop_im)
         }
         DEST_EA(env, insn, opsize, tmp, &addr);
     }
+    /* Clear CCF_Z if bit set.  */
+    gen_flush_flags(s, QREG_CC_DEST);
+    tcg_gen_ori_i32(QREG_CC_DEST, QREG_CC_DEST, CCF_Z);
+    tcg_gen_xor_i32(QREG_CC_DEST, QREG_CC_DEST, cc_nz);
     set_cc_op(s, CC_OP_FLAGS);
 }
 
