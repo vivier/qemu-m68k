@@ -236,7 +236,6 @@ static void gen_jmp_im(DisasContext *s, uint32_t dest)
 
 static void gen_exception(DisasContext *s, uint32_t where, int nr)
 {
-    update_cc_op(s);
     gen_jmp_im(s, where);
     gen_helper_raise_exception(cpu_env, tcg_const_i32(nr));
 }
