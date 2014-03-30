@@ -291,6 +291,7 @@ static inline TCGv gen_load(DisasContext *s, int opsize, TCGv addr,
                             int sign, int index)
 {
     TCGv tmp;
+    update_cc_op(s);
     tmp = tcg_temp_new_i32();
     switch(opsize) {
     case OS_BYTE:
@@ -318,6 +319,7 @@ static inline TCGv gen_load(DisasContext *s, int opsize, TCGv addr,
 static inline void gen_store(DisasContext *s, int opsize, TCGv addr, TCGv val,
                              int index)
 {
+    update_cc_op(s);
     switch(opsize) {
     case OS_BYTE:
         tcg_gen_qemu_st8(val, addr, index);
@@ -4097,6 +4099,7 @@ DISAS_INSN(move16)
 
     use_areg = (insn >> 5) & 1;
 
+    update_cc_op(s);
     if (use_areg) {
         TCGv src;
         TCGv dst;
