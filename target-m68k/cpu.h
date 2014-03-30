@@ -198,6 +198,8 @@ void do_interrupt_m68k_hardirq(CPUM68KState *env1);
    is returned if the signal was handled by the virtual CPU.  */
 int cpu_m68k_signal_handler(int host_signum, void *pinfo,
                            void *puc);
+uint32_t cpu_m68k_flush_flags(CPUM68KState *env, int op, uint32_t src,
+                              uint32_t dest);
 
 typedef enum {
     CC_OP_DYNAMIC, /* Use env->cc_op  */

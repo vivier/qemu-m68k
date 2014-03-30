@@ -119,6 +119,11 @@ throwaway:
     }
     env->aregs[7] = sp;
     m68k_switch_sp(env);
+
+    /* restore CC state */
+    env->cc_op = CC_OP_FLAGS;
+    env->cc_dest = env->sr & 0xf;
+    env->cc_x = (env->sr >> 4) & 1;
 }
 
 static inline void do_stack_frame(CPUM68KState *env, uint32_t *sp,
@@ -159,6 +164,12 @@ static void do_interrupt_all(CPUM68KState *env, int is_hw)
     fmt = 0;
     retaddr = env->pc;
 
+    if (env->cc_op != CC_OP_FLAGS) {
+        env->cc_dest = cpu_m68k_flush_flags(env, env->cc_op, env->cc_src,
+                                            env->cc_dest);
+        env->cc_op = CC_OP_FLAGS;
+    }
+
     if (!is_hw) {
         switch (cs->exception_index) {
         case EXCP_RTE:
@@ -181,6 +192,9 @@ static void do_interrupt_all(CPUM68KState *env, int is_hw)
             return;
         }
     }
+
+    env->sr = (env->sr & 0xffe0) | ((env->cc_x & 1) << 4) |
+              (env->cc_dest & 0xf);
 
     vector = cs->exception_index << 2;
 
