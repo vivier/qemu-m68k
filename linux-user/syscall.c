@@ -110,6 +110,7 @@ int __clone2(int (*fn)(void *), void *child_stack_base,
 #include <linux/route.h>
 #include <linux/filter.h>
 #include <linux/blkpg.h>
+#include <linux/if_packet.h>
 #include "linux_loop.h"
 #include "uname.h"
 
@@ -1148,11 +1149,20 @@ static inline abi_long target_to_host_sockaddr(struct sockaddr *addr,
     memcpy(addr, target_saddr, len);
     addr->sa_family = sa_family;
     if (sa_family == AF_PACKET) {
-	struct target_sockaddr_ll *lladdr;
+        /* Manage an obsolete case :
+         * if socket type is SOCK_PACKET, bind by name otherwise by index
+         * but we are not able to know socket type, so check if the name
+         * is usable...
+         * see linux/net/packet/af_packet.c: packet_bind_spkt()
+         */
+        if (strncmp((char *)((struct sockaddr_pkt *)addr)->spkt_device,
+                    "eth", 3) != 0) {
+            struct target_sockaddr_ll *lladdr;
 
-	lladdr = (struct target_sockaddr_ll *)addr;
-	lladdr->sll_ifindex = tswap32(lladdr->sll_ifindex);
-	lladdr->sll_hatype = tswap16(lladdr->sll_hatype);
+            lladdr = (struct target_sockaddr_ll *)addr;
+            lladdr->sll_ifindex = tswap32(lladdr->sll_ifindex);
+            lladdr->sll_hatype = tswap16(lladdr->sll_hatype);
+        }
     }
     unlock_user(target_saddr, target_addr, 0);
 
