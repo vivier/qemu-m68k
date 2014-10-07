@@ -1,0 +1,157 @@
+#!/bin/bash
+
+LXC_BASE=/var/lib/lxc
+LOOP_MAX_PART_PARAM=/sys/module/loop/parameters/max_part
+MAX_PART_MIN=4
+
+if [ ! -f $LOOP_MAX_PART_PARAM ] ; then
+    echo "ERROR: $LOOP_MAX_PART_PARAM is missing" 1>&2
+    echo "       Please load \"loop\" module" 1>&2
+    exit 1
+fi
+
+LOOP_MAX_PART=$(cat $LOOP_MAX_PART_PARAM)
+if [ $LOOP_MAX_PART -le $MAX_PART_MIN ] ; then
+    echo "ERROR: set loop.max_part to at least $MAX_PART_MIN" 1>&2
+    echo "       either \"modprobe loop max_part=$MAX_PART_MIN\"" 1>&2
+    echo "       or \"loop.max_part=$MAX_PART_MIN\" on the kernel cmdline" 1>&2
+    exit 1
+fi
+
+if [ "$USER" != "root" ] ; then
+    echo "ERROR: you must be root to run this script" 1>&2
+    exit 1
+fi
+
+usage()
+{
+    cat <<!EOF
+USage: $1 --name NAME --format FORMAT --label LABEL filename [size]
+    --name is the name of the container to clone into an image disk
+    --label is the disklabel type (mac, msdos, gpt, ...)
+    filename is the name of the disk image
+    size is the size of the disk image
+!EOF
+}
+
+options=$(getopt -o hn:l: -l help,name:,label: -- "$@")
+if [ $? -ne 0 ]; then
+        usage $(basename $0)
+        exit 1
+fi
+eval set -- "$options"
+
+while true ; do
+    case "$1" in
+    -n|--name)
+        shift
+        name=$1
+        ;;
+    -l|--label)
+        shift
+        label=$1
+        ;;
+    -h|--help)
+        usage
+        exit 1
+        ;;
+    *)
+        break
+        ;;
+    esac
+    shift
+done
+
+shift
+filename="$1"
+shift
+size=$1
+
+if [ "$filename" = "" ] ; then
+    echo "ERROR: you must provide a disk image name" 1>&2
+    exit 1
+fi
+
+if [ "$name" = "" ] ; then
+    echo "ERROR: you must provide a container name" 1>&2
+    exit 1
+fi
+if [ ! -d "$LXC_BASE/$name/rootfs" ] ; then
+    echo "ERROR: container $name does not exist" 1>&2
+    exit 1
+fi
+
+if [ "$label" = "" ] ; then
+    echo "ERROR: you must provide a disklabel (see parted(8))" 1>&2
+    exit 1
+fi
+
+if [ "$size" = "" ] ; then
+    echo "Computing disk size..."
+    size=$(du -s "$LXC_BASE/$name/rootfs"| cut -f1)
+    # Add 20 %
+    size=$(( size * 120 / 100 ))k
+    echo "Disk size is $size"
+fi
+
+if ! sudo -u $SUDO_USER qemu-img create -f raw "$filename" ${size} ; then
+    echo "ERROR: cannot create $filename" 1>&2
+    exit 1
+fi
+
+if ! sudo -u $SUDO_USER parted "$filename" mklabel "$label" ; then
+    echo "ERROR: cannot create label $label in $filename" 1>&2
+    exit 1
+fi
+
+if [ "$label" = "mac" ] ; then
+    sudo -u $SUDO_USER parted --script -a optimal "$filename" \
+         mkpart primary ext4 32kiB 100%
+else
+    sudo -u $SUDO_USER parted --script -a optimal "$filename" \
+         mkpart primary ext4 4096B 100%
+fi
+if [ $? -ne 0 ] ; then
+    echo "ERROR: cannot create partition in $filename" 1>&2
+    exit 1
+fi
+
+LONAME=$(losetup -f --show "$filename")
+
+MOUNTPOINT=$(mktemp -d)
+
+if [ "$label" = "mac" ] ; then
+    PART="${LONAME}p2"
+else
+    PART="${LONAME}p1"
+fi
+
+if ! mkfs -t ext4 "${PART}" > /dev/null ; then
+    losetup -d $LONAME
+    echo "ERROR: cannot create filesystem in $filename" 1>&2
+    exit 1
+fi
+if ! cd "$LXC_BASE/$name/rootfs" ; then
+    losetup -d $LONAME
+    echo "ERROR: cannot open $LXC_BASE/$name/rootfs" 1>&2
+    exit 1
+fi
+
+if ! mount "${PART}" "${MOUNTPOINT}" ; then
+    losetup -d $LONAME
+    echo "ERROR: cannot mount filesystem from $filename" 1>&2
+    exit 1
+fi
+
+echo "Copying filesystem..."
+
+if ! find . | cpio -pdm --sparse "${MOUNTPOINT}" ; then
+    umount "${PART}"
+    losetup -d $LONAME
+    echo "ERROR: cannot copy files from $LXC_BASE/$name/rootfs" 1>&2
+    exit 1
+fi
+
+umount "${PART}"
+losetup -d $LONAME
+rmdir "${MOUNTPOINT}"
