@@ -23,6 +23,19 @@ if [ "$USER" != "root" ] ; then
     exit 1
 fi
 
+cleanup()
+{
+    echo "Cleaning up..."
+    if [ "$MOUNTPOINT" != "" ] ; then
+        umount "${PART}" 2> /dev/null
+        rmdir "${MOUNTPOINT}"
+    fi
+    if [ "$LONAME" != "" ] ; then
+        losetup -d $LONAME
+    fi
+    exit 1
+}
+
 usage()
 {
     cat <<!EOF
@@ -116,9 +129,9 @@ if [ $? -ne 0 ] ; then
     exit 1
 fi
 
-LONAME=$(losetup -f --show "$filename")
+trap cleanup SIGTERM SIGINT
 
-MOUNTPOINT=$(mktemp -d)
+LONAME=$(losetup -f --show "$filename")
 
 if [ "$label" = "mac" ] ; then
     PART="${LONAME}p2"
@@ -127,18 +140,20 @@ else
 fi
 
 if ! mkfs -t ext4 "${PART}" > /dev/null ; then
-    losetup -d $LONAME
+    cleanup
     echo "ERROR: cannot create filesystem in $filename" 1>&2
     exit 1
 fi
 if ! cd "$LXC_BASE/$name/rootfs" ; then
-    losetup -d $LONAME
+    cleanup
     echo "ERROR: cannot open $LXC_BASE/$name/rootfs" 1>&2
     exit 1
 fi
 
+MOUNTPOINT=$(mktemp -d)
+
 if ! mount "${PART}" "${MOUNTPOINT}" ; then
-    losetup -d $LONAME
+    cleanup
     echo "ERROR: cannot mount filesystem from $filename" 1>&2
     exit 1
 fi
@@ -146,12 +161,9 @@ fi
 echo "Copying filesystem..."
 
 if ! find . | cpio -pdm --sparse "${MOUNTPOINT}" ; then
-    umount "${PART}"
-    losetup -d $LONAME
+    cleanup
     echo "ERROR: cannot copy files from $LXC_BASE/$name/rootfs" 1>&2
     exit 1
 fi
 
-umount "${PART}"
-losetup -d $LONAME
-rmdir "${MOUNTPOINT}"
+cleanup
