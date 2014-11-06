@@ -379,6 +379,7 @@ static QEMUMachine q800_machine = {
     .init = q800_init,
     .max_cpus = 1,
     .is_default = 1,
+    .block_default_type = IF_SCSI,
 };
 
 static void q800_machine_init(void)
