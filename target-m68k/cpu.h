@@ -252,6 +252,10 @@ typedef enum {
 #define M68K_TT_040  (0x0018)
 #define M68K_TM_040  (0x0007)
 
+#define M68K_TM_040_DATA  (0x0001)
+#define M68K_TM_040_CODE  (0x0002)
+#define M68K_TM_040_SUPER (0x0004)
+
 /* bits for 68040 write back status word */
 #define M68K_WBV_040   (0x80)
 #define M68K_WBSIZ_040 (0x60)
@@ -262,6 +266,7 @@ typedef enum {
 #define M68K_WBTM_040  (0x07)
 
 /* bus access size codes */
+#define M68K_BA_SIZE_MASK    (0x60)
 #define M68K_BA_SIZE_BYTE    (0x20)
 #define M68K_BA_SIZE_WORD    (0x40)
 #define M68K_BA_SIZE_LONG    (0x00)
