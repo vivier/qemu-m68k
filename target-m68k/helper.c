@@ -1022,12 +1022,12 @@ int m68k_cpu_handle_mmu_fault(CPUState *cs, vaddr address, int size, int rw,
         break;
     }
     if (access_type & ACCESS_SUPER) {
-        env->mmu.ssw |= 4;
+        env->mmu.ssw |= M68K_TM_040_SUPER;
     }
-    if ((access_type & ACCESS_CODE) == 0) {
-        env->mmu.ssw |= 2;
+    if (access_type & ACCESS_CODE) {
+        env->mmu.ssw |= M68K_TM_040_CODE;
     } else {
-        env->mmu.ssw |= 1;
+        env->mmu.ssw |= M68K_TM_040_DATA;
     }
     if (!(access_type & ACCESS_STORE)) {
         env->mmu.ssw |= M68K_RW_040;
