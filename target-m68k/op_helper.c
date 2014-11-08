@@ -382,12 +382,14 @@ void m68k_cpu_unassigned_access(CPUState *cs, hwaddr addr,
     env->mmu.mmusr = 0;
     env->mmu.ssw |= M68K_ATC_040;
     /* FIXME: manage MMU table access error */
+    env->mmu.ssw &= ~M68K_TM_040;
     if (env->sr & SR_S) /* SUPERVISOR */
-        env->mmu.ssw |= 4;
+        env->mmu.ssw |= M68K_TM_040_SUPER;
     if (is_exec) /* instruction or data */
-        env->mmu.ssw |= 2;
+        env->mmu.ssw |= M68K_TM_040_CODE;
     else
-        env->mmu.ssw |= 1;
+        env->mmu.ssw |= M68K_TM_040_DATA;
+    env->mmu.ssw &= ~M68K_BA_SIZE_MASK;
     switch (size) {
     case 1:
         env->mmu.ssw |= M68K_BA_SIZE_BYTE;
