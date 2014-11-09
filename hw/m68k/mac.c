@@ -115,8 +115,6 @@ static void main_cpu_reset(void *opaque)
     CPUState *cs = CPU(cpu);
 
     cpu_reset(cs);
-    cpu->env.aregs[7] = ldl_phys(cs->as, 0);
-    cpu->env.pc = ldl_phys(cs->as, 4);
 }
 
 static void macsonic_rw(void *opaque, hwaddr addr, uint8_t *buf,
