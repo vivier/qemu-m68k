@@ -2184,6 +2184,24 @@ struct target_statfs64 {
 #define TARGET_O_LARGEFILE      0x2000  /* allow large file opens */
 #define TARGET___O_SYNC         0x4000
 #define TARGET_O_DIRECT         0x8000  /* direct disk access hint */
+#define TARGET_O_ACCMODE	0x0003
+#define TARGET_O_RDONLY	        0x0000
+#define TARGET_O_WRONLY		0x0001
+#define TARGET_O_RDWR		0x0002
+#define TARGET_O_APPEND         0x0008
+#define TARGET_O_SYNC		0x0010
+#define TARGET_O_NONBLOCK	0x0080
+#define TARGET_O_CREAT         0x0100	/* not fcntl */
+#define TARGET_O_TRUNC		0x0200	/* not fcntl */
+#define TARGET_O_EXCL		0x0400	/* not fcntl */
+#define TARGET_O_NOCTTY	0x0800	/* not fcntl */
+#define TARGET_FASYNC		0x1000	/* fcntl, for BSD compatibility */
+#define TARGET_O_LARGEFILE	0x2000	/* allow large file opens */
+#define TARGET_O_DIRECT	0x8000	/* direct disk access hint */
+#define TARGET_O_DIRECTORY	0x10000	/* must be a directory */
+#define TARGET_O_NOFOLLOW	0x20000	/* don't follow links */
+#define TARGET_O_NOATIME	0x40000
+#define TARGET_O_NDELAY	TARGET_O_NONBLOCK
 #elif defined (TARGET_PPC)
 #define TARGET_O_DIRECTORY      040000 /* must be a directory */
 #define TARGET_O_NOFOLLOW      0100000 /* don't follow links */
@@ -2219,25 +2237,6 @@ struct target_statfs64 {
 #define TARGET_O_PATH        0x1000000
 
 #define TARGET_O_DIRECT        0x100000 /* direct disk access hint */
-#elif defined(TARGET_MIPS)
-#define TARGET_O_ACCMODE	0x0003
-#define TARGET_O_RDONLY	0x0000
-#define TARGET_O_WRONLY	0x0001
-#define TARGET_O_RDWR		0x0002
-#define TARGET_O_APPEND	0x0008
-#define TARGET_O_SYNC		0x0010
-#define TARGET_O_NONBLOCK	0x0080
-#define TARGET_O_CREAT         0x0100	/* not fcntl */
-#define TARGET_O_TRUNC		0x0200	/* not fcntl */
-#define TARGET_O_EXCL		0x0400	/* not fcntl */
-#define TARGET_O_NOCTTY	0x0800	/* not fcntl */
-#define TARGET_FASYNC		0x1000	/* fcntl, for BSD compatibility */
-#define TARGET_O_LARGEFILE	0x2000	/* allow large file opens */
-#define TARGET_O_DIRECT	0x8000	/* direct disk access hint */
-#define TARGET_O_DIRECTORY	0x10000	/* must be a directory */
-#define TARGET_O_NOFOLLOW	0x20000	/* don't follow links */
-#define TARGET_O_NOATIME	0x40000
-#define TARGET_O_NDELAY	TARGET_O_NONBLOCK
 #elif defined(TARGET_ALPHA)
 #define TARGET_O_ACCMODE	0x0003
 #define TARGET_O_RDONLY	0x0000
