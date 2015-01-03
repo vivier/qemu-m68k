@@ -17,11 +17,11 @@
  * with this program; if not, see <http://www.gnu.org/licenses/>.
  */
 
-#include "hw/hw.h"
-#include "qemu/timer.h"
+#include "hw/sysbus.h"
+#include "hw/devices.h"
 #include "net/net.h"
-#include "hw/mips/mips.h"
 #include "hw/net/dp8393x.h"
+#include "qemu/timer.h"
 #include <zlib.h>
 
 //#define DEBUG_SONIC
@@ -141,10 +141,15 @@ do { printf("sonic ERROR: %s: " fmt, __func__ , ## __VA_ARGS__); } while (0)
 #define SONIC_ISR_PINT   0x0800
 #define SONIC_ISR_LCD    0x1000
 
+#define TYPE_DP8393X "dp8393x"
+#define DP8393X(obj) OBJECT_CHECK(dp8393xState, (obj), TYPE_DP8393X)
+
 typedef struct dp8393xState {
+    SysBusDevice parent_obj;
+
     /* Hardware */
-    int it_shift;
-    int regs_offset;
+    uint8_t it_shift;
+    uint32_t regs_offset;
     qemu_irq irq;
 #ifdef DEBUG_SONIC
     int irq_level;
@@ -153,7 +158,6 @@ typedef struct dp8393xState {
     int64_t wt_last_update;
     NICConf conf;
     NICState *nic;
-    MemoryRegion *address_space;
     MemoryRegion mmio;
     MemoryRegion prom;
 
@@ -166,6 +170,7 @@ typedef struct dp8393xState {
     int loopback_packet;
 
     /* Memory access */
+    void *dma_mr;
     AddressSpace as;
 } dp8393xState;
 
@@ -809,9 +814,9 @@ static ssize_t dp8393x_receive(NetClientState *nc, const uint8_t * buf,
     return size;
 }
 
-static void dp8393x_reset(void *opaque)
+static void dp8393x_reset(DeviceState *dev)
 {
-    dp8393xState *s = opaque;
+    dp8393xState *s = DP8393X(dev);
     timer_del(s->watchdog);
 
     s->regs[SONIC_CR] = SONIC_CR_RST | SONIC_CR_STP | SONIC_CR_RXDIS;
@@ -851,53 +856,76 @@ static NetClientInfo net_dp83932_info = {
     .cleanup = dp8393x_cleanup,
 };
 
-void dp83932_init(NICInfo *nd, hwaddr base, hwaddr prombase,
-                  int it_shift, int regs_offset,
-                  MemoryRegion *address_space,
-                  qemu_irq irq, MemoryRegion *dma_mr)
+static void dp8393x_instance_init(Object *obj)
 {
-    dp8393xState *s;
+    SysBusDevice *sbd = SYS_BUS_DEVICE(obj);
+    dp8393xState *s = DP8393X(obj);
+
+    memory_region_init_rom_device(&s->prom, obj, NULL, NULL,
+                                  "dp8393x-prom", SONIC_PROM_SIZE, NULL);
+    sysbus_init_mmio(sbd, &s->mmio);
+    sysbus_init_mmio(sbd, &s->prom);
+    sysbus_init_irq(sbd, &s->irq);
+}
+
+static void dp8393x_realize(DeviceState *dev, Error **errp)
+{
+    dp8393xState *s = DP8393X(dev);
     int i, checksum;
     uint8_t *prom;
 
-    qemu_check_nic_model(nd, "dp83932");
+    address_space_init(&s->as, s->dma_mr, "dp8393x");
+    memory_region_init_io(&s->mmio, NULL, &dp8393x_ops, s,
+                          "dp8393x", 0x40 << s->it_shift);
 
-    s = g_malloc0(sizeof(dp8393xState));
+    s->nic = qemu_new_nic(&net_dp83932_info, &s->conf,
+                          object_get_typename(OBJECT(dev)), dev->id, s);
+    qemu_format_nic_info_str(qemu_get_queue(s->nic), s->conf.macaddr.a);
 
-    s->address_space = address_space;
-    address_space_init(&s->as, dma_mr, "dp8393x-dma");
-    s->it_shift = it_shift;
-    s->regs_offset = regs_offset;
-    s->irq = irq;
     s->watchdog = timer_new_ns(QEMU_CLOCK_VIRTUAL, dp8393x_watchdog, s);
     s->regs[SONIC_SR] = 0x0004; /* only revision recognized by Linux */
 
-    s->conf.macaddr = nd->macaddr;
-    s->conf.peers.ncs[0] = nd->netdev;
-
-    s->nic = qemu_new_nic(&net_dp83932_info, &s->conf, nd->model, nd->name, s);
-
-    qemu_format_nic_info_str(qemu_get_queue(s->nic), s->conf.macaddr.a);
-    qemu_register_reset(dp8393x_reset, s);
-    dp8393x_reset(s);
-
-    memory_region_init_io(&s->mmio, NULL, &dp8393x_ops, s,
-                          "dp8393x", 0x40 << it_shift);
-    memory_region_add_subregion(address_space, base, &s->mmio);
-
-    if (prombase) {
-        memory_region_init_rom_device(&s->prom, NULL, NULL, NULL,
-                                      "dp8393x-prom", SONIC_PROM_SIZE, NULL);
-        prom = memory_region_get_ram_ptr(&s->prom);
-        checksum = 0;
-        for (i = 0; i < 6; i++) {
-            prom[i] = s->conf.macaddr.a[i];
-            checksum += prom[i];
-            if (checksum > 0xff) {
-                checksum = (checksum + 1) & 0xff;
-            }
+    prom = memory_region_get_ram_ptr(&s->prom);
+    checksum = 0;
+    for (i = 0; i < 6; i++) {
+        prom[i] = s->conf.macaddr.a[i];
+        checksum += prom[i];
+        if (checksum > 0xff) {
+            checksum = (checksum + 1) & 0xff;
         }
-        prom[7] = 0xff - checksum;
-        memory_region_add_subregion(address_space, prombase, &s->prom);
     }
+    prom[7] = 0xff - checksum;
 }
+
+static Property dp8393x_properties[] = {
+    DEFINE_NIC_PROPERTIES(dp8393xState, conf),
+    DEFINE_PROP_PTR("dma_mr", dp8393xState, dma_mr),
+    DEFINE_PROP_UINT8("it_shift", dp8393xState, it_shift, 0),
+    DEFINE_PROP_UINT32("regs_offset", dp8393xState, regs_offset, 0),
+    DEFINE_PROP_END_OF_LIST(),
+};
+
+static void dp8393x_class_init(ObjectClass *klass, void *data)
+{
+    DeviceClass *dc = DEVICE_CLASS(klass);
+
+    set_bit(DEVICE_CATEGORY_NETWORK, dc->categories);
+    dc->realize = dp8393x_realize;
+    dc->reset = dp8393x_reset;
+    dc->props = dp8393x_properties;
+}
+
+static const TypeInfo dp8393x_info = {
+    .name          = TYPE_DP8393X,
+    .parent        = TYPE_SYS_BUS_DEVICE,
+    .instance_size = sizeof(dp8393xState),
+    .instance_init = dp8393x_instance_init,
+    .class_init    = dp8393x_class_init,
+};
+
+static void dp8393x_register_types(void)
+{
+    type_register_static(&dp8393x_info);
+}
+
+type_init(dp8393x_register_types)

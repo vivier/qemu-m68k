@@ -38,7 +38,6 @@
 #include "hw/audio/asc.h"
 #include "hw/nubus/mac.h"
 #include "net/net.h"
-#include "hw/net/dp8393x.h"
 
 #define MACROM_ADDR     0x40000000
 #define MACROM_SIZE     0x00100000
@@ -213,8 +212,17 @@ static void q800_init(MachineState *machine)
         nd_table[0].macaddr.a[1] = 0x00;
         nd_table[0].macaddr.a[2] = 0x07;
     }
-    dp83932_init(&nd_table[0], SONIC_BASE, SONIC_PROM_BASE, 2, 2,
-                 get_system_memory(), pic[2], get_system_memory());
+    qemu_check_nic_model(&nd_table[0], "dp83932");
+    dev = qdev_create(NULL, "dp8393x");
+    qdev_set_nic_properties(dev, &nd_table[0]);
+    qdev_prop_set_uint8(dev, "it_shift", 2);
+    qdev_prop_set_int32(dev, "regs_offset", 2);
+    qdev_prop_set_ptr(dev, "dma_mr", get_system_memory());
+    qdev_init_nofail(dev);
+    sysbus = SYS_BUS_DEVICE(dev);
+    sysbus_mmio_map(sysbus, 0, SONIC_BASE);
+    sysbus_mmio_map(sysbus, 1, SONIC_PROM_BASE);
+    sysbus_connect_irq(sysbus, 0, pic[2]);
 
     /* SCC */
 
