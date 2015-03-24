@@ -2208,6 +2208,10 @@ struct target_statfs64 {
 #define TARGET_O_NOFOLLOW      0100000 /* don't follow links */
 #define TARGET_O_LARGEFILE     0200000
 #define TARGET_O_DIRECT        0400000 /* direct disk access hint */
+#define TARGET_O_ACCMODE          0003
+#define TARGET_O_RDONLY             00
+#define TARGET_O_WRONLY             01
+#define TARGET_O_RDWR               02
 #elif defined (TARGET_SPARC)
 #define TARGET_O_APPEND         0x0008
 #define TARGET_FASYNC           0x0040  /* fcntl, for BSD compatibility */
