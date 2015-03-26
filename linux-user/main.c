@@ -4193,6 +4193,8 @@ int main(int argc, char **argv, char **envp)
 
     module_call_init(MODULE_INIT_QOM);
 
+    qemu_init_auxval(envp);
+
     if ((envlist = envlist_create()) == NULL) {
         (void) fprintf(stderr, "Unable to allocate envlist\n");
         exit(EXIT_FAILURE);
