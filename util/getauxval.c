@@ -48,51 +48,24 @@ typedef struct {
 
 static const ElfW_auxv_t *auxv;
 
-static const ElfW_auxv_t *qemu_init_auxval(void)
+void qemu_init_auxval(char **envp)
 {
-    ElfW_auxv_t *a;
-    ssize_t size = 512, r, ofs;
-    int fd;
-
-    /* Allocate some initial storage.  Make sure the first entry is set
-       to end-of-list, so that we've got a valid list in case of error.  */
-    auxv = a = g_malloc(size);
-    a[0].a_type = 0;
-    a[0].a_val = 0;
-
-    fd = open("/proc/self/auxv", O_RDONLY);
-    if (fd < 0) {
-        return a;
+    /* The auxiliary vector is located just beyond the initial environment.  */
+    while (*envp++ != NULL) {
+        continue;
     }
-
-    /* Read the first SIZE bytes.  Hopefully, this covers everything.  */
-    r = read(fd, a, size);
-
-    if (r == size) {
-        /* Continue to expand until we do get a partial read.  */
-        do {
-            ofs = size;
-            size *= 2;
-            auxv = a = g_realloc(a, size);
-            r = read(fd, (char *)a + ofs, ofs);
-        } while (r == ofs);
-    }
-
-    close(fd);
-    return a;
+    auxv = (const ElfW_auxv_t *)envp;
 }
 
 unsigned long qemu_getauxval(unsigned long type)
 {
-    const ElfW_auxv_t *a = auxv;
-
-    if (unlikely(a == NULL)) {
-        a = qemu_init_auxval();
-    }
-
-    for (; a->a_type != 0; a++) {
-        if (a->a_type == type) {
-            return a->a_val;
+    /* If we were able to find the auxiliary vector, use it.  */
+    if (auxv) {
+        const ElfW_auxv_t *a;
+        for (a = auxv; a->a_type != 0; a++) {
+            if (a->a_type == type) {
+                return a->a_val;
+            }
         }
     }
 
