@@ -22,7 +22,6 @@ find_interpreter() {
              "$file" = "/proc/sys/fs/binfmt_misc/status" ] ; then
             continue
         fi
-set -x
         interpreter_path=$(sed -n "/^interpreter/s/interpreter \([^[:space:]]*\)/\1/p" "$file")
         interpreter=$(basename $interpreter_path)
          
