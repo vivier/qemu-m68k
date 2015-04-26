@@ -130,6 +130,28 @@ then
     fi
 fi
 
+find_interpreter() {
+    given_interpreter=$(basename "$1")
+
+    if [ ! -d /proc/sys/fs/binfmt_misc/ ] ; then
+        return 1
+    fi
+    for file in /proc/sys/fs/binfmt_misc/* ; do
+        if [ "$file" = "/proc/sys/fs/binfmt_misc/register" -o \
+             "$file" = "/proc/sys/fs/binfmt_misc/status" ] ; then
+            continue
+        fi
+        interpreter_path=$(sed -n "/^interpreter/s/interpreter \([^[:space:]]*\)/\1/p" "$file")
+        interpreter=$(basename $interpreter_path)
+
+        if [ "$given_interpreter" = "$interpreter" ] ; then
+            echo "$interpreter_path"
+            return 0
+        fi
+    done
+    return 1
+}
+
 configure_fedora()
 {
 
@@ -666,6 +688,14 @@ This will take a couple of minutes.  Patience..."
     rsync -av ${mirrorurl}/releases/20/Fedora/$basearch/os/Packages/r/rpm-[0-9]* \
         ${mirrorurl}/releases/20/Fedora/$basearch/os/Packages/y/yum-[0-9]* .
 
+    # adding interpreter binary
+
+    if [ "$interpreter" != "" ] && ! cp "$interpreter" "./$interpreter_path"
+    then
+        echo "ERROR: failed to copy $interpreter to $interpreter_path" 1>&2
+        exit 1
+    fi
+
     # And here it is...
     # The --nodeps is STUPID but F15 had a bogus dependency on RawHide?!?!
     chroot . rpm -ivh --nodeps rpm-* yum-*
@@ -1200,7 +1230,7 @@ EOF
     return 0
 }
 
-options=$(getopt -o a:hp:n:cR: -l help,path:,rootfs:,name:,clean,release:,arch:,fqdn:,mask-tmp -- "$@")
+options=$(getopt -o a:hp:n:cR:I: -l help,path:,rootfs:,name:,clean,release:,arch:,fqdn:,mask-tmp,interpreter-path: -- "$@")
 if [ $? -ne 0 ]; then
     usage $(basename $0)
     exit 1
@@ -1219,9 +1249,10 @@ do
         -n|--name)      name=$2; shift 2;;
         -c|--clean)     clean=1; shift 1;;
         -R|--release)   release=$2; shift 2;;
-        -a|--arch)      newarch=$2; shift 2;;
+        -a|--arch)      arch=$2; shift 2;;
         --fqdn)         utsname=$2; shift 2;;
         --mask-tmp)     masktmp=1; shift 1;;
+        -I|--interpreter-path) interpreter=$2; shift 2;;
         --)             shift 1; break ;;
         *)              break ;;
     esac
@@ -1230,6 +1261,19 @@ done
 if [ ! -z "$clean" -a -z "$path" ]; then
     clean || exit 1
     exit 0
+fi
+
+if [ "$interpreter" != "" ]; then
+    if [ ! -f "$interpreter" ] ; then
+        echo "ERROR: invalid path $interpreter" 1>&2
+        exit 1
+    fi
+    interpreter_path=$(find_interpreter "$interpreter")
+    if [ $? -ne 0 ] ; then
+        echo "ERROR: no binfmt interpreter using $(basename $interpreter)" 1>&2
+        exit 1
+    fi
+    interpreter=$(readlink -f $interpreter)
 fi
 
 basearch=${arch}
@@ -1251,36 +1295,6 @@ case "$arch" in
 ppc64|s390x) mirrorurl="mirrors.kernel.org::fedora-secondary" ;;
 *) ;;
 esac
-
-
-# Somebody wants to specify an arch.  This is very limited case.
-#       i386/i586/i686 on i386/x86_64
-#           - or -
-#       x86_64 on x86_64
-if [ "${newarch}" != "" -a "${newarch}" != "${arch}" ]
-then
-    case "${newarch}" in
-        i386|i586|i686)
-            if [ "${basearch}" = "i386" -o "${basearch}" = "x86_64" ]
-            then
-                # Make the arch a generic x86 32 bit...
-            arch=${newarch}
-                basearch=i386
-            else
-                basearch=bad
-            fi
-            ;;
-        *)
-            basearch=bad
-            ;;
-    esac
-
-    if [ "${basearch}" = "bad" ]
-    then
-        echo "You cannot build a ${newarch} Fedora container on a ${arch} host.  Sorry!"
-        exit 1
-    fi
-fi
 
 cache_base=/var/cache/lxc/fedora/$basearch
 
