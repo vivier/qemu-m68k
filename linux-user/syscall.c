@@ -3784,7 +3784,7 @@ enum {
 typedef struct IOCTLEntry IOCTLEntry;
 
 typedef abi_long do_ioctl_fn(const IOCTLEntry *ie, uint8_t *buf_temp,
-                             int fd, abi_long cmd, abi_long arg);
+                             int fd, int cmd, abi_long arg);
 
 struct IOCTLEntry {
     int target_cmd;
@@ -3810,7 +3810,7 @@ struct IOCTLEntry {
                             / sizeof(struct fiemap_extent))
 
 static abi_long do_ioctl_fs_ioc_fiemap(const IOCTLEntry *ie, uint8_t *buf_temp,
-                                       int fd, abi_long cmd, abi_long arg)
+                                       int fd, int cmd, abi_long arg)
 {
     /* The parameter for this ioctl is a struct fiemap followed
      * by an array of struct fiemap_extent whose size is set
@@ -3891,7 +3891,7 @@ static abi_long do_ioctl_fs_ioc_fiemap(const IOCTLEntry *ie, uint8_t *buf_temp,
 #endif
 
 static abi_long do_ioctl_ifconf(const IOCTLEntry *ie, uint8_t *buf_temp,
-                                int fd, abi_long cmd, abi_long arg)
+                                int fd, int cmd, abi_long arg)
 {
     const argtype *arg_type = ie->arg_type;
     int target_size;
@@ -3985,7 +3985,7 @@ static abi_long do_ioctl_ifconf(const IOCTLEntry *ie, uint8_t *buf_temp,
 }
 
 static abi_long do_ioctl_dm(const IOCTLEntry *ie, uint8_t *buf_temp, int fd,
-                            abi_long cmd, abi_long arg)
+                            int cmd, abi_long arg)
 {
     void *argptr;
     struct dm_ioctl *host_dm;
@@ -4210,7 +4210,7 @@ out:
 }
 
 static abi_long do_ioctl_blkpg(const IOCTLEntry *ie, uint8_t *buf_temp, int fd,
-                               abi_long cmd, abi_long arg)
+                               int cmd, abi_long arg)
 {
     void *argptr;
     int target_size;
@@ -4263,7 +4263,7 @@ out:
 }
 
 static abi_long do_ioctl_rt(const IOCTLEntry *ie, uint8_t *buf_temp,
-                                int fd, abi_long cmd, abi_long arg)
+                                int fd, int cmd, abi_long arg)
 {
     const argtype *arg_type = ie->arg_type;
     const StructEntry *se;
@@ -4326,7 +4326,7 @@ static abi_long do_ioctl_rt(const IOCTLEntry *ie, uint8_t *buf_temp,
 }
 
 static abi_long do_ioctl_kdsigaccept(const IOCTLEntry *ie, uint8_t *buf_temp,
-                                     int fd, abi_long cmd, abi_long arg)
+                                     int fd, int cmd, abi_long arg)
 {
     int sig = target_to_host_signal(arg);
     return get_errno(ioctl(fd, ie->host_cmd, sig));
@@ -4343,7 +4343,7 @@ static IOCTLEntry ioctl_entries[] = {
 
 /* ??? Implement proper locking for ioctls.  */
 /* do_ioctl() Must return target values and target errnos. */
-static abi_long do_ioctl(int fd, abi_long cmd, abi_long arg)
+static abi_long do_ioctl(int fd, int cmd, abi_long arg)
 {
     const IOCTLEntry *ie;
     const argtype *arg_type;
