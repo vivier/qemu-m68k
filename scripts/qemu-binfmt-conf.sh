@@ -128,11 +128,11 @@ Usage: qemu-binfmt-conf.sh [--qemu-path PATH][--debian [--exportdir PATH]]
 
     To import templates with update-binfmts, use :
 
-        sudo update-binftms --importdir $EXPORTDIR --import qemu-CPU
+        sudo update-binfmts --importdir $EXPORTDIR --import qemu-CPU
 
     To remove interpreter, use :
 
-        sudo update-binftms --package qemu --remove qemu-CPU $QEMU_PATH/qemu-CPU
+        sudo update-binfmts --package qemu-CPU --remove qemu-CPU $QEMU_PATH
 
     where CPU is one of:
 
