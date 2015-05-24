@@ -60,6 +60,7 @@ int __clone2(int (*fn)(void *), void *child_stack_base,
 #include <sys/statfs.h>
 #include <utime.h>
 #include <sys/sysinfo.h>
+#include <sys/signalfd.h>
 //#include <sys/user.h>
 #include <netinet/ip.h>
 #include <netinet/tcp.h>
@@ -294,6 +295,16 @@ static bitmask_transtbl fcntl_flags_tbl[] = {
 #endif
   { 0, 0, 0, 0 }
 };
+
+struct target_fd_trans {
+    abi_long (*host_to_target)(void *, size_t);
+    abi_long (*target_to_host)(void *, size_t);
+};
+
+typedef struct target_fd_trans target_fd_trans_t;
+
+static int target_fd_max;
+static target_fd_trans_t **target_fd_trans;
 
 static int sys_getcwd1(char *buf, size_t size)
 {
@@ -4949,6 +4960,7 @@ void syscall_init(void)
     const argtype *arg_type;
     int size;
     int i;
+    struct rlimit rlim;
 
     thunk_init(STRUCT_MAX);
 
@@ -4957,6 +4969,15 @@ void syscall_init(void)
 #include "syscall_types.h"
 #undef STRUCT
 #undef STRUCT_SPECIAL
+
+    /* allocate an array to store fd ops */
+
+    if (getrlimit(RLIMIT_NOFILE, &rlim) == 0) {
+        target_fd_max = rlim.rlim_cur;
+        target_fd_trans = g_malloc0(target_fd_max *
+                                    sizeof(target_fd_trans_t *));
+    }
+
 
     /* Build target_to_host_errno_table[] table from
      * host_to_target_errno_table[]. */
@@ -5585,6 +5606,46 @@ static target_timer_t get_timer_id(abi_long arg)
     return timerid;
 }
 
+/* signalfd siginfo conversion */
+
+static void
+host_to_target_signalfd_siginfo(struct signalfd_siginfo *tinfo,
+                                const struct signalfd_siginfo *info)
+{
+    int sig = host_to_target_signal(info->ssi_signo);
+    tinfo->ssi_signo = tswap32(sig);
+    tinfo->ssi_errno = 0; /* unused */
+    tinfo->ssi_code = tswap32(info->ssi_code);
+    tinfo->ssi_pid =  tswap32(info->ssi_pid);
+    tinfo->ssi_uid =  tswap32(info->ssi_uid);
+    tinfo->ssi_fd =  tswap32(info->ssi_fd);
+    tinfo->ssi_tid =  tswap32(info->ssi_tid);
+    tinfo->ssi_band =  tswap32(info->ssi_band);
+    tinfo->ssi_overrun =  tswap32(info->ssi_overrun);
+    tinfo->ssi_trapno =  tswap32(info->ssi_trapno);
+    tinfo->ssi_status =  tswap32(info->ssi_status);
+    tinfo->ssi_int =  tswap32(info->ssi_int);
+    tinfo->ssi_ptr =  tswap64(info->ssi_ptr);
+    tinfo->ssi_utime =  tswap64(info->ssi_utime);
+    tinfo->ssi_stime =  tswap64(info->ssi_stime);
+    tinfo->ssi_addr =  tswap64(info->ssi_addr);
+}
+
+static abi_long host_to_target_signalfd(void *buf, size_t len)
+{
+    int i;
+
+    for (i = 0; i < len; i += sizeof(struct signalfd_siginfo)) {
+        host_to_target_signalfd_siginfo(buf + i, buf + i);
+    }
+
+    return len;
+}
+
+static target_fd_trans_t target_signalfd_trans = {
+    .host_to_target = host_to_target_signalfd,
+};
+
 /* do_syscall() should always have a single exit point at the end so
    that actions, such as logging of syscall results, can be performed.
    All errnos that do_syscall() returns must be -TARGET_<errcode>. */
@@ -5645,6 +5706,12 @@ abi_long do_syscall(void *cpu_env, int num, abi_long arg1,
             if (!(p = lock_user(VERIFY_WRITE, arg2, arg3, 0)))
                 goto efault;
             ret = get_errno(read(arg1, p, arg3));
+            if (ret >= 0 &&
+                arg1 < target_fd_max &&
+                target_fd_trans[arg1] &&
+                target_fd_trans[arg1]->host_to_target) {
+                ret =  target_fd_trans[arg1]->host_to_target(p, ret);
+            }
             unlock_user(p, arg2, ret);
         }
         break;
@@ -5671,6 +5738,10 @@ abi_long do_syscall(void *cpu_env, int num, abi_long arg1,
         unlock_user(p, arg2, 0);
         break;
     case TARGET_NR_close:
+        if (arg1 < target_fd_max &&
+            target_fd_trans[arg1]) {
+            target_fd_trans[arg1] = NULL;
+        }
         ret = get_errno(close(arg1));
         break;
     case TARGET_NR_brk:
@@ -9550,6 +9621,26 @@ abi_long do_syscall(void *cpu_env, int num, abi_long arg1,
         break;
 #endif
 #endif
+#if defined(TARGET_NR_signalfd4)
+    case TARGET_NR_signalfd4:
+        {
+            target_sigset_t *target_mask;
+            sigset_t mask;
+            if (!lock_user_struct(VERIFY_READ, target_mask, arg2, 1)) {
+                goto efault;
+            }
+
+            target_to_host_sigset(&mask, target_mask);
+
+            ret = get_errno(signalfd(arg1, &mask, arg4));
+            if (ret >= 0) {
+                target_fd_trans[ret] = &target_signalfd_trans;
+            }
+
+            unlock_user_struct(target_mask, arg2, 0);
+        }
+        break;
+#endif
 #if defined(CONFIG_EPOLL)
 #if defined(TARGET_NR_epoll_create)
     case TARGET_NR_epoll_create:
@@ -9840,6 +9931,27 @@ abi_long do_syscall(void *cpu_env, int num, abi_long arg1,
         }
         break;
     }
+#endif
+
+#if defined(TARGET_NR_signalfd)
+    case TARGET_NR_signalfd:
+        {
+            target_sigset_t *target_mask;
+            sigset_t mask;
+            if (!lock_user_struct(VERIFY_READ, target_mask, arg2, 1)) {
+                goto efault;
+            }
+
+            target_to_host_sigset(&mask, target_mask);
+
+            ret = get_errno(signalfd(arg1, &mask, arg3));
+            if (ret >= 0) {
+                target_fd_trans[ret] = &target_signalfd_trans;
+            }
+
+            unlock_user_struct(target_mask, arg2, 0);
+        }
+        break;
 #endif
 
 #if defined(TARGET_NR_timerfd_create) && defined(CONFIG_TIMERFD)
