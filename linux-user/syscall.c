@@ -297,63 +297,50 @@ static bitmask_transtbl fcntl_flags_tbl[] = {
 };
 
 typedef abi_long (*TargetFdFunc)(void *, size_t);
-struct TargetFdTrans {
+typedef struct TargetFdTrans {
     TargetFdFunc host_to_target;
     TargetFdFunc target_to_host;
-};
-typedef struct TargetFdTrans TargetFdTrans;
+} TargetFdTrans;
 
-struct TargetFdEntry {
-    TargetFdTrans *trans;
-    int flags;
-};
-typedef struct TargetFdEntry TargetFdEntry;
+static TargetFdTrans **target_fd_trans;
 
-static TargetFdEntry *target_fd_trans;
-
-static int target_fd_max;
+static unsigned int target_fd_max;
 
 static TargetFdFunc fd_trans_host_to_target(int fd)
 {
-    return fd < target_fd_max && target_fd_trans[fd].trans ?
-           target_fd_trans[fd].trans->host_to_target : NULL;
+    if (fd < target_fd_max && target_fd_trans[fd]) {
+        return target_fd_trans[fd]->host_to_target;
+    }
+    return NULL;
 }
 
-static void fd_trans_register(int fd, int flags, TargetFdTrans *trans)
+static void fd_trans_register(int fd, TargetFdTrans *trans)
 {
+    unsigned int oldmax;
+
     if (fd >= target_fd_max) {
+        oldmax = target_fd_max;
         target_fd_max = ((fd >> 6) + 1) << 6; /* by slice of 64 entries */
         target_fd_trans = g_realloc(target_fd_trans,
-                                    target_fd_max * sizeof(TargetFdEntry));
+                                    target_fd_max * sizeof(TargetFdTrans));
+        memset((void *)(target_fd_trans + oldmax), 0,
+               (target_fd_max - oldmax) * sizeof(TargetFdTrans *));
     }
-    target_fd_trans[fd].flags = flags;
-    target_fd_trans[fd].trans = trans;
+    target_fd_trans[fd] = trans;
 }
 
 static void fd_trans_unregister(int fd)
 {
-    if (fd < target_fd_max) {
-        target_fd_trans[fd].trans = NULL;
-        target_fd_trans[fd].flags = 0;
+    if (fd >= 0 && fd < target_fd_max) {
+        target_fd_trans[fd] = NULL;
     }
 }
 
-static void fd_trans_dup(int oldfd, int newfd, int flags)
+static void fd_trans_dup(int oldfd, int newfd)
 {
     fd_trans_unregister(newfd);
-    if (oldfd < target_fd_max && target_fd_trans[oldfd].trans) {
-        fd_trans_register(newfd, flags, target_fd_trans[oldfd].trans);
-    }
-}
-
-static void fd_trans_close_on_exec(void)
-{
-    int fd;
-
-    for (fd = 0; fd < target_fd_max; fd++) {
-        if (target_fd_trans[fd].flags & O_CLOEXEC) {
-            fd_trans_unregister(fd);
-        }
+    if (oldfd < target_fd_max && target_fd_trans[oldfd]) {
+        fd_trans_register(newfd, target_fd_trans[oldfd]);
     }
 }
 
@@ -5335,19 +5322,19 @@ host_to_target_signalfd_siginfo(struct signalfd_siginfo *tinfo,
     tinfo->ssi_signo = tswap32(sig);
     tinfo->ssi_errno = tswap32(tinfo->ssi_errno);
     tinfo->ssi_code = tswap32(info->ssi_code);
-    tinfo->ssi_pid =  tswap32(info->ssi_pid);
-    tinfo->ssi_uid =  tswap32(info->ssi_uid);
-    tinfo->ssi_fd =  tswap32(info->ssi_fd);
-    tinfo->ssi_tid =  tswap32(info->ssi_tid);
-    tinfo->ssi_band =  tswap32(info->ssi_band);
-    tinfo->ssi_overrun =  tswap32(info->ssi_overrun);
-    tinfo->ssi_trapno =  tswap32(info->ssi_trapno);
-    tinfo->ssi_status =  tswap32(info->ssi_status);
-    tinfo->ssi_int =  tswap32(info->ssi_int);
-    tinfo->ssi_ptr =  tswap64(info->ssi_ptr);
-    tinfo->ssi_utime =  tswap64(info->ssi_utime);
-    tinfo->ssi_stime =  tswap64(info->ssi_stime);
-    tinfo->ssi_addr =  tswap64(info->ssi_addr);
+    tinfo->ssi_pid = tswap32(info->ssi_pid);
+    tinfo->ssi_uid = tswap32(info->ssi_uid);
+    tinfo->ssi_fd = tswap32(info->ssi_fd);
+    tinfo->ssi_tid = tswap32(info->ssi_tid);
+    tinfo->ssi_band = tswap32(info->ssi_band);
+    tinfo->ssi_overrun = tswap32(info->ssi_overrun);
+    tinfo->ssi_trapno = tswap32(info->ssi_trapno);
+    tinfo->ssi_status = tswap32(info->ssi_status);
+    tinfo->ssi_int = tswap32(info->ssi_int);
+    tinfo->ssi_ptr = tswap64(info->ssi_ptr);
+    tinfo->ssi_utime = tswap64(info->ssi_utime);
+    tinfo->ssi_stime = tswap64(info->ssi_stime);
+    tinfo->ssi_addr = tswap64(info->ssi_addr);
 }
 
 static abi_long host_to_target_signalfd(void *buf, size_t len)
@@ -5367,27 +5354,25 @@ static TargetFdTrans target_signalfd_trans = {
 
 static abi_long do_signalfd4(int fd, abi_long mask, int flags)
 {
-    int host_flags = flags & (~(TARGET_O_NONBLOCK | TARGET_O_CLOEXEC));
+    int host_flags;
     target_sigset_t *target_mask;
     sigset_t host_mask;
     abi_long ret;
 
+    if (flags & ~(TARGET_O_NONBLOCK | TARGET_O_CLOEXEC)) {
+        return -TARGET_EINVAL;
+    }
     if (!lock_user_struct(VERIFY_READ, target_mask, mask, 1)) {
         return -TARGET_EFAULT;
     }
 
     target_to_host_sigset(&host_mask, target_mask);
 
-    if (flags & TARGET_O_NONBLOCK) {
-        host_flags |= O_NONBLOCK;
-    }
-    if (flags & TARGET_O_CLOEXEC) {
-        host_flags |= O_CLOEXEC;
-    }
+    host_flags = target_to_host_bitmask(flags, fcntl_flags_tbl);
 
     ret = get_errno(signalfd(fd, &host_mask, host_flags));
     if (ret >= 0) {
-        fd_trans_register(ret, host_flags, &target_signalfd_trans);
+        fd_trans_register(ret, &target_signalfd_trans);
     }
 
     unlock_user_struct(target_mask, mask, 0);
@@ -5781,7 +5766,7 @@ abi_long do_syscall(void *cpu_env, int num, abi_long arg1,
             ret = get_errno(read(arg1, p, arg3));
             if (ret >= 0 &&
                 fd_trans_host_to_target(arg1)) {
-                ret =  fd_trans_host_to_target(arg1)(p, ret);
+                ret = fd_trans_host_to_target(arg1)(p, ret);
             }
             unlock_user(p, arg2, ret);
         }
@@ -5798,9 +5783,7 @@ abi_long do_syscall(void *cpu_env, int num, abi_long arg1,
         ret = get_errno(do_openat(cpu_env, AT_FDCWD, p,
                                   target_to_host_bitmask(arg2, fcntl_flags_tbl),
                                   arg3));
-        if (ret >= 0) {
-            fd_trans_unregister(ret);
-        }
+        fd_trans_unregister(ret);
         unlock_user(p, arg1, 0);
         break;
     case TARGET_NR_openat:
@@ -5809,9 +5792,7 @@ abi_long do_syscall(void *cpu_env, int num, abi_long arg1,
         ret = get_errno(do_openat(cpu_env, arg1, p,
                                   target_to_host_bitmask(arg3, fcntl_flags_tbl),
                                   arg4));
-        if (ret >= 0) {
-            fd_trans_unregister(ret);
-        }
+        fd_trans_unregister(ret);
         unlock_user(p, arg2, 0);
         break;
     case TARGET_NR_close:
@@ -5855,9 +5836,7 @@ abi_long do_syscall(void *cpu_env, int num, abi_long arg1,
         if (!(p = lock_user_string(arg1)))
             goto efault;
         ret = get_errno(creat(p, arg2));
-        if (ret >= 0) {
-            fd_trans_unregister(ret);
-        }
+        fd_trans_unregister(ret);
         unlock_user(p, arg1, 0);
         break;
 #endif
@@ -5992,9 +5971,6 @@ abi_long do_syscall(void *cpu_env, int num, abi_long arg1,
                     || !addr)
                     break;
                 unlock_user(*q, addr, 0);
-            }
-            if (ret >= 0) {
-                fd_trans_close_on_exec();
             }
         }
         break;
@@ -6295,7 +6271,7 @@ abi_long do_syscall(void *cpu_env, int num, abi_long arg1,
     case TARGET_NR_dup:
         ret = get_errno(dup(arg1));
         if (ret >= 0) {
-            fd_trans_dup(arg1, ret, 0);
+            fd_trans_dup(arg1, ret);
         }
         break;
     case TARGET_NR_pipe:
@@ -6390,14 +6366,14 @@ abi_long do_syscall(void *cpu_env, int num, abi_long arg1,
     case TARGET_NR_dup2:
         ret = get_errno(dup2(arg1, arg2));
         if (ret >= 0) {
-            fd_trans_dup(arg1, arg2, 0);
+            fd_trans_dup(arg1, arg2);
         }
         break;
 #if defined(CONFIG_DUP3) && defined(TARGET_NR_dup3)
     case TARGET_NR_dup3:
         ret = get_errno(dup3(arg1, arg2, arg3));
         if (ret >= 0) {
-            fd_trans_dup(arg1, arg2, arg3);
+            fd_trans_dup(arg1, arg2);
         }
         break;
 #endif
@@ -7394,9 +7370,7 @@ abi_long do_syscall(void *cpu_env, int num, abi_long arg1,
         } else {
             ret = do_socket(arg1, arg2, arg3);
         }
-        if (ret >= 0) {
-            fd_trans_unregister(ret);
-        }
+        fd_trans_unregister(ret);
         break;
 #endif
 #ifdef TARGET_NR_socketpair
@@ -9658,9 +9632,7 @@ abi_long do_syscall(void *cpu_env, int num, abi_long arg1,
 #if defined(TARGET_NR_eventfd)
     case TARGET_NR_eventfd:
         ret = get_errno(eventfd(arg1, 0));
-        if (ret >= 0) {
-            fd_trans_unregister(ret);
-        }
+        fd_trans_unregister(ret);
         break;
 #endif
 #if defined(TARGET_NR_eventfd2)
@@ -9674,9 +9646,7 @@ abi_long do_syscall(void *cpu_env, int num, abi_long arg1,
             host_flags |= O_CLOEXEC;
         }
         ret = get_errno(eventfd(arg1, host_flags));
-        if (ret >= 0) {
-            fd_trans_unregister(ret);
-        }
+        fd_trans_unregister(ret);
         break;
     }
 #endif
@@ -10000,9 +9970,7 @@ abi_long do_syscall(void *cpu_env, int num, abi_long arg1,
             timer_t htimer = g_posix_timers[timerid];
             ret = get_errno(timer_getoverrun(htimer));
         }
-        if (ret >= 0) {
-            fd_trans_unregister(ret);
-        }
+        fd_trans_unregister(ret);
         break;
     }
 #endif
