@@ -113,7 +113,7 @@ qemu_get_family() {
 usage() {
     cat <<!EOF
 Usage: qemu-binfmt-conf.sh [--qemu-path PATH][--debian [--exportdir PATH]]
-                           [--help][--credential yes|no]
+                           [--help][--credential yes|no][--systemd CPU]
 
        Configure binfmt_misc to use qemu interpreter
 
@@ -121,6 +121,9 @@ Usage: qemu-binfmt-conf.sh [--qemu-path PATH][--debian [--exportdir PATH]]
        --qemu-path:  set path to qemu interpreter ($QEMU_PATH)
        --debian:     don't write into /proc,
                      instead generate update-binfmts templates
+       --systemd:    don't write into /proc,
+                     instead generate file for systemd-binfmt.service
+                     for the given CPU
        --exportdir:  define where to write update-binfmts templates
                      ($EXPORTDIR)
        --credential: if yes, credential an security tokens are 
@@ -133,6 +136,8 @@ Usage: qemu-binfmt-conf.sh [--qemu-path PATH][--debian [--exportdir PATH]]
     To remove interpreter, use :
 
         sudo update-binfmts --package qemu-CPU --remove qemu-CPU $QEMU_PATH
+
+    With systemd, binfmt files are loaded by systemd-binfmt.service
 
     where CPU is one of:
 
@@ -179,9 +184,25 @@ qemu_check_debian() {
     fi
 }
 
+qemu_check_systemd() {
+    if ! systemctl -q is-enabled systemd-binfmt.service ; then
+        echo "ERROR: systemd-binfmt.service is missing or disabled !" 1>&2
+        exit 1
+    fi
+    if [ "$UID" != "0" ] ; then
+        echo "ERROR: you must be root to be able to write systemd configuration files !" 1>&2
+        exit 1
+    fi
+}
+
 qemu_register_interpreter() {
     echo "Setting $qemu as binfmt interpreter for $cpu"
     echo ":qemu-$cpu:M::$magic:$mask:$qemu:$FLAGS" > /proc/sys/fs/binfmt_misc/register
+}
+
+qemu_generate_systemd() {
+    echo "Setting $qemu as binfmt interpreter for $cpu for systemd-binfmt.service"
+    echo ":qemu-$cpu:M::$magic:$mask:$qemu:$FLAGS" > "/etc/binfmt.d/qemu-$cpu.conf"
 }
 
 qemu_generate_packages() {
@@ -229,7 +250,7 @@ EXPORTDIR="/usr/share/binfmts"
 CHECK=qemu_check_bintfmt_misc
 FLAGS=""
 
-options=$(getopt -o dQ:e:hc: -l debian,qemu-path:,exportdir:,help,credential: -- "$@")
+options=$(getopt -o ds:Q:e:hc: -l debian,systemd:,qemu-path:,exportdir:,help,credential: -- "$@")
 eval set -- "$options"
 
 while true ; do
@@ -237,6 +258,12 @@ while true ; do
     -d|--debian)
         CHECK=qemu_check_debian
         BINFMT_SET=qemu_generate_packages
+        ;;
+    -s|--systemd)
+        CHECK=qemu_check_systemd
+        BINFMT_SET=qemu_generate_systemd
+        shift
+        qemu_target_list="$1"
         ;;
     -Q|--qemu-path)
         shift
