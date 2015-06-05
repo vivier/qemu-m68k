@@ -2575,6 +2575,9 @@ static abi_long do_socket(int domain, int type, int protocol)
             case NETLINK_ROUTE:
                 fd_trans_register(ret, &target_netlink_route_trans);
                 break;
+            case NETLINK_KOBJECT_UEVENT:
+                /* nothing to do: messages are strings */
+                break;
             default:
                 close(ret);
                 ret = -EPFNOSUPPORT;
