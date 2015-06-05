@@ -5750,6 +5750,58 @@ static int do_futex(target_ulong uaddr, int op, int val, target_ulong timeout,
         return -TARGET_ENOSYS;
     }
 }
+#if defined(TARGET_NR_name_to_handle_at) && defined(CONFIG_OPEN_BY_HANDLE)
+static abi_long do_name_to_handle_at(abi_long arg1, abi_long arg2,
+                                     abi_long arg3, abi_long arg4,
+                                     abi_long arg5)
+{
+    struct file_handle *target_fh;
+    struct file_handle *fh;
+    int mount_id = 0;
+    abi_long ret;
+    char *name;
+    unsigned int size;
+
+    if (get_user_s32(size, arg3)) {
+        return -TARGET_EFAULT;
+    }
+
+    name = lock_user_string(arg2);
+    if (!name) {
+        return -TARGET_EFAULT;
+    }
+
+    target_fh = lock_user(VERIFY_WRITE, arg3,
+                          sizeof(struct file_handle) + size, 0);
+    if (!target_fh) {
+        unlock_user(name, arg2, 0);
+        return -TARGET_EFAULT;
+    }
+
+    fh = g_malloc0(sizeof(struct file_handle) + size);
+    fh->handle_bytes = size;
+
+    ret = get_errno(name_to_handle_at(arg1, path(name), fh, &mount_id, arg5));
+    unlock_user(name, arg2, 0);
+
+    /* man name_to_handle_at(2):
+     * Other than the use of the handle_bytes field, the caller should treat
+     * the file_handle structure as an opaque data type
+     */
+
+    memcpy(target_fh, fh, fh->handle_bytes);
+    target_fh->handle_bytes = tswap32(fh->handle_bytes);
+    g_free(fh);
+    unlock_user(target_fh, arg3, size);
+
+    if (put_user_s32(mount_id, arg4)) {
+        return -TARGET_EFAULT;
+    }
+
+    return ret;
+
+}
+#endif
 
 /* Map host to target signal numbers for the wait family of syscalls.
    Assume all other status bits are the same.  */
@@ -6205,6 +6257,11 @@ abi_long do_syscall(void *cpu_env, int num, abi_long arg1,
                                   arg4));
         unlock_user(p, arg2, 0);
         break;
+#if defined(TARGET_NR_name_to_handle_at) && defined(CONFIG_OPEN_BY_HANDLE)
+    case TARGET_NR_name_to_handle_at:
+        ret = do_name_to_handle_at(arg1, arg2, arg3, arg4, arg5);
+        break;
+#endif
     case TARGET_NR_close:
         if (arg1 < target_fd_max &&
             target_fd_trans[arg1]) {
