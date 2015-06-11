@@ -499,6 +499,11 @@ fedora_get_bootstrap()
         WHITE_LISTED=0
     fi
 
+    if [ "$(uname -m)" != "$arch" ]
+    then
+        WHITE_LISTED=0
+    fi
+
     if [[ ${WHITE_LISTED} != 0 ]]
     then
         for OS in ${BOOTSTRAP_WHITE_LIST}
