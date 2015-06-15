@@ -5745,6 +5745,41 @@ static abi_long do_name_to_handle_at(abi_long arg1, abi_long arg2,
 }
 #endif
 
+#if defined(TARGET_NR_open_by_handle_at) && defined(CONFIG_OPEN_BY_HANDLE)
+static abi_long do_open_by_handle_at(abi_long arg1, abi_long arg2,
+                                     abi_long arg3)
+{
+    struct file_handle *target_fh;
+    struct file_handle *fh;
+    unsigned int size;
+    abi_long ret;
+
+    if (get_user_s32(size, arg2)) {
+        return -TARGET_EFAULT;
+    }
+
+    target_fh = lock_user(VERIFY_READ, arg2,
+                          sizeof(struct file_handle) + size, 1);
+    if (!target_fh) {
+        return -TARGET_EFAULT;
+    }
+
+    fh = g_malloc0(sizeof(struct file_handle) + size);
+    memcpy(fh, target_fh, size);
+    fh->handle_bytes = size;
+    fh->handle_type = tswap32(target_fh->handle_type);
+
+    ret = get_errno(open_by_handle_at(arg1, fh,
+                    target_to_host_bitmask(arg3, fcntl_flags_tbl)));
+
+    g_free(fh);
+
+    unlock_user(target_fh, arg2, sizeof(struct file_handle) + size);
+
+    return ret;
+}
+#endif
+
 /* Map host to target signal numbers for the wait family of syscalls.
    Assume all other status bits are the same.  */
 int host_to_target_waitstatus(int status)
@@ -6202,6 +6237,11 @@ abi_long do_syscall(void *cpu_env, int num, abi_long arg1,
 #if defined(TARGET_NR_name_to_handle_at) && defined(CONFIG_OPEN_BY_HANDLE)
     case TARGET_NR_name_to_handle_at:
         ret = do_name_to_handle_at(arg1, arg2, arg3, arg4, arg5);
+        break;
+#endif
+#if defined(TARGET_NR_open_by_handle_at) && defined(CONFIG_OPEN_BY_HANDLE)
+    case TARGET_NR_open_by_handle_at:
+        ret = do_open_by_handle_at(arg1, arg2, arg3);
         break;
 #endif
     case TARGET_NR_close:
