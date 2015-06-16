@@ -610,10 +610,10 @@ Have a beer or a cup of coffee.  This will take a bit (~300MB).
 "
         sleep 3 # let him read it...
 
-        # Right now, we are using Fedora 20 for the inial bootstrap.
+        # Right now, we are using Fedora $liveos_release for the inial bootstrap.
         # We could make this the "current" Fedora rev (F > 15).
 
-        rsync -av ${mirrorurl}/releases/20/Fedora/$basearch/os/LiveOS .
+        rsync -av ${mirrorurl}/releases/$liveos_release/$liveos_flavour/$basearch/os/LiveOS .
 
         if [[ 0 == $? ]]
         then
@@ -690,8 +690,8 @@ This will take a couple of minutes.  Patience..."
     # of this LiveOS image we're camped out on.  This is the beginning
     # of the butt ugly hack.  Look close or you may missing it...
 
-    rsync -av ${mirrorurl}/releases/20/Fedora/$basearch/os/Packages/r/rpm-[0-9]* \
-        ${mirrorurl}/releases/20/Fedora/$basearch/os/Packages/y/yum-[0-9]* .
+    rsync -av ${mirrorurl}/releases/$liveos_release/$liveos_flavour/$basearch/os/Packages/r/rpm-[0-9]* \
+        ${mirrorurl}/releases/$liveos_release/$liveos_flavour/$basearch/os/Packages/y/yum-[0-9]* .
 
     # adding interpreter binary
 
@@ -731,10 +731,15 @@ This will take a couple of minutes.  Patience..."
     echo "Stage 1 creation complete.  Building stage 2 Installation Bootstrap"
 
     mount -o bind ../bootstrap run/install
-    rsync -av ${mirrorurl}/releases/20/Fedora/$basearch/os/Packages/f/fedora-release-20* .
-
-    # The --nodeps is STUPID but F15 had a bogus dependency on RawHide?!?!
-    chroot . rpm --root /run/install --nodeps -ivh fedora-release-*
+    rsync -av ${mirrorurl}/releases/$liveos_release/$liveos_flavour/$basearch/os/Packages/f/fedora-release-$liveos_release* .
+    if [[ ${liveos_release} -ge 21 ]]
+    then
+        rsync -av ${mirrorurl}/releases/$liveos_release/$liveos_flavour/$basearch/os/Packages/f/fedora-repos-$liveos_release* .
+        chroot . rpm --root /run/install -ivh fedora-repos-* fedora-release-*
+    else
+        # The --nodeps is STUPID but F15 had a bogus dependency on RawHide?!?!
+        chroot . rpm --root /run/install --nodeps -ivh fedora-release-*
+    fi
 
     # yum will take $basearch from host, so force the arch we want
     sed -i "s|\$basearch|$basearch|" ./run/install/etc/yum.repos.d/*
@@ -1296,8 +1301,17 @@ armv6l|armv7l|armv8l) basearch=armhfp ;;
 esac
 
 mirrorurl="mirrors.kernel.org::fedora"
+liveos_release=20
+liveos_flavour=Fedora
 case "$arch" in
-ppc64|s390x) mirrorurl="mirrors.kernel.org::fedora-secondary" ;;
+ppc64le)
+    liveos_release=21
+    liveos_flavour=Server
+    mirrorurl="mirrors.kernel.org::fedora-secondary"
+    ;;
+ppc64|s390x)
+    mirrorurl="mirrors.kernel.org::fedora-secondary"
+    ;;
 *) ;;
 esac
 
