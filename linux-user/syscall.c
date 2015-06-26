@@ -10601,11 +10601,7 @@ abi_long do_syscall(void *cpu_env, int num, abi_long arg1,
                 goto efault;
             }
             ep.events = tswap32(target_ep->events);
-            /* The epoll_data_t union is just opaque data to the kernel,
-             * so we transfer all 64 bits across and need not worry what
-             * actual data type it is.
-             */
-            ep.data.u64 = tswap64(target_ep->data.u64);
+            ep.data.u64 = target_ep->data.u64;
             unlock_user_struct(target_ep, arg4, 0);
             epp = &ep;
         }
@@ -10675,7 +10671,7 @@ abi_long do_syscall(void *cpu_env, int num, abi_long arg1,
             int i;
             for (i = 0; i < ret; i++) {
                 target_ep[i].events = tswap32(ep[i].events);
-                target_ep[i].data.u64 = tswap64(ep[i].data.u64);
+                target_ep[i].data.u64 = ep[i].data.u64;
             }
         }
         unlock_user(target_ep, arg2, ret * sizeof(struct target_epoll_event));
