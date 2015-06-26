@@ -476,18 +476,21 @@ _syscall4(int, sys_prlimit64, pid_t, pid, int, resource,
 
 #if defined(TARGET_NR_timer_create)
 /* Maxiumum of 32 active POSIX timers allowed at any one time. */
+static pthread_mutex_t g_posix_timers_lock = PTHREAD_MUTEX_INITIALIZER;
 static timer_t g_posix_timers[32] = { 0, } ;
 
 static inline int next_free_host_timer(void)
 {
     int k ;
-    /* FIXME: Does finding the next free slot require a lock? */
+    pthread_mutex_lock(&g_posix_timers_lock);
     for (k = 0; k < ARRAY_SIZE(g_posix_timers); k++) {
         if (g_posix_timers[k] == 0) {
             g_posix_timers[k] = (timer_t) 1;
+            pthread_mutex_unlock(&g_posix_timers_lock);
             return k;
         }
     }
+    pthread_mutex_unlock(&g_posix_timers_lock);
     return -1;
 }
 #endif
