@@ -54,11 +54,16 @@
 #if HOST_LONG_BITS <= TARGET_VIRT_ADDR_SPACE_BITS
 #define h2g_valid(x) 1
 #else
+#if defined(CONFIG_USE_GUEST_BASE)
 #define h2g_valid(x) ({ \
     unsigned long __guest = (unsigned long)(x) - GUEST_BASE; \
     (__guest < (1ul << TARGET_VIRT_ADDR_SPACE_BITS)) && \
     (!RESERVED_VA || (__guest < RESERVED_VA)); \
 })
+#else
+#define h2g_valid(x) \
+    ((unsigned long)(x) < (1ul << TARGET_VIRT_ADDR_SPACE_BITS))
+#endif
 #endif
 
 #define h2g_nocheck(x) ({ \
