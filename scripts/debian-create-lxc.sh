@@ -60,6 +60,13 @@ check_target() {
         DEBIAN_TARGET=powerpc
         INCLUDE="openssh-server"
         ;;
+    ppc64le|powerpc64le)
+        MIRROR=http://ftp.debian.org/debian
+        SUITE=stable
+        QEMU_TARGET=ppc64le
+        DEBIAN_TARGET=ppc64el
+        INCLUDE="openssh-server"
+        ;;
     raspberrypi)
         MIRROR=http://archive.raspbian.org/raspbian
         SUITE=wheezy
