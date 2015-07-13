@@ -2585,17 +2585,14 @@ struct target_mq_attr {
 typedef union target_epoll_data {
     abi_ulong ptr;
     abi_ulong fd;
-    uint32_t u32;
-    uint64_t u64;
+    abi_uint32_t u32;
+    abi_uint64_t u64;
 } target_epoll_data_t;
 
 struct target_epoll_event {
-    uint32_t events;
-#if defined(TARGET_ARM) || defined(TARGET_MIPS) || defined(TARGET_MIPS64)
-    uint32_t __pad;
-#endif
+    abi_uint32_t events;
     target_epoll_data_t data;
-} QEMU_PACKED;
+};
 #endif
 struct target_rlimit64 {
     uint64_t rlim_cur;
