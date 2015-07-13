@@ -86,4 +86,11 @@ static inline abi_ulong abi_ntohl(abi_ulong v)
 
 
 #endif
+
+typedef abi_short abi_int16_t;
+typedef abi_ushort abi_uint16_t;
+typedef abi_int abi_int32_t;
+typedef abi_uint abi_uint32_t;
+typedef abi_llong abi_int64_t;
+typedef abi_ullong abi_uint64_t;
 #endif
