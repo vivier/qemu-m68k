@@ -743,6 +743,16 @@ This will take a couple of minutes.  Patience..."
 
     # yum will take $basearch from host, so force the arch we want
     sed -i "s|\$basearch|$basearch|" ./run/install/etc/yum.repos.d/*
+    # add interpreter into the bootstrap
+    chroot . yum -y --nogpgcheck --installroot /run/install install filesystem
+    if [ "$interpreter" != "" ] && ! cp "$interpreter" "run/install/$interpreter_path"
+    then
+        umount run/install
+        umount proc
+        umount dev
+        echo "ERROR: failed to copy $interpreter to run/install/$interpreter_path" 1>&2
+        exit 1
+    fi
 
     chroot . yum -y --nogpgcheck --installroot /run/install install python rpm yum
 
@@ -972,6 +982,21 @@ download_fedora()
 
     # yum will take $basearch from host, so force the arch we want
     sed -i "s|\$basearch|$basearch|" ${BOOTSTRAP_DIR}/${BOOTSTRAP_INSTALL_ROOT}/etc/yum.repos.d/*
+
+    # add interpreter into the bootstrap
+    ${BOOTSTRAP_CHROOT}yum --installroot ${BOOTSTRAP_INSTALL_ROOT} -y --nogpgcheck install filesystem &
+    if [ "$interpreter" != "" ]
+    then
+        # very ugly hack to be able to install interpreter in directory
+        # created by filesystem RPM which needs bash and bash needs the
+        # interpreter...
+        while [ ! -f "${INSTALL_ROOT}/$interpreter_path" ]
+        do
+            ${BOOTSTRAP_CHROOT}cp "$interpreter_path" "${BOOTSTRAP_INSTALL_ROOT}/$interpreter_path" 2> /dev/null
+            sleep 1
+        done
+    fi
+    wait
 
     ${BOOTSTRAP_CHROOT}yum --installroot ${BOOTSTRAP_INSTALL_ROOT} -y --nogpgcheck install ${PKG_LIST}
 
