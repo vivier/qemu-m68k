@@ -519,8 +519,10 @@ static TCGv gen_lea_indexed(CPUM68KState *env, DisasContext *s, TCGv base)
 
 static inline void gen_flush_flags(DisasContext *s, TCGv cc_dest)
 {
-    if (s->cc_op == CC_OP_FLAGS)
+    if (s->cc_op == CC_OP_FLAGS) {
+        tcg_gen_mov_i32(cc_dest, QREG_CC_DEST);
         return;
+    }
     if (s->cc_op == CC_OP_DYNAMIC) {
         gen_helper_flush_flags(cc_dest, cpu_env, QREG_CC_OP);
     } else {
