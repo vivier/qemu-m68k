@@ -2163,6 +2163,10 @@ struct target_statfs64 {
 #define TARGET_O_CLOEXEC     010000000
 #define TARGET___O_SYNC      020000000
 #define TARGET_O_PATH        040000000
+#define TARGET_O_ACCMODE          0003
+#define TARGET_O_RDONLY             00
+#define TARGET_O_WRONLY             01
+#define TARGET_O_RDWR               02
 #elif defined(TARGET_ARM)
 #define TARGET_O_DIRECTORY      040000 /* must be a directory */
 #define TARGET_O_NOFOLLOW      0100000 /* don't follow links */
