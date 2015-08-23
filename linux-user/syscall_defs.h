@@ -2227,8 +2227,6 @@ struct target_statfs64 {
 #define TARGET_O_WRONLY        0x0001
 #define TARGET_O_RDWR          0x0002
 #define TARGET_O_ACCMODE       0x0003
-#define TARGET_O_NDELAY        (0x0004 | TARGET_O_NONBLOCK)
-#define TARGET_O_NOCTTY        0x8000  /* not fcntl */
 #define TARGET_O_DIRECTORY     0x10000 /* must be a directory */
 #define TARGET_O_NOFOLLOW      0x20000 /* don't follow links */
 # ifdef TARGET_SPARC64
