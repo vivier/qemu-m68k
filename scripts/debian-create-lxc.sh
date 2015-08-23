@@ -41,7 +41,7 @@ check_target() {
         ;;
     sparc)
         MIRROR=http://ftp.debian.org/debian
-        SUITE=stable
+        SUITE=squeeze
         QEMU_TARGET=sparc32plus
         DEBIAN_TARGET=sparc
         INCLUDE="openssh-server"
