@@ -89,7 +89,7 @@ static bool have_isa_2_06;
 #define HAVE_ISA_2_06  have_isa_2_06
 #define HAVE_ISEL      have_isa_2_06
 
-#ifdef CONFIG_USE_GUEST_BASE
+#ifdef CONFIG_USER_ONLY
 #define TCG_GUEST_BASE_REG 30
 #else
 #define TCG_GUEST_BASE_REG 0
@@ -1779,7 +1779,7 @@ static void tcg_target_qemu_prologue(TCGContext *s)
     }
     tcg_out_st(s, TCG_TYPE_PTR, TCG_REG_R0, TCG_REG_R1, FRAME_SIZE+LR_OFFSET);
 
-#ifdef CONFIG_USE_GUEST_BASE
+#ifdef CONFIG_USER_ONLY
     if (GUEST_BASE) {
         tcg_out_movi(s, TCG_TYPE_PTR, TCG_GUEST_BASE_REG, GUEST_BASE);
         tcg_regset_set_reg(s->reserved_regs, TCG_GUEST_BASE_REG);

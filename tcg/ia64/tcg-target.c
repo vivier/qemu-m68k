@@ -40,7 +40,7 @@ static const char * const tcg_target_reg_names[TCG_TARGET_NB_REGS] = {
 };
 #endif
 
-#ifdef CONFIG_USE_GUEST_BASE
+#ifdef CONFIG_USER_ONLY
 #define TCG_GUEST_BASE_REG TCG_REG_R55
 #else
 #define TCG_GUEST_BASE_REG TCG_REG_R0
