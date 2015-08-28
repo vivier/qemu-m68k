@@ -60,6 +60,13 @@ check_target() {
         DEBIAN_TARGET=powerpc
         INCLUDE="openssh-server"
         ;;
+    s390|s390x)
+        MIRROR=ftp://ftp.debian.org/debian
+        SUITE=stable
+        QEMU_TARGET=s390x
+        DEBIAN_TARGET=s390x
+        INCLUDE="openssh-server"
+        ;;
     ppc64le|powerpc64le)
         MIRROR=http://ftp.debian.org/debian
         SUITE=stable
