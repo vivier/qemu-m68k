@@ -88,7 +88,7 @@ check_target() {
         ;;
     esac
     CONTAINER_NAME=virt${1}-${SUITE}
-    QEMU_BIN=${QEMU_PATH}/build-${QEMU_TARGET}/${QEMU_TARGET}-linux-user/qemu-${QEMU_TARGET}
+    QEMU_BIN=${QEMU_PATH}/build/${QEMU_TARGET}/${QEMU_TARGET}-linux-user/qemu-${QEMU_TARGET}
 }
 
 check_m68k() {
@@ -117,9 +117,9 @@ create_qemu() {
                 fi
         fi
         echo "cd ${QEMU_PATH} && \
-        mkdir build-${QEMU_TARGET} && \
-        cd build-${QEMU_TARGET} && \
-        ../configure --static ${CONFIGURE_PARAMS} \
+        mkdir -p build/${QEMU_TARGET} && \
+        cd build/${QEMU_TARGET} && \
+        ../../configure --static ${CONFIGURE_PARAMS} \
                      --target-list=${QEMU_TARGET}-linux-user && \
         make" | sudo -i -u ${SUDO_USER}
         if ! ${CHECK_BIN}
