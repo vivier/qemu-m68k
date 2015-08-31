@@ -1974,24 +1974,51 @@ DISAS_INSN(negx)
     TCGv src;
     TCGv dest;
     TCGv addr;
+    TCGv z, tmp;
     int opsize;
 
     opsize = insn_opsize(insn, 6);
     gen_flush_flags(s);
     SRC_EA(env, src, opsize, -1, &addr);
     dest = tcg_temp_new();
-    switch(opsize) {
-    case OS_BYTE:
-        gen_helper_subx8_cc(dest, cpu_env, tcg_const_i32(0), src);
-        break;
-    case OS_WORD:
-        gen_helper_subx16_cc(dest, cpu_env, tcg_const_i32(0), src);
-        break;
-    case OS_LONG:
-        gen_helper_subx32_cc(dest, cpu_env, tcg_const_i32(0), src);
-        break;
-    }
+
+    /* Perform subtraction with borrow.  */
+    z = tcg_const_i32(0);
+    tcg_gen_add2_i32(dest, QREG_CC_X, src, z, QREG_CC_X, z);
+    tcg_gen_sub2_i32(dest, QREG_CC_X, z, z, dest, QREG_CC_X);
+    tcg_temp_free(z);
+
+    /* compute flags */
+
+    tcg_gen_andi_i32(QREG_CC_X, QREG_CC_X, 1); /* X */
+
+    /* Z: cleared if results is nonzero, unchanged otherwise */
+
+    tmp = tcg_temp_new();
+    tcg_gen_andi_i32(QREG_CC_DEST, QREG_CC_DEST, CCF_Z);
+    tcg_gen_setcondi_i32(TCG_COND_EQ, tmp, dest, 0);
+    tcg_gen_shli_i32(tmp, tmp, 2);
+    tcg_gen_and_i32(QREG_CC_DEST, QREG_CC_DEST, tmp); /* Z */
+
+    tcg_gen_or_i32(QREG_CC_DEST, QREG_CC_DEST, QREG_CC_X);  /* C */
+
+    /* Compute signed-overflow for negation.  The normal formula for
+       subtraction is (res ^ src1) & (src1 ^ src2), but with src1==0
+       this simplies to res & src2.  */
+
+    tcg_gen_and_i32(tmp, dest, src);
+    tcg_gen_setcondi_i32(TCG_COND_NE, tmp, tmp, 0);
+    tcg_gen_shli_i32(tmp, tmp, 1);
+    tcg_gen_or_i32(QREG_CC_DEST, QREG_CC_DEST, tmp); /* V */
+
+    tcg_temp_free(tmp);
+
+    tcg_gen_setcondi_i32(TCG_COND_LT, tmp, dest, 0);
+    tcg_gen_shli_i32(tmp, tmp, 3);
+    tcg_gen_or_i32(QREG_CC_DEST, QREG_CC_DEST, tmp); /* N */
+
     DEST_EA(env, insn, opsize, dest, &addr);
+    tcg_temp_free(dest);
     set_cc_op(s, CC_OP_FLAGS);
 }
 
