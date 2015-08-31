@@ -2505,28 +2505,65 @@ DISAS_INSN(suba)
     tcg_gen_sub_i32(reg, reg, src);
 }
 
+static void subx(TCGv res, TCGv src, TCGv reg)
+{
+    TCGv z, tmp1, tmp2;
+
+    /* Perform subtract with borrow.  */
+    z = tcg_const_i32(0);
+    tcg_gen_add2_i32(res, QREG_CC_X, src, z, QREG_CC_X, z);
+    tcg_gen_sub2_i32(res, QREG_CC_X, reg, z, res, QREG_CC_X);
+    tcg_temp_free(z);
+
+    /* compute flags */
+
+    tcg_gen_andi_i32(QREG_CC_X, QREG_CC_X, 1); /* X */
+
+   /* Z: cleared if results is nonzero, unchanged otherwise */
+
+    tmp1 = tcg_temp_new();
+    tcg_gen_andi_i32(QREG_CC_DEST, QREG_CC_DEST, CCF_Z);
+    tcg_gen_setcondi_i32(TCG_COND_EQ, tmp1, res, 0);
+    tcg_gen_shli_i32(tmp1, tmp1, 2);
+    tcg_gen_and_i32(QREG_CC_DEST, QREG_CC_DEST, tmp1); /* Z */
+
+    tcg_gen_or_i32(QREG_CC_DEST, QREG_CC_DEST, QREG_CC_X);  /* C */
+
+    /* Compute signed-overflow for subtraction.  */
+
+    tmp2 = tcg_temp_new();
+    tcg_gen_xor_i32(tmp1, res, reg);
+    tcg_gen_xor_i32(tmp2, reg, src);
+    tcg_gen_and_i32(tmp1, tmp1, tmp2);
+    tcg_temp_free(tmp2);
+    tcg_gen_setcondi_i32(TCG_COND_NE, tmp1, tmp1, 0);
+    tcg_gen_shli_i32(tmp1, tmp1, 1);
+    tcg_gen_or_i32(QREG_CC_DEST, QREG_CC_DEST, tmp1); /* V */
+
+    tcg_gen_setcondi_i32(TCG_COND_LT, tmp1, res, 0);
+    tcg_gen_shli_i32(tmp1, tmp1, 3);
+    tcg_gen_or_i32(QREG_CC_DEST, QREG_CC_DEST, tmp1); /* N */
+    tcg_temp_free(tmp1);
+}
+
 DISAS_INSN(subx_reg)
 {
     TCGv reg;
     TCGv src;
+    TCGv res;
     int opsize;
 
     opsize = insn_opsize(insn, 6);
 
     gen_flush_flags(s);
-    reg = DREG(insn, 9);
-    src = DREG(insn, 0);
-    switch(opsize) {
-    case OS_BYTE:
-        gen_helper_subx8_cc(reg, cpu_env, reg, src);
-        break;
-    case OS_WORD:
-        gen_helper_subx16_cc(reg, cpu_env, reg, src);
-        break;
-    case OS_LONG:
-        gen_helper_subx32_cc(reg, cpu_env, reg, src);
-        break;
-    }
+    reg = gen_extend(DREG(insn, 9), opsize, 1);
+    src = gen_extend(DREG(insn, 0), opsize, 1);
+    res = tcg_temp_new();
+
+    subx(res, src, reg);
+
+    gen_partset_reg(opsize, DREG(insn, 9), res);
+    tcg_temp_free(res);
     set_cc_op(s, CC_OP_FLAGS);
 }
 
@@ -2535,6 +2572,7 @@ DISAS_INSN(subx_mem)
     TCGv src;
     TCGv addr_src;
     TCGv reg;
+    TCGv res;
     TCGv addr_reg;
     int opsize;
 
@@ -2550,20 +2588,13 @@ DISAS_INSN(subx_mem)
     tcg_gen_subi_i32(addr_reg, addr_reg, opsize);
     reg = gen_load(s, opsize, addr_reg, 0);
 
-    switch(opsize) {
-    case OS_BYTE:
-        gen_helper_subx8_cc(reg, cpu_env, reg, src);
-        break;
-    case OS_WORD:
-        gen_helper_subx16_cc(reg, cpu_env, reg, src);
-        break;
-    case OS_LONG:
-        gen_helper_subx32_cc(reg, cpu_env, reg, src);
-        break;
-    }
+    res = tcg_temp_new();
+
+    subx(res, src, reg);
+
     set_cc_op(s, CC_OP_FLAGS);
 
-    gen_store(s, opsize, addr_reg, reg);
+    gen_store(s, opsize, addr_reg, res);
 }
 
 DISAS_INSN(mov3q)
