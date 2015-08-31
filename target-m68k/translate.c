@@ -2749,98 +2749,55 @@ DISAS_INSN(addx_mem)
     set_cc_op(s, CC_OP_FLAGS);
 }
 
-/* TODO: This could be implemented without helper functions.  */
-DISAS_INSN(shift8_im)
-{
-    TCGv reg;
-    int tmp;
-    TCGv shift;
-    TCGv dest;
-
-    reg = DREG(insn, 0);
-    tmp = (insn >> 9) & 7;
-    if (tmp == 0)
-        tmp = 8;
-    shift = tcg_const_i32(tmp);
-    dest = tcg_temp_new_i32();
-    /* No need to flush flags becuse we know we will set C flag.  */
-    if (insn & 0x100) {
-        if (insn & 8) {
-            gen_helper_shl8_cc(dest, cpu_env, reg, shift);
-        } else {
-            gen_helper_sal8_cc(dest, cpu_env, reg, shift);
-        }
-    } else {
-        if (insn & 8) {
-            gen_helper_shr8_cc(dest, cpu_env, reg, shift);
-        } else {
-            gen_helper_sar8_cc(dest, cpu_env, reg, shift);
-        }
-    }
-    gen_partset_reg(OS_BYTE, reg, dest);
-    set_cc_op(s, CC_OP_SHIFTB);
-}
-
-/* TODO: This could be implemented without helper functions.  */
-DISAS_INSN(shift16_im)
-{
-    TCGv reg;
-    int tmp;
-    TCGv shift;
-    TCGv dest;
-
-    reg = DREG(insn, 0);
-    tmp = (insn >> 9) & 7;
-    if (tmp == 0)
-        tmp = 8;
-    shift = tcg_const_i32(tmp);
-    dest = tcg_temp_new_i32();
-    /* No need to flush flags becuse we know we will set C flag.  */
-    if (insn & 0x100) {
-        if (insn & 8) {
-            gen_helper_shl16_cc(dest, cpu_env, reg, shift);
-        } else {
-            gen_helper_sal16_cc(dest, cpu_env, reg, shift);
-        }
-    } else {
-        if (insn & 8) {
-            gen_helper_shr16_cc(dest, cpu_env, reg, shift);
-        } else {
-            gen_helper_sar16_cc(dest, cpu_env, reg, shift);
-        }
-    }
-    gen_partset_reg(OS_WORD, reg, dest);
-    set_cc_op(s, CC_OP_SHIFTW);
-}
-
-
-/* TODO: This could be implemented without helper functions.  */
 DISAS_INSN(shift_im)
 {
-    TCGv reg;
-    int tmp;
-    TCGv shift;
+    int count = (insn >> 9) & 7;
+    int arith = !(insn & 8);
+    int shift_left = insn & 0x100;
+    int opsize = insn_opsize(insn, 6);
+    TCGv reg = gen_extend(DREG(insn, 0), opsize, arith);
+    TCGv tmp, old_sign;
 
-    reg = DREG(insn, 0);
-    tmp = (insn >> 9) & 7;
-    if (tmp == 0)
-        tmp = 8;
-    shift = tcg_const_i32(tmp);
-    /* No need to flush flags becuse we know we will set C flag.  */
-    if (insn & 0x100) {
-        if (insn & 8) {
-            gen_helper_shl32_cc(reg, cpu_env, reg, shift);
-        } else {
-            gen_helper_sal32_cc(reg, cpu_env, reg, shift);
-        }
+    old_sign = tcg_temp_new_i32();
+    tcg_gen_setcondi_i32(TCG_COND_LT, old_sign, reg, 0); /* N */
+    if (count == 0) {
+        count = 8;
+    }
+    if (shift_left) {
+        tcg_gen_shri_i32(QREG_CC_X, reg, 8 * opsize_bytes(opsize) - count);
+        tcg_gen_shli_i32(reg, reg, count);
     } else {
-        if (insn & 8) {
-            gen_helper_shr32_cc(reg, cpu_env, reg, shift);
+        tcg_gen_shri_i32(QREG_CC_X, reg, count - 1);
+        if (arith) {
+            tcg_gen_sari_i32(reg, reg, count);
         } else {
-            gen_helper_sar32_cc(reg, cpu_env, reg, shift);
+            tcg_gen_shri_i32(reg, reg, count);
         }
     }
-    set_cc_op(s, CC_OP_SHIFT);
+    tcg_gen_andi_i32(QREG_CC_X, QREG_CC_X, 1);
+    /* compute flags */
+    tcg_gen_mov_i32(QREG_CC_DEST, QREG_CC_X); /* C always equal to X */
+
+    tmp = tcg_temp_new_i32();
+    tcg_gen_setcondi_i32(TCG_COND_LT, tmp, reg, 0); /* N */
+    tcg_gen_deposit_i32(QREG_CC_DEST, QREG_CC_DEST, tmp, 3, 1);
+    /* Note that ColdFire always clears V, while M68000 sets it for
+       a change in the sign bit.  */
+    if (arith && m68k_feature(s->env, M68K_FEATURE_M68000)) {
+        tcg_gen_xor_i32(old_sign, old_sign, tmp); /* V */
+    } else {
+        tcg_gen_movi_i32(old_sign, 0); /* V */
+    }
+    tcg_gen_deposit_i32(QREG_CC_DEST, QREG_CC_DEST, old_sign, 1, 1);
+    tcg_temp_free(old_sign);
+
+    tcg_gen_setcondi_i32(TCG_COND_EQ, tmp, reg, 0); /* Z */
+    tcg_gen_deposit_i32(QREG_CC_DEST, QREG_CC_DEST, tmp, 2, 1);
+
+    tcg_temp_free(tmp);
+    set_cc_op(s, CC_OP_FLAGS);
+
+    gen_partset_reg(opsize, DREG(insn, 0), reg);
 }
 
 DISAS_INSN(shift8_reg)
@@ -4711,9 +4668,7 @@ void register_m68k_insns (CPUM68KState *env)
     INSN(adda,      d0c0, f0c0, M68000);
     INSN(shift_im,  e080, f0f0, CF_ISA_A);
     INSN(shift_reg, e0a0, f0f0, CF_ISA_A);
-    INSN(shift8_im, e000, f0f0, M68000);
-    INSN(shift16_im, e040, f0f0, M68000);
-    INSN(shift_im,  e080, f0f0, M68000);
+    INSN(shift_im,  e000, f030, M68000);
     INSN(shift8_reg, e020, f0f0, M68000);
     INSN(shift16_reg, e060, f0f0, M68000);
     INSN(shift_reg, e0a0, f0f0, M68000);
