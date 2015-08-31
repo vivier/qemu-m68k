@@ -148,13 +148,13 @@ typedef struct DisasContext {
 static void *gen_throws_exception;
 #define gen_last_qop NULL
 
-#define OS_BYTE     1
-#define OS_WORD     2
-#define OS_LONG     3
-#define OS_SINGLE   4
-#define OS_DOUBLE   5
-#define OS_EXTENDED 6
-#define OS_PACKED   7
+#define OS_BYTE     0
+#define OS_WORD     1
+#define OS_LONG     2
+#define OS_SINGLE   3
+#define OS_DOUBLE   4
+#define OS_EXTENDED 5
+#define OS_PACKED   6
 
 typedef void (*disas_proc)(CPUM68KState *env, DisasContext *s, uint16_t insn);
 
@@ -1497,11 +1497,11 @@ DISAS_INSN(abcd_mem)
     TCGv addr_dest;
 
     addr_src = AREG(insn, 0);
-    tcg_gen_subi_i32(addr_src, addr_src, OS_BYTE);
+    tcg_gen_subi_i32(addr_src, addr_src, opsize_bytes(OS_BYTE));
     src = gen_load(s, OS_BYTE, addr_src, 0);
 
     addr_dest = AREG(insn, 9);
-    tcg_gen_subi_i32(addr_dest, addr_dest, OS_BYTE);
+    tcg_gen_subi_i32(addr_dest, addr_dest, opsize_bytes(OS_BYTE));
     dest = gen_load(s, OS_BYTE, addr_dest, 0);
 
     gen_flush_flags(s);
@@ -1529,11 +1529,11 @@ DISAS_INSN(sbcd_mem)
     TCGv addr_dest;
 
     addr_src = AREG(insn, 0);
-    tcg_gen_subi_i32(addr_src, addr_src, OS_BYTE);
+    tcg_gen_subi_i32(addr_src, addr_src, opsize_bytes(OS_BYTE));
     src = gen_load(s, OS_BYTE, addr_src, 0);
 
     addr_dest = AREG(insn, 9);
-    tcg_gen_subi_i32(addr_dest, addr_dest, OS_BYTE);
+    tcg_gen_subi_i32(addr_dest, addr_dest, opsize_bytes(OS_BYTE));
     dest = gen_load(s, OS_BYTE, addr_dest, 0);
 
     gen_flush_flags(s);
@@ -2581,11 +2581,11 @@ DISAS_INSN(subx_mem)
     gen_flush_flags(s);
 
     addr_src = AREG(insn, 0);
-    tcg_gen_subi_i32(addr_src, addr_src, opsize);
+    tcg_gen_subi_i32(addr_src, addr_src, opsize_bytes(opsize));
     src = gen_load(s, opsize, addr_src, 0);
 
     addr_reg = AREG(insn, 9);
-    tcg_gen_subi_i32(addr_reg, addr_reg, opsize);
+    tcg_gen_subi_i32(addr_reg, addr_reg, opsize_bytes(opsize));
     reg = gen_load(s, opsize, addr_reg, 0);
 
     res = tcg_temp_new();
@@ -2823,11 +2823,11 @@ DISAS_INSN(addx_mem)
     gen_flush_flags(s);
 
     addr_src = AREG(insn, 0);
-    tcg_gen_subi_i32(addr_src, addr_src, opsize);
+    tcg_gen_subi_i32(addr_src, addr_src, opsize_bytes(opsize));
     src = gen_load(s, opsize, addr_src, 0);
 
     addr_reg = AREG(insn, 9);
-    tcg_gen_subi_i32(addr_reg, addr_reg, opsize);
+    tcg_gen_subi_i32(addr_reg, addr_reg, opsize_bytes(opsize));
     reg = gen_load(s, opsize, addr_reg, 0);
     res = tcg_temp_new();
 
