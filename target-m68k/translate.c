@@ -1547,7 +1547,7 @@ DISAS_INSN(nbcd)
     TCGv dest;
     TCGv addr;
 
-    SRC_EA(env, dest, OS_BYTE, -1, &addr);
+    SRC_EA(env, dest, OS_BYTE, 1, &addr);
 
     gen_flush_flags(s);
     gen_helper_sbcd_cc(dest, cpu_env, dest, tcg_const_i32(0));
@@ -1570,11 +1570,11 @@ DISAS_INSN(addsub)
     reg = DREG(insn, 9);
     dest = tcg_temp_new();
     if (insn & 0x100) {
-        SRC_EA(env, tmp, opsize, -1, &addr);
+        SRC_EA(env, tmp, opsize, 1, &addr);
         src = reg;
     } else {
         tmp = reg;
-        SRC_EA(env, src, opsize, -1, NULL);
+        SRC_EA(env, src, opsize, 1, NULL);
     }
     if (add) {
         tcg_gen_add_i32(dest, tmp, src);
@@ -1817,7 +1817,7 @@ DISAS_INSN(arith_im)
     default:
        abort();
     }
-    SRC_EA(env, src1, opsize, -1, (op == 6) ? NULL : &addr);
+    SRC_EA(env, src1, opsize, 1, (op == 6) ? NULL : &addr);
     dest = tcg_temp_new();
     switch (op) {
     case 0: /* ori */
@@ -1979,7 +1979,7 @@ DISAS_INSN(negx)
 
     opsize = insn_opsize(insn, 6);
     gen_flush_flags(s);
-    SRC_EA(env, src, opsize, -1, &addr);
+    SRC_EA(env, src, opsize, 1, &addr);
     dest = tcg_temp_new();
 
     /* Perform subtraction with borrow.  */
@@ -2078,7 +2078,7 @@ DISAS_INSN(neg)
     int opsize;
 
     opsize = insn_opsize(insn, 6);
-    SRC_EA(env, src1, opsize, -1, &addr);
+    SRC_EA(env, src1, opsize, 1, &addr);
     dest = tcg_temp_new();
     tcg_gen_neg_i32(dest, src1);
     SET_CC_OP(opsize, SUB);
@@ -2138,7 +2138,7 @@ DISAS_INSN(not)
     int opsize;
 
     opsize = insn_opsize(insn, 6);
-    SRC_EA(env, src1, opsize, -1, &addr);
+    SRC_EA(env, src1, opsize, 1, &addr);
     dest = tcg_temp_new();
     tcg_gen_not_i32(dest, src1);
     DEST_EA(env, insn, opsize, dest, &addr);
@@ -2203,7 +2203,7 @@ DISAS_INSN(tst)
     TCGv tmp;
 
     opsize = insn_opsize(insn, 6);
-    SRC_EA(env, tmp, opsize, -1, NULL);
+    SRC_EA(env, tmp, opsize, 1, NULL);
     gen_logic_cc(s, tmp, opsize);
 }
 
@@ -2366,7 +2366,7 @@ DISAS_INSN(addsubq)
         opsize = OS_LONG;
     } else
         opsize = insn_opsize(insn, 6);
-    SRC_EA(env, src, opsize, -1, &addr);
+    SRC_EA(env, src, opsize, 1, &addr);
     imm = (insn >> 9) & 7;
     if (imm == 0)
         imm = 8;
@@ -2484,11 +2484,11 @@ DISAS_INSN(or)
     reg = DREG(insn, 9);
     dest = tcg_temp_new();
     if (insn & 0x100) {
-        SRC_EA(env, src, opsize, -1, &addr);
+        SRC_EA(env, src, opsize, 1, &addr);
         tcg_gen_or_i32(dest, src, reg);
         DEST_EA(env, insn, opsize, dest, &addr);
     } else {
-        SRC_EA(env, src, opsize, -1, NULL);
+        SRC_EA(env, src, opsize, 1, NULL);
         tcg_gen_or_i32(dest, src, reg);
         gen_partset_reg(opsize, reg, dest);
     }
@@ -2500,7 +2500,7 @@ DISAS_INSN(suba)
     TCGv src;
     TCGv reg;
 
-    SRC_EA(env, src, (insn & 0x100) ? OS_LONG : OS_WORD, -1, NULL);
+    SRC_EA(env, src, (insn & 0x100) ? OS_LONG : OS_WORD, 1, NULL);
     reg = AREG(insn, 9);
     tcg_gen_sub_i32(reg, reg, src);
 }
@@ -2618,7 +2618,7 @@ DISAS_INSN(cmp)
     int opsize;
 
     opsize = insn_opsize(insn, 6);
-    SRC_EA(env, src, opsize, -1, NULL);
+    SRC_EA(env, src, opsize, 1, NULL);
     reg = DREG(insn, 9);
     dest = tcg_temp_new();
     tcg_gen_sub_i32(dest, reg, src);
@@ -2674,7 +2674,7 @@ DISAS_INSN(eor)
         return;
     }
 
-    SRC_EA(env, src, opsize, -1, &addr);
+    SRC_EA(env, src, opsize, 1, &addr);
     reg = DREG(insn, 9);
     dest = tcg_temp_new();
     tcg_gen_xor_i32(dest, src, reg);
@@ -2725,11 +2725,11 @@ DISAS_INSN(and)
     opsize = insn_opsize(insn, 6);
     reg = DREG(insn, 9);
     if (insn & 0x100) {
-        SRC_EA(env, src, opsize, -1, &addr);
+        SRC_EA(env, src, opsize, 1, &addr);
         tcg_gen_and_i32(dest, src, reg);
         DEST_EA(env, insn, opsize, dest, &addr);
     } else {
-        SRC_EA(env, src, opsize, -1, NULL);
+        SRC_EA(env, src, opsize, 1, NULL);
         tcg_gen_and_i32(dest, src, reg);
         gen_partset_reg(opsize, reg, dest);
     }
@@ -2741,7 +2741,7 @@ DISAS_INSN(adda)
     TCGv src;
     TCGv reg;
 
-    SRC_EA(env, src, (insn & 0x100) ? OS_LONG : OS_WORD, -1, NULL);
+    SRC_EA(env, src, (insn & 0x100) ? OS_LONG : OS_WORD, 1, NULL);
     reg = AREG(insn, 9);
     tcg_gen_add_i32(reg, reg, src);
 }
