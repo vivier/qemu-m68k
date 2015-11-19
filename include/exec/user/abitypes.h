@@ -14,6 +14,10 @@
 #define ABI_LLONG_ALIGNMENT 2
 #endif
 
+#ifdef TARGET_SH4
+#define ABI_LLONG_ALIGNMENT 4
+#endif
+
 #ifndef ABI_SHORT_ALIGNMENT
 #define ABI_SHORT_ALIGNMENT 2
 #endif
