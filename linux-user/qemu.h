@@ -201,6 +201,8 @@ int get_osversion(void);
 void init_qemu_uname_release(void);
 void fork_start(void);
 void fork_end(int child);
+void clone_start(void);
+void clone_end(void);
 
 /* Creates the initial guest address space in the host memory space using
  * the given host start address hint and size.  The guest_start parameter

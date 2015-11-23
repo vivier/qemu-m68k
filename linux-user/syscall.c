@@ -4561,7 +4561,6 @@ abi_long do_arch_prctl(CPUX86State *env, int code, abi_ulong addr)
 #define NEW_STACK_SIZE 0x40000
 
 
-static pthread_mutex_t clone_lock = PTHREAD_MUTEX_INITIALIZER;
 typedef struct {
     CPUArchState *env;
     pthread_mutex_t mutex;
@@ -4580,6 +4579,10 @@ static void *clone_func(void *arg)
     CPUState *cpu;
     TaskState *ts;
 
+    /* info->mutex is released during pthread_cond_wait()
+     * all the following is done during this time
+     */
+    pthread_mutex_lock(&info->mutex);
     env = info->env;
     cpu = ENV_GET_CPU(env);
     thread_cpu = cpu;
@@ -4594,12 +4597,10 @@ static void *clone_func(void *arg)
     /* Enable signals.  */
     sigprocmask(SIG_SETMASK, &info->sigmask, NULL);
     /* Signal to the parent that we're ready.  */
-    pthread_mutex_lock(&info->mutex);
     pthread_cond_broadcast(&info->cond);
+    /* once the signal is received, pthread_cond_wait()
+     * wants to take again the lock, so release it */
     pthread_mutex_unlock(&info->mutex);
-    /* Wait until the parent has finshed initializing the tls state.  */
-    pthread_mutex_lock(&clone_lock);
-    pthread_mutex_unlock(&clone_lock);
     cpu_loop(env);
     /* never exits */
     return NULL;
@@ -4624,10 +4625,16 @@ static int do_fork(CPUArchState *env, unsigned int flags, abi_ulong newsp,
         flags &= ~(CLONE_VFORK | CLONE_VM);
 
     if (flags & CLONE_VM) {
-        TaskState *parent_ts = (TaskState *)cpu->opaque;
-        new_thread_info info;
+        TaskState *parent_ts;
         pthread_attr_t attr;
+        new_thread_info info = {
+            .mutex = PTHREAD_MUTEX_INITIALIZER,
+            .cond = PTHREAD_COND_INITIALIZER,
+        };
 
+        clone_start();
+
+        parent_ts = (TaskState *)cpu->opaque;
         ts = g_malloc0(sizeof(TaskState));
         init_task_state(ts);
         /* we create a new CPU instance. */
@@ -4649,12 +4656,7 @@ static int do_fork(CPUArchState *env, unsigned int flags, abi_ulong newsp,
             cpu_set_tls (new_env, newtls);
 
         /* Grab a mutex so that thread setup appears atomic.  */
-        pthread_mutex_lock(&clone_lock);
-
-        memset(&info, 0, sizeof(info));
-        pthread_mutex_init(&info.mutex, NULL);
         pthread_mutex_lock(&info.mutex);
-        pthread_cond_init(&info.cond, NULL);
         info.env = new_env;
         if (nptl_flags & CLONE_CHILD_SETTID)
             info.child_tidptr = child_tidptr;
@@ -4684,9 +4686,7 @@ static int do_fork(CPUArchState *env, unsigned int flags, abi_ulong newsp,
             ret = -1;
         }
         pthread_mutex_unlock(&info.mutex);
-        pthread_cond_destroy(&info.cond);
-        pthread_mutex_destroy(&info.mutex);
-        pthread_mutex_unlock(&clone_lock);
+        clone_end();
     } else {
         /* if no CLONE_VM, we consider it is a fork */
         if ((flags & ~(CSIGNAL | CLONE_NPTL_FLAGS2)) != 0)

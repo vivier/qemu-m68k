@@ -103,10 +103,22 @@ static pthread_cond_t exclusive_resume = PTHREAD_COND_INITIALIZER;
 static int pending_cpus;
 
 /* Make sure everything is in a consistent state for calling fork().  */
-void fork_start(void)
+
+void clone_start(void)
 {
     pthread_mutex_lock(&tcg_ctx.tb_ctx.tb_lock);
     pthread_mutex_lock(&exclusive_lock);
+}
+
+void clone_end(void)
+{
+    pthread_mutex_unlock(&exclusive_lock);
+    pthread_mutex_unlock(&tcg_ctx.tb_ctx.tb_lock);
+}
+
+void fork_start(void)
+{
+    clone_start();
     mmap_fork_start();
 }
 
@@ -130,11 +142,9 @@ void fork_end(int child)
         pthread_mutex_init(&tcg_ctx.tb_ctx.tb_lock, NULL);
         gdbserver_fork(thread_cpu);
     } else {
-        pthread_mutex_unlock(&exclusive_lock);
-        pthread_mutex_unlock(&tcg_ctx.tb_ctx.tb_lock);
+        clone_end();
     }
 }
-
 /* Wait for pending exclusive operations to complete.  The exclusive lock
    must be held.  */
 static inline void exclusive_idle(void)
