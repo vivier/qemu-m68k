@@ -20,6 +20,7 @@
 #include <sys/mman.h>
 #include <sys/syscall.h>
 #include <sys/resource.h>
+#include <glib.h>
 
 #include "qemu.h"
 #include "qemu/path.h"
@@ -83,12 +84,17 @@ const char *qemu_uname_release;
    by remapping the process stack directly at the right place */
 unsigned long guest_stack_size = 8 * 1024 * 1024UL;
 
+static FILE *strace_fd;
+
 void gemu_log(const char *fmt, ...)
 {
     va_list ap;
 
+    if (strace_fd == NULL) {
+        strace_fd = stderr;
+    }
     va_start(ap, fmt);
-    vfprintf(stderr, fmt, ap);
+    vfprintf(strace_fd, fmt, ap);
     va_end(ap);
 }
 
@@ -3912,6 +3918,18 @@ static void handle_arg_strace(const char *arg)
     do_strace = 1;
 }
 
+static void handle_arg_strace_logfile(const char *arg)
+{
+    gchar *filename;
+
+    filename = g_strdup_printf("%s.%d", arg, getpid());
+    strace_fd = fopen(filename, "w");
+    if (strace_fd == NULL) {
+        strace_fd = stderr;
+    }
+    g_free(filename);
+}
+
 static void handle_arg_version(const char *arg)
 {
     printf("qemu-" TARGET_NAME " version " QEMU_VERSION QEMU_PKGVERSION
@@ -3962,8 +3980,10 @@ static const struct qemu_argument arg_table[] = {
      "pagesize",   "set the host page size to 'pagesize'"},
     {"singlestep", "QEMU_SINGLESTEP",  false, handle_arg_singlestep,
      "",           "run in singlestep mode"},
-    {"strace",     "QEMU_STRACE",      false, handle_arg_strace,
+    {"strace",     "QEMU_STRACE",      true, handle_arg_strace,
      "",           "log system calls"},
+    {"strace_logfile", "QEMU_STRACE_FILENAME", true, handle_arg_strace_logfile,
+     "",           "log system calls to 'logfile' (default stderr)"},
     {"seed",       "QEMU_RAND_SEED",   true,  handle_arg_randseed,
      "",           "Seed for pseudo-random number generator"},
     {"version",    "QEMU_VERSION",     false, handle_arg_version,
