@@ -82,16 +82,20 @@ struct vm86_saved_state {
 
 #define MAX_SIGQUEUE_SIZE 1024
 
-struct sigqueue {
-    struct sigqueue *next;
+struct emulated_sigtable {
+    int pending; /* true if signal is pending */
     target_siginfo_t info;
 };
 
-struct emulated_sigtable {
-    int pending; /* true if signal is pending */
-    struct sigqueue *first;
-    struct sigqueue info; /* in order to always have memory for the
-                             first signal, we put it here */
+struct sigqueue_rt {
+    struct sigqueue_rt *next;
+    target_siginfo_t    info;
+};
+
+struct emulated_sigtable_rt {
+    struct sigqueue_rt *first;
+    struct sigqueue_rt *last;
+    struct sigqueue_rt reserved;
 };
 
 /* NOTE: we force a big alignment so that the stack stored after is
@@ -131,9 +135,10 @@ typedef struct TaskState {
     struct image_info *info;
     struct linux_binprm *bprm;
 
-    struct emulated_sigtable sigtab[TARGET_NSIG];
-    struct sigqueue sigqueue_table[MAX_SIGQUEUE_SIZE]; /* siginfo queue */
-    struct sigqueue *first_free; /* first free siginfo queue entry */
+    struct emulated_sigtable sigtab[TARGET_SIGRTMIN];
+    struct emulated_sigtable_rt sigtab_rt[TARGET_NSIG - TARGET_SIGRTMIN + 1];
+    struct sigqueue_rt sigqueue_table[MAX_SIGQUEUE_SIZE]; /* siginfo queue */
+    struct sigqueue_rt *first_free; /* first free siginfo queue entry */
     int signal_pending; /* non zero if a signal may be pending */
 } __attribute__((aligned(16))) TaskState;
 

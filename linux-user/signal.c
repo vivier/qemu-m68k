@@ -417,22 +417,17 @@ void signal_init(void)
 
 /* signal queue handling */
 
-static inline struct sigqueue *alloc_sigqueue(CPUArchState *env)
+static inline struct sigqueue_rt *alloc_sigqueue(TaskState *ts)
 {
-    CPUState *cpu = ENV_GET_CPU(env);
-    TaskState *ts = cpu->opaque;
-    struct sigqueue *q = ts->first_free;
+    struct sigqueue_rt *q = ts->first_free;
     if (!q)
         return NULL;
     ts->first_free = q->next;
     return q;
 }
 
-static inline void free_sigqueue(CPUArchState *env, struct sigqueue *q)
+static inline void free_sigqueue(TaskState *ts, struct sigqueue_rt *q)
 {
-    CPUState *cpu = ENV_GET_CPU(env);
-    TaskState *ts = cpu->opaque;
-
     q->next = ts->first_free;
     ts->first_free = q;
 }
@@ -495,8 +490,6 @@ int queue_signal(CPUArchState *env, int sig, target_siginfo_t *info)
 {
     CPUState *cpu = ENV_GET_CPU(env);
     TaskState *ts = cpu->opaque;
-    struct emulated_sigtable *k;
-    struct sigqueue *q, **pq;
     abi_ulong handler;
     int queue;
 
@@ -504,7 +497,6 @@ int queue_signal(CPUArchState *env, int sig, target_siginfo_t *info)
     fprintf(stderr, "queue_signal: sig=%d\n",
             sig);
 #endif
-    k = &ts->sigtab[sig - 1];
     queue = gdb_queuesig ();
     handler = sigact_table[sig - 1]._sa_handler;
 
@@ -520,53 +512,98 @@ int queue_signal(CPUArchState *env, int sig, target_siginfo_t *info)
         handler = TARGET_SIG_DFL;
     }
 
+    /*
+     * handler: SIG_DFLT
+     */
+
     if (!queue && handler == TARGET_SIG_DFL) {
-        if (sig == TARGET_SIGTSTP || sig == TARGET_SIGTTIN || sig == TARGET_SIGTTOU) {
+
+        if (sig == TARGET_SIGTSTP ||
+            sig == TARGET_SIGTTIN ||
+            sig == TARGET_SIGTTOU) {
             kill(getpid(),SIGSTOP);
-            return 0;
-        } else
+            return 0; /* indicate ignored */
+        }
+
         /* default handler : ignore some signal. The other are fatal */
+
         if (sig != TARGET_SIGCHLD &&
             sig != TARGET_SIGURG &&
             sig != TARGET_SIGWINCH &&
             sig != TARGET_SIGCONT) {
-            force_sig(sig);
-        } else {
-            return 0; /* indicate ignored */
+            force_sig(sig); /* no return */
         }
-    } else if (!queue && handler == TARGET_SIG_IGN) {
+
+        return 0; /* indicate ignored */
+    }
+
+    /* handler: SIG_IGN */
+
+    if (!queue && handler == TARGET_SIG_IGN) {
         /* ignore signal */
         return 0;
-    } else if (!queue && handler == TARGET_SIG_ERR) {
-        force_sig(sig);
-    } else {
-        pq = &k->first;
-        if (sig < TARGET_SIGRTMIN) {
-            /* if non real time signal, we queue exactly one signal */
-            if (!k->pending)
-                q = &k->info;
-            else
-                return 0;
+    }
+
+    /* handler: SIG_ERR */
+
+    if (!queue && handler == TARGET_SIG_ERR) {
+        force_sig(sig); /* no return */
+    }
+
+    /* handler: user defined */
+
+    /* real-time signals */
+
+    if (sig >= TARGET_SIGRTMIN) {
+        struct emulated_sigtable_rt *k;
+        struct sigqueue_rt *next, *last;
+
+        k = &ts->sigtab_rt[sig - TARGET_SIGRTMIN];
+
+        /* real-time signal are not ignored
+         * when there is already one pending signal
+         */
+
+        if (k->first == NULL) {
+            next = &k->reserved;
         } else {
-            if (!k->pending) {
-                /* first signal */
-                q = &k->info;
-            } else {
-                q = alloc_sigqueue(env);
-                if (!q)
-                    return -EAGAIN;
-                while (*pq != NULL)
-                    pq = &(*pq)->next;
+            next = alloc_sigqueue(ts);
+            if (!next) {
+                return -EAGAIN;
             }
         }
-        *pq = q;
-        q->info = *info;
-        q->next = NULL;
+
+        next->info = *info;
+        next->next = NULL;
+
+        if (k->first) {
+            last = k->last;
+            k->last = next;
+            last->next = next;
+        } else {
+            k->last = next;
+            k->first = next;
+        }
+    } else {
+        struct emulated_sigtable *k;
+
+        k = &ts->sigtab[sig - 1];
+
+        /* we queue exactly one signal */
+
+        if (k->pending) {
+            return 0;
+        }
+
         k->pending = 1;
-        /* signal that a new signal is pending */
-        ts->signal_pending = 1;
-        return 1; /* indicates that the signal was queued */
+        k->info = *info;
     }
+
+    /* signal that a new signal is pending */
+
+    ts->signal_pending = 1;
+
+    return 1; /* indicates that the signal was queued */
 }
 
 static void host_signal_handler(int host_signum, siginfo_t *info,
@@ -5569,41 +5606,19 @@ long do_rt_sigreturn(CPUArchState *env)
 
 #endif
 
-void process_pending_signals(CPUArchState *cpu_env)
+static void handle_signal(CPUArchState *cpu_env,
+                          int sig, target_siginfo_t *siginfo)
 {
     CPUState *cpu = ENV_GET_CPU(cpu_env);
-    int sig;
+    TaskState *ts = cpu->opaque;
     abi_ulong handler;
+    struct target_sigaction *sa;
     sigset_t set, old_set;
     target_sigset_t target_old_set;
-    struct emulated_sigtable *k;
-    struct target_sigaction *sa;
-    struct sigqueue *q;
-    TaskState *ts = cpu->opaque;
 
-    if (!ts->signal_pending)
-        return;
-
-    /* FIXME: This is not threadsafe.  */
-    k = ts->sigtab;
-    for(sig = 1; sig <= TARGET_NSIG; sig++) {
-        if (k->pending)
-            goto handle_signal;
-        k++;
-    }
-    /* if no signal is pending, just return */
-    ts->signal_pending = 0;
-    return;
-
- handle_signal:
 #ifdef DEBUG_SIGNAL
     fprintf(stderr, "qemu: process signal %d\n", sig);
 #endif
-    /* dequeue signal */
-    q = k->first;
-    k->first = q->next;
-    if (!k->first)
-        k->pending = 0;
 
     sig = gdb_handlesig(cpu, sig);
     if (!sig) {
@@ -5623,8 +5638,13 @@ void process_pending_signals(CPUArchState *cpu_env)
     }
 
     if (handler == TARGET_SIG_DFL) {
-        /* default handler : ignore some signal. The other are job control or fatal */
-        if (sig == TARGET_SIGTSTP || sig == TARGET_SIGTTIN || sig == TARGET_SIGTTOU) {
+        /* default handler : ignore some signal.
+         * The other are job control or fatal
+         */
+
+        if (sig == TARGET_SIGTSTP ||
+            sig == TARGET_SIGTTIN ||
+            sig == TARGET_SIGTTOU) {
             kill(getpid(),SIGSTOP);
         } else if (sig != TARGET_SIGCHLD &&
                    sig != TARGET_SIGURG &&
@@ -5632,45 +5652,108 @@ void process_pending_signals(CPUArchState *cpu_env)
                    sig != TARGET_SIGCONT) {
             force_sig(sig);
         }
-    } else if (handler == TARGET_SIG_IGN) {
-        /* ignore sig */
-    } else if (handler == TARGET_SIG_ERR) {
-        force_sig(sig);
-    } else {
-        /* compute the blocked signals during the handler execution */
-        target_to_host_sigset(&set, &sa->sa_mask);
-        /* SA_NODEFER indicates that the current signal should not be
-           blocked during the handler */
-        if (!(sa->sa_flags & TARGET_SA_NODEFER))
-            sigaddset(&set, target_to_host_signal(sig));
-
-        /* block signals in the handler using Linux */
-        do_sigprocmask(SIG_BLOCK, &set, &old_set);
-        /* save the previous blocked signal state to restore it at the
-           end of the signal execution (see do_sigreturn) */
-        host_to_target_sigset_internal(&target_old_set, &old_set);
-
-        /* if the CPU is in VM86 mode, we restore the 32 bit values */
-#if defined(TARGET_I386) && !defined(TARGET_X86_64)
-        {
-            CPUX86State *env = cpu_env;
-            if (env->eflags & VM_MASK)
-                save_v86_state(env);
-        }
-#endif
-        /* prepare the stack frame of the virtual CPU */
-#if defined(TARGET_ABI_MIPSN32) || defined(TARGET_ABI_MIPSN64)
-        /* These targets do not have traditional signals.  */
-        setup_rt_frame(sig, sa, &q->info, &target_old_set, cpu_env);
-#else
-        if (sa->sa_flags & TARGET_SA_SIGINFO)
-            setup_rt_frame(sig, sa, &q->info, &target_old_set, cpu_env);
-        else
-            setup_frame(sig, sa, &target_old_set, cpu_env);
-#endif
-	if (sa->sa_flags & TARGET_SA_RESETHAND)
-            sa->_sa_handler = TARGET_SIG_DFL;
+        return;
     }
-    if (q != &k->info)
-        free_sigqueue(cpu_env, q);
+
+    if (handler == TARGET_SIG_IGN) {
+        /* ignore sig */
+        return;
+    }
+
+    if (handler == TARGET_SIG_ERR) {
+        force_sig(sig); /* no return */
+    }
+
+    /* compute the blocked signals during the handler execution */
+
+    target_to_host_sigset(&set, &sa->sa_mask);
+
+    /* SA_NODEFER indicates that the current signal should not be
+       blocked during the handler */
+
+    if (!(sa->sa_flags & TARGET_SA_NODEFER)) {
+        sigaddset(&set, target_to_host_signal(sig));
+    }
+
+    /* block signals in the handler using Linux */
+
+    do_sigprocmask(SIG_BLOCK, &set, &old_set);
+
+    /* save the previous blocked signal state to restore it at the
+       end of the signal execution (see do_sigreturn) */
+
+    host_to_target_sigset_internal(&target_old_set, &old_set);
+
+#if defined(TARGET_I386) && !defined(TARGET_X86_64)
+    /* if the CPU is in VM86 mode, we restore the 32 bit values */
+    if (((CPUX86State *)cpu_env)->eflags & VM_MASK) {
+        save_v86_state(env);
+    }
+#endif
+
+    /* prepare the stack frame of the virtual CPU */
+
+#if defined(TARGET_ABI_MIPSN32) || defined(TARGET_ABI_MIPSN64)
+    /* These targets do not have traditional signals.  */
+    setup_rt_frame(sig, sa, siginfo, &target_old_set, cpu_env);
+#else
+    if (sa->sa_flags & TARGET_SA_SIGINFO) {
+        setup_rt_frame(sig, sa, siginfo, &target_old_set, cpu_env);
+    } else {
+        setup_frame(sig, sa, &target_old_set, cpu_env);
+    }
+#endif
+
+    if (sa->sa_flags & TARGET_SA_RESETHAND) {
+        sa->_sa_handler = TARGET_SIG_DFL;
+    }
+}
+
+void process_pending_signals(CPUArchState *cpu_env)
+{
+    CPUState *cpu = ENV_GET_CPU(cpu_env);
+    TaskState *ts = cpu->opaque;
+    int sig;
+
+    if (!ts->signal_pending) {
+        return;
+    }
+
+    /* real-time signals */
+
+    for (sig = 0; sig < TARGET_NSIG - TARGET_SIGRTMIN + 1; sig++) {
+        struct sigqueue_rt *curr;
+
+        curr = ts->sigtab_rt[sig].first;
+
+        if (curr) {
+
+            /* dequeue signal */
+
+            if (curr->next == NULL) {
+                ts->sigtab_rt[sig].last = NULL;
+            }
+            ts->sigtab_rt[sig].first = curr->next;
+            handle_signal(cpu_env, sig + TARGET_SIGRTMIN, &curr->info);
+            if (curr != &ts->sigtab_rt[sig].reserved) {
+                free_sigqueue(ts, curr);
+            }
+            return;
+        }
+    }
+
+    /* non real-time signals */
+
+    for (sig = 0; sig < TARGET_SIGRTMIN; sig++) {
+        if (ts->sigtab[sig].pending) {
+            handle_signal(cpu_env, sig + 1, &ts->sigtab[sig].info);
+            ts->sigtab[sig].pending = 0;
+            return;
+        }
+    }
+
+    /* if no signal is pending, just return */
+
+    ts->signal_pending = 0;
+    return;
 }
