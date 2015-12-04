@@ -170,10 +170,8 @@ static void target_to_host_sigset_internal(sigset_t *d,
 void target_to_host_sigset(sigset_t *d, const target_sigset_t *s)
 {
     target_sigset_t s1;
-    int i;
 
-    for(i = 0;i < TARGET_NSIG_WORDS; i++)
-        s1.sig[i] = tswapal(s->sig[i]);
+    tswap_sigset(&s1, s);
     target_to_host_sigset_internal(d, &s1);
 }
 
