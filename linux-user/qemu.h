@@ -85,7 +85,6 @@ struct vm86_saved_state {
 struct sigqueue {
     struct sigqueue *next;
     target_siginfo_t info;
-    pid_t pid;
 };
 
 struct emulated_sigtable {
