@@ -2976,6 +2976,196 @@ void cpu_loop(CPUMBState *env)
 
 #ifdef TARGET_M68K
 
+static int do_cas(CPUM68KState *env)
+{
+    int size, is_cas;
+    int cmp1_reg, upd1_reg;
+    int cmp2_reg, upd2_reg;
+    uint32_t dest1, cmp1, addr1;
+    uint32_t dest2, cmp2, addr2;
+    int segv = 0;
+
+    start_exclusive();
+
+    /* cas_param bits
+     * 31    -> CAS(0) / CAS2(1)
+     * 11:13 -> update reg 2
+     * 8:10  -> cmp reg 2
+     * 5:7   -> update reg 1
+     * 2:4   -> cmp reg 1
+     * 0:1   -> opsize
+     */
+
+    is_cas = (env->cas_param & 0x80000000) == 0;
+
+    size = env->cas_param & 0x3;
+
+    cmp1_reg = (env->cas_param >> 2) & 7;
+    upd1_reg = (env->cas_param >> 5) & 7;
+    cmp2_reg = (env->cas_param >> 8) & 7;
+    upd2_reg = (env->cas_param >> 11) & 7;
+
+    addr1 = env->cas_addr1;
+    addr2 = env->cas_addr2;
+
+    switch (size) {
+    case OS_BYTE:
+        segv = get_user_u8(dest1, addr1);
+        cmp1 = (uint8_t)env->dregs[cmp1_reg];
+        env->cc_op = CC_OP_LOGICB;
+        break;
+    case OS_WORD:
+        segv = get_user_u16(dest1, addr1);
+        cmp1 = (uint16_t)env->dregs[cmp1_reg];
+        env->cc_op = CC_OP_LOGICW;
+        break;
+    case OS_LONG:
+    default:
+        segv = get_user_u32(dest1, addr1);
+        cmp1 = env->dregs[cmp1_reg];
+        env->cc_op = CC_OP_LOGIC;
+        break;
+    }
+    if (segv) {
+        env->mmu.ar = addr1;
+        goto done;
+    }
+    env->cc_dest = dest1 - cmp1;
+
+    if (is_cas) {
+        /* CAS */
+
+        /* if (addr1) == cmp1 then (addr1) = upd1 */
+
+        if (env->cc_dest == 0) {
+            switch (size) {
+            case OS_BYTE:
+                segv = put_user_u8(env->dregs[upd1_reg], addr1);
+                break;
+            case OS_WORD:
+                segv = put_user_u16(env->dregs[upd1_reg], addr1);
+                break;
+            case OS_LONG:
+                segv = put_user_u32(env->dregs[upd1_reg], addr1);
+                break;
+            default:
+                break;
+            }
+            if (segv) {
+                env->mmu.ar = addr1;
+            }
+            goto done;
+        }
+        /* else cmp1 = (addr1) */
+        switch (size) {
+        case OS_BYTE:
+            env->dregs[cmp1_reg] = deposit32(env->dregs[cmp1_reg],
+                                            0, 8, dest1);
+            break;
+        case OS_WORD:
+            env->dregs[cmp1_reg] = deposit32(env->dregs[cmp1_reg],
+                                            0, 16, dest1);
+            break;
+        case OS_LONG:
+            env->dregs[cmp1_reg] = dest1;
+            break;
+        default:
+            break;
+        }
+    } else {
+        /* CAS2 */
+        switch (size) {
+        case OS_BYTE:
+            segv = get_user_u8(dest2, addr2);
+            cmp2 = (uint8_t)env->dregs[cmp2_reg];
+            env->cc_op = CC_OP_LOGICB;
+            break;
+        case OS_WORD:
+            segv = get_user_u16(dest2, addr2);
+            cmp2 = (uint16_t)env->dregs[cmp2_reg];
+            env->cc_op = CC_OP_LOGICW;
+            break;
+        case OS_LONG:
+        default:
+            segv = get_user_u32(dest2, addr2);
+            cmp2 = env->dregs[cmp2_reg];
+            env->cc_op = CC_OP_LOGIC;
+            break;
+        }
+        if (segv) {
+            env->mmu.ar = addr2;
+            goto done;
+        }
+        /* if (addr1) == cmp1 && (addr2) == cmp2 then
+         *    (addr1) = upd1, (addr2) = udp2
+         */
+        if (env->cc_dest == 0) {
+            env->cc_dest = dest2 - cmp2;
+        }
+        if (env->cc_dest == 0) {
+            switch (size) {
+            case OS_BYTE:
+                segv = put_user_u8(env->dregs[upd1_reg], addr1);
+                break;
+            case OS_WORD:
+                segv = put_user_u16(env->dregs[upd1_reg], addr1);
+                break;
+            case OS_LONG:
+                segv = put_user_u32(env->dregs[upd1_reg], addr1);
+                break;
+            default:
+                break;
+            }
+            if (segv) {
+                env->mmu.ar = addr1;
+            }
+            switch (size) {
+            case OS_BYTE:
+                segv = put_user_u8(env->dregs[upd2_reg], addr2);
+                break;
+            case OS_WORD:
+                segv = put_user_u16(env->dregs[upd2_reg], addr2);
+                break;
+            case OS_LONG:
+                segv = put_user_u32(env->dregs[upd2_reg], addr2);
+                break;
+            default:
+                break;
+            }
+            if (segv) {
+                env->mmu.ar = addr2;
+            }
+            goto done;
+        }
+        /* else cmp1 = (addr1), cmp2 = (addr2) */
+        switch (size) {
+        case OS_BYTE:
+            env->dregs[cmp1_reg] = deposit32(env->dregs[cmp1_reg],
+                                            0, 8, dest1);
+            env->dregs[cmp2_reg] = deposit32(env->dregs[cmp2_reg],
+                                            0, 8, dest2);
+            break;
+        case OS_WORD:
+            env->dregs[cmp1_reg] = deposit32(env->dregs[cmp1_reg],
+                                            0, 16, dest1);
+            env->dregs[cmp2_reg] = deposit32(env->dregs[cmp2_reg],
+                                            0, 16, dest2);
+            break;
+        case OS_LONG:
+            env->dregs[cmp1_reg] = dest1;
+            env->dregs[cmp2_reg] = dest2;
+            break;
+        default:
+            break;
+        }
+    }
+
+done:
+    end_exclusive();
+
+    return segv;
+}
+
 void cpu_loop(CPUM68KState *env)
 {
     CPUState *cs = CPU(m68k_env_get_cpu(env));
@@ -3035,6 +3225,11 @@ void cpu_loop(CPUM68KState *env)
         case EXCP_INTERRUPT:
             /* just indicate that signals should be handled asap */
             break;
+        case EXCP_CAS:
+            if (!do_cas(env)) {
+                break;
+            }
+            /* fall through for segv */
         case EXCP_ACCESS:
             {
                 info.si_signo = TARGET_SIGSEGV;

@@ -30,6 +30,14 @@
 
 #include "fpu/softfloat.h"
 
+#define OS_BYTE     1
+#define OS_WORD     2
+#define OS_LONG     3
+#define OS_SINGLE   4
+#define OS_DOUBLE   5
+#define OS_EXTENDED 6
+#define OS_PACKED   7
+
 #define MAX_QREGS 32
 
 #define ELF_MACHINE	EM_68K
@@ -53,6 +61,7 @@
 
 #define EXCP_RTE            0x100
 #define EXCP_HALT_INSN      0x101
+#define EXCP_CAS            0x102
 #ifdef CONFIG_EMULOP
 #define EXCP_EXEC_RETURN    0x20000
 #endif
@@ -145,6 +154,14 @@ typedef struct CPUM68KState {
     int pending_level;
 
     uint32_t qregs[MAX_QREGS];
+
+#ifdef CONFIG_USER_ONLY
+    /* CAS/CAS2 parameters */
+
+    uint32_t cas_param;
+    uint32_t cas_addr1;
+    uint32_t cas_addr2;
+#endif
 
     CPU_COMMON
 
