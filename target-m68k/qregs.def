@@ -12,3 +12,8 @@ DEFO32(QUADH, quadh)
 DEFO32(MACSR, macsr)
 DEFO32(MAC_MASK, mac_mask)
 DEFO32(FPSR, fpsr)
+#ifdef CONFIG_USER_ONLY
+DEFO32(CAS_PARAM, cas_param)
+DEFO32(CAS_ADDR1, cas_addr1)
+DEFO32(CAS_ADDR2, cas_addr2)
+#endif

@@ -148,14 +148,6 @@ typedef struct DisasContext {
 static void *gen_throws_exception;
 #define gen_last_qop NULL
 
-#define OS_BYTE     1
-#define OS_WORD     2
-#define OS_LONG     3
-#define OS_SINGLE   4
-#define OS_DOUBLE   5
-#define OS_EXTENDED 6
-#define OS_PACKED   7
-
 typedef void (*disas_proc)(CPUM68KState *env, DisasContext *s, uint16_t insn);
 
 #ifdef DEBUG_DISPATCH
@@ -1872,22 +1864,10 @@ DISAS_INSN(arith_im)
 DISAS_INSN(cas)
 {
     int opsize;
-    TCGv dest;
-    TCGv tmp;
-    TCGv cmp;
-    TCGv update;
-    TCGv taddr;
     TCGv addr;
-    TCGv res;
     uint16_t ext;
-    TCGLabel *l1, *l2;
 
-    if ((insn & 0x3f) == 0x3c) {
-        /* CAS2: Not yet implemented */
-        gen_exception(s, s->pc - 4, EXCP_UNSUPPORTED);
-    }
-
-    switch((insn >> 9) & 3) {
+    switch ((insn >> 9) & 3) {
     case 1:
         opsize = OS_BYTE;
         break;
@@ -1902,35 +1882,156 @@ DISAS_INSN(cas)
     }
 
     ext = read_im16(env, s);
-    taddr = gen_lea(env, s, insn, opsize);
-    if (IS_NULL_QREG(taddr)) {
+
+    addr = gen_lea(env, s, insn, opsize);
+    if (IS_NULL_QREG(addr)) {
         gen_addr_fault(s);
         return;
     }
 
-    cmp = DREG(ext, 0);
-    update = DREG(ext, 6);
-    tmp = gen_load(s, opsize, taddr, 0);
-    dest = tcg_temp_local_new();
-    tcg_gen_mov_i32(dest, tmp);
-    addr = tcg_temp_local_new ();
-    tcg_gen_mov_i32(addr, taddr);
+#ifdef CONFIG_USER_ONLY
+    tcg_gen_mov_i32(QREG_CAS_ADDR1, addr);
+    tcg_gen_movi_i32(QREG_CAS_PARAM,
+                     (REG(ext, 6) << 5) | (REG(ext, 0) << 2) |
+                     opsize);
+    gen_exception(s, s->pc, EXCP_CAS);
+    s->is_jmp = DISAS_JUMP;
+#else
+    TCGv dest;
+    TCGv res;
+    TCGv cmp;
+    TCGv zero;
+
+    dest = gen_load(s, opsize, addr, 0);
+
+    zero = tcg_const_i32(0);
+    cmp = gen_extend(DREG(ext, 0), opsize, 0);
+
+    /* if  dest - cmp == 0 */
 
     res = tcg_temp_new();
     tcg_gen_sub_i32(res, dest, cmp);
+
+    /* then dest = update1 */
+
+    tcg_gen_movcond_i32(TCG_COND_EQ, dest,
+                        res, zero,
+                        DREG(ext, 6), dest);
+
+    /* else cmp = dest */
+
+    tcg_gen_movcond_i32(TCG_COND_NE, cmp,
+                        res, zero,
+                        dest, cmp);
+
+    gen_partset_reg(opsize, DREG(ext, 0), cmp);
+    gen_store(s, opsize, addr, dest);
     gen_logic_cc(s, res, opsize);
 
-    l1 = gen_new_label();
-    l2 = gen_new_label();
+    tcg_temp_free_i32(res);
+    tcg_temp_free_i32(zero);
+#endif
+}
 
-    gen_jmpcc(s, 6 /* !Z */, l1);
-    gen_store(s, opsize, addr, update);
-    tcg_gen_br(l2);
-    gen_set_label(l1);
-    tcg_gen_mov_i32(cmp, dest);
-    gen_set_label(l2);
-    tcg_temp_free(dest);
-    tcg_temp_free(addr);
+DISAS_INSN(cas2)
+{
+    int opsize;
+    uint16_t ext1, ext2;
+    TCGv addr1, addr2;
+
+    switch ((insn >> 9) & 3) {
+    case 1:
+        opsize = OS_BYTE;
+        break;
+    case 2:
+        opsize = OS_WORD;
+        break;
+    case 3:
+        opsize = OS_LONG;
+        break;
+    default:
+        abort();
+    }
+
+    ext1 = read_im16(env, s);
+
+    if (ext1 & 0x8000) {
+        /* Address Register */
+        addr1 = AREG(ext1, 12);
+    } else {
+        /* Data Register */
+        addr1 = DREG(ext1, 12);
+    }
+
+    ext2 = read_im16(env, s);
+    if (ext2 & 0x8000) {
+        /* Address Register */
+        addr2 = AREG(ext2, 12);
+    } else {
+        /* Data Register */
+        addr2 = DREG(ext2, 12);
+    }
+#ifdef CONFIG_USER_ONLY
+    tcg_gen_mov_i32(QREG_CAS_ADDR1, addr1);
+    tcg_gen_mov_i32(QREG_CAS_ADDR2, addr2);
+    tcg_gen_movi_i32(QREG_CAS_PARAM,
+                     (REG(ext2, 6) << 11) | (REG(ext2, 0) << 8) |
+                     (REG(ext1, 6) << 5) | (REG(ext1, 0) << 2) |
+                     0x80000000 | opsize);
+    gen_exception(s, s->pc, EXCP_CAS);
+    s->is_jmp = DISAS_JUMP;
+#else
+    TCGv cmp1, cmp2;
+    TCGv dest1, dest2;
+    TCGv res1, res2;
+    TCGv zero;
+    zero = tcg_const_i32(0);
+    dest1 = gen_load(s, opsize, addr1, 0);
+    cmp1 = gen_extend(DREG(ext1, 0), opsize, 0);
+
+    res1 = tcg_temp_new();
+    tcg_gen_sub_i32(res1, dest1, cmp1);
+    dest2 = gen_load(s, opsize, addr2, 0);
+    cmp2 = gen_extend(DREG(ext2, 0), opsize, 0);
+
+    res2 = tcg_temp_new();
+    tcg_gen_sub_i32(res2, dest2, cmp2);
+
+    /* if dest1 - cmp1 == 0 and dest2 - cmp2 == 0 */
+
+    tcg_gen_movcond_i32(TCG_COND_EQ, res1,
+                        res1, zero,
+                        res2, res1);
+
+    /* then dest1 = update1, dest2 = update2 */
+
+    tcg_gen_movcond_i32(TCG_COND_EQ, dest1,
+                        res1, zero,
+                        DREG(ext1, 6), dest1);
+    tcg_gen_movcond_i32(TCG_COND_EQ, dest2,
+                        res1, zero,
+                        DREG(ext2, 6), dest2);
+
+    /* else cmp1 = dest1, cmp2 = dest2 */
+
+    tcg_gen_movcond_i32(TCG_COND_NE, cmp1,
+                        res1, zero,
+                        dest1, cmp1);
+    tcg_gen_movcond_i32(TCG_COND_NE, cmp2,
+                        res1, zero,
+                        dest2, cmp2);
+
+    gen_partset_reg(opsize, DREG(ext1, 0), cmp1);
+    gen_partset_reg(opsize, DREG(ext2, 0), cmp2);
+    gen_store(s, opsize, addr1, dest1);
+    gen_store(s, opsize, addr2, dest2);
+
+    gen_logic_cc(s, res1, opsize);
+
+    tcg_temp_free_i32(res2);
+    tcg_temp_free_i32(res1);
+    tcg_temp_free_i32(zero);
+#endif
 }
 
 DISAS_INSN(byterev)
@@ -4555,6 +4656,7 @@ void register_m68k_insns (CPUM68KState *env)
     INSN(arith_im,  0c00, ff38, CF_ISA_A);
     INSN(arith_im,  0c00, ff00, M68000);
     INSN(cas,       08c0, f9c0, CAS);
+    INSN(cas2,      08fc, f9ff, CAS);
     INSN(bitop_im,  0800, ffc0, CF_ISA_A);
     INSN(bitop_im,  0800, ffc0, M68000);
     INSN(bitop_im,  0840, ffc0, CF_ISA_A);
