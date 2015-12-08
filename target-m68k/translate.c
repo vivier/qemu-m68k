@@ -514,14 +514,8 @@ static inline void gen_flush_flags(DisasContext *s)
     set_cc_op(s, CC_OP_FLAGS);
 }
 
-#define SET_CC_OP(opsize, op) do { \
-    switch (opsize) { \
-    case OS_BYTE: set_cc_op(s, CC_OP_##op##B); break; \
-    case OS_WORD: set_cc_op(s, CC_OP_##op##W); break; \
-    case OS_LONG: set_cc_op(s, CC_OP_##op); break; \
-    default: abort(); \
-    } \
-} while (0)
+#define SET_CC_OP(opsize, op) \
+    set_cc_op(s, CC_OP_##op##B + opsize)
 
 #define SET_X_FLAG(opsize, a, b) do { \
     switch (opsize) { \
@@ -1489,11 +1483,11 @@ DISAS_INSN(abcd_mem)
     TCGv addr_dest;
 
     addr_src = AREG(insn, 0);
-    tcg_gen_subi_i32(addr_src, addr_src, OS_BYTE);
+    tcg_gen_subi_i32(addr_src, addr_src, opsize_bytes(OS_BYTE));
     src = gen_load(s, OS_BYTE, addr_src, 0);
 
     addr_dest = AREG(insn, 9);
-    tcg_gen_subi_i32(addr_dest, addr_dest, OS_BYTE);
+    tcg_gen_subi_i32(addr_dest, addr_dest, opsize_bytes(OS_BYTE));
     dest = gen_load(s, OS_BYTE, addr_dest, 0);
 
     gen_flush_flags(s);
@@ -1521,11 +1515,11 @@ DISAS_INSN(sbcd_mem)
     TCGv addr_dest;
 
     addr_src = AREG(insn, 0);
-    tcg_gen_subi_i32(addr_src, addr_src, OS_BYTE);
+    tcg_gen_subi_i32(addr_src, addr_src, opsize_bytes(OS_BYTE));
     src = gen_load(s, OS_BYTE, addr_src, 0);
 
     addr_dest = AREG(insn, 9);
-    tcg_gen_subi_i32(addr_dest, addr_dest, OS_BYTE);
+    tcg_gen_subi_i32(addr_dest, addr_dest, opsize_bytes(OS_BYTE));
     dest = gen_load(s, OS_BYTE, addr_dest, 0);
 
     gen_flush_flags(s);
@@ -2828,11 +2822,11 @@ DISAS_INSN(addx_mem)
     gen_flush_flags(s);
 
     addr_src = AREG(insn, 0);
-    tcg_gen_subi_i32(addr_src, addr_src, opsize);
+    tcg_gen_subi_i32(addr_src, addr_src, opsize_bytes(opsize));
     src = gen_load(s, opsize, addr_src, 0);
 
     addr_reg = AREG(insn, 9);
-    tcg_gen_subi_i32(addr_reg, addr_reg, opsize);
+    tcg_gen_subi_i32(addr_reg, addr_reg, opsize_bytes(opsize));
     reg = gen_load(s, opsize, addr_reg, 0);
 
     switch(opsize) {
