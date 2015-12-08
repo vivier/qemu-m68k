@@ -30,13 +30,13 @@
 
 #include "fpu/softfloat.h"
 
-#define OS_BYTE     1
-#define OS_WORD     2
-#define OS_LONG     3
-#define OS_SINGLE   4
-#define OS_DOUBLE   5
-#define OS_EXTENDED 6
-#define OS_PACKED   7
+#define OS_BYTE     0
+#define OS_WORD     1
+#define OS_LONG     2
+#define OS_SINGLE   3
+#define OS_DOUBLE   4
+#define OS_EXTENDED 5
+#define OS_PACKED   6
 
 #define MAX_QREGS 32
 
