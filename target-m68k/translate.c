@@ -345,22 +345,21 @@ static TCGv gen_ldst(DisasContext *s, int opsize, TCGv addr, TCGv val,
     }
 }
 
-/* Read an 8-bit immediate constant */
-static inline uint32_t read_im8(CPUM68KState *env, DisasContext *s)
-{
-    uint32_t im;
-    im = cpu_ldsb_code(env, s->pc + 1);
-    s->pc += 2;
-    return im;
-}
 /* Read a 16-bit immediate constant */
-static inline uint32_t read_im16(CPUM68KState *env, DisasContext *s)
+static inline uint16_t read_im16(CPUM68KState *env, DisasContext *s)
 {
-    uint32_t im;
-    im = cpu_ldsw_code(env, s->pc);
+    uint16_t im;
+    im = cpu_lduw_code(env, s->pc);
     s->pc += 2;
     return im;
 }
+
+/* Read an 8-bit immediate constant */
+static inline uint8_t read_im8(CPUM68KState *env, DisasContext *s)
+{
+    return read_im16(env, s);
+}
+
 /* Read a 32-bit immediate constant.  */
 static inline uint32_t read_im32(CPUM68KState *env, DisasContext *s)
 {
@@ -409,8 +408,7 @@ static TCGv gen_lea_indexed(CPUM68KState *env, DisasContext *s, TCGv base)
     uint32_t bd, od;
 
     offset = s->pc;
-    ext = cpu_lduw_code(env, s->pc);
-    s->pc += 2;
+    ext = read_im16(env, s);
 
     if ((ext & 0x800) == 0 && !m68k_feature(s->env, M68K_FEATURE_WORD_INDEX))
         return NULL_QREG;
@@ -426,8 +424,7 @@ static TCGv gen_lea_indexed(CPUM68KState *env, DisasContext *s, TCGv base)
         if ((ext & 0x30) > 0x10) {
             /* base displacement */
             if ((ext & 0x30) == 0x20) {
-                bd = cpu_ldsw_code(env, s->pc);
-                s->pc += 2;
+                bd = (int16_t)read_im16(env, s);
             } else {
                 bd = read_im32(env, s);
             }
@@ -475,8 +472,7 @@ static TCGv gen_lea_indexed(CPUM68KState *env, DisasContext *s, TCGv base)
             if ((ext & 3) > 1) {
                 /* outer displacement */
                 if ((ext & 3) == 2) {
-                    od = cpu_ldsw_code(env, s->pc);
-                    s->pc += 2;
+                    od = (int16_t)read_im16(env, s);
                 } else {
                     od = read_im32(env, s);
                 }
@@ -677,16 +673,14 @@ static TCGv gen_lea(CPUM68KState *env, DisasContext *s, uint16_t insn,
     case 7: /* Other */
         switch (insn & 7) {
         case 0: /* Absolute short.  */
-            offset = cpu_ldsw_code(env, s->pc);
-            s->pc += 2;
+            offset = (int16_t)read_im16(env, s);
             return tcg_const_i32(offset);
         case 1: /* Absolute long.  */
             offset = read_im32(env, s);
             return tcg_const_i32(offset);
         case 2: /* pc displacement  */
             offset = s->pc;
-            offset += cpu_ldsw_code(env, s->pc);
-            s->pc += 2;
+            offset += (int16_t)read_im16(env, s);
             return tcg_const_i32(offset);
         case 3: /* pc index+displacement.  */
             return gen_lea_indexed(env, s, NULL_QREG);
@@ -793,19 +787,17 @@ static TCGv gen_ea(CPUM68KState *env, DisasContext *s, uint16_t insn,
             switch (opsize) {
             case OS_BYTE:
                 if (what == EA_LOADS) {
-                    offset = cpu_ldsb_code(env, s->pc + 1);
+                    offset = (int8_t)read_im8(env, s);
                 } else {
-                    offset = cpu_ldub_code(env, s->pc + 1);
+                    offset = read_im8(env, s);
                 }
-                s->pc += 2;
                 break;
             case OS_WORD:
                 if (what == EA_LOADS) {
-                    offset = cpu_ldsw_code(env, s->pc);
+                    offset = (int16_t)read_im16(env, s);
                 } else {
-                    offset = cpu_lduw_code(env, s->pc);
+                    offset = read_im16(env, s);
                 }
-                s->pc += 2;
                 break;
             case OS_LONG:
                 offset = read_im32(env, s);
@@ -1334,8 +1326,7 @@ DISAS_INSN(dbcc)
 
     reg = DREG(insn, 0);
     base = s->pc;
-    offset = cpu_ldsw_code(env, s->pc);
-    s->pc += 2;
+    offset = (int16_t)read_im16(env, s);
     l1 = gen_new_label();
     gen_jmpcc(s, (insn >> 8) & 0xf, l1);
 
@@ -2507,8 +2498,7 @@ DISAS_INSN(branch)
     op = (insn >> 8) & 0xf;
     offset = (int8_t)insn;
     if (offset == 0) {
-        offset = cpu_ldsw_code(env, s->pc);
-        s->pc += 2;
+        offset = (int16_t)read_im16(env, s);
     } else if (offset == -1) {
         offset = read_im32(env, s);
     }
