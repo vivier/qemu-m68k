@@ -2684,6 +2684,29 @@ DISAS_INSN(cmpa)
     SET_CC_OP(OS_LONG, SUB);
 }
 
+DISAS_INSN(cmpm)
+{
+    TCGv src;
+    TCGv reg;
+    TCGv dest;
+    int opsize;
+
+    opsize = insn_opsize(insn);
+
+    reg = AREG(insn, 0);
+    src = gen_load(s, opsize, reg, 1);
+    tcg_gen_addi_i32(reg, reg, opsize_bytes(opsize));
+
+    reg = AREG(insn, 9);
+    dest = gen_load(s, opsize, reg, 1);
+    tcg_gen_addi_i32(reg, reg, opsize_bytes(opsize));
+
+    reg = tcg_temp_new();
+    tcg_gen_sub_i32(reg, dest, src);
+    gen_update_cc_add(reg, src);
+    SET_CC_OP(opsize, SUB);
+}
+
 DISAS_INSN(eor)
 {
     TCGv src;
@@ -2693,24 +2716,6 @@ DISAS_INSN(eor)
     int opsize;
 
     opsize = insn_opsize(insn);
-
-    if (((insn >> 3) & 7) == 1 ) {
-        /* cmpm */
-        reg = AREG(insn, 0);
-        src = gen_load(s, opsize, reg, 1);
-        tcg_gen_addi_i32(reg, reg, opsize_bytes(opsize));
-
-        reg = AREG(insn, 9);
-        dest = gen_load(s, opsize, reg, 1);
-        tcg_gen_addi_i32(reg, reg, opsize_bytes(opsize));
-
-        reg = tcg_temp_new();
-        tcg_gen_sub_i32(reg, dest, src);
-        gen_update_cc_add(reg, src);
-        SET_CC_OP(opsize, SUB);
-
-        return;
-    }
 
     SRC_EA(env, src, opsize, 1, &addr);
     reg = DREG(insn, 9);
@@ -4749,6 +4754,7 @@ void register_m68k_insns (CPUM68KState *env)
     INSN(cmpa,      b1c0, f1c0, CF_ISA_A);
     INSN(cmp,       b000, f100, M68000);
     INSN(eor,       b100, f100, M68000);
+    INSN(cmpm,      b108, f138, M68000);
     INSN(cmpa,      b0c0, f0c0, M68000);
     INSN(eor,       b180, f1c0, CF_ISA_A);
     BASE(and,       c000, f000);
