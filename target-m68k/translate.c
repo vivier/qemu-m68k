@@ -555,9 +555,9 @@ static inline int opsize_bytes(int opsize)
     }
 }
 
-static inline int insn_opsize(int insn, int pos)
+static inline int insn_opsize(int insn)
 {
-    switch ((insn >> pos) & 3) {
+    switch ((insn >> 6) & 3) {
     case 0: return OS_BYTE;
     case 1: return OS_WORD;
     case 2: return OS_LONG;
@@ -1554,7 +1554,7 @@ DISAS_INSN(addsub)
     int opsize;
 
     add = (insn & 0x4000) != 0;
-    opsize = insn_opsize(insn, 6);
+    opsize = insn_opsize(insn);
     reg = DREG(insn, 9);
     dest = tcg_temp_new();
     if (insn & 0x100) {
@@ -1791,7 +1791,7 @@ DISAS_INSN(arith_im)
     int opsize;
 
     op = (insn >> 9) & 7;
-    opsize = insn_opsize(insn, 6);
+    opsize = insn_opsize(insn);
     switch (opsize) {
     case OS_BYTE:
         im = read_im8(env, s);
@@ -2073,7 +2073,7 @@ DISAS_INSN(negx)
     TCGv addr;
     int opsize;
 
-    opsize = insn_opsize(insn, 6);
+    opsize = insn_opsize(insn);
     gen_flush_flags(s);
     SRC_EA(env, src, opsize, -1, &addr);
     dest = tcg_temp_new();
@@ -2113,7 +2113,7 @@ DISAS_INSN(clr)
 
     zero = tcg_const_i32(0);
 
-    opsize = insn_opsize(insn, 6);
+    opsize = insn_opsize(insn);
     DEST_EA(env, insn, opsize, zero, NULL);
     gen_logic_cc(s, zero, opsize);
 }
@@ -2147,7 +2147,7 @@ DISAS_INSN(neg)
     TCGv addr;
     int opsize;
 
-    opsize = insn_opsize(insn, 6);
+    opsize = insn_opsize(insn);
     SRC_EA(env, src1, opsize, -1, &addr);
     dest = tcg_temp_new();
     tcg_gen_neg_i32(dest, src1);
@@ -2207,7 +2207,7 @@ DISAS_INSN(not)
     TCGv addr;
     int opsize;
 
-    opsize = insn_opsize(insn, 6);
+    opsize = insn_opsize(insn);
     SRC_EA(env, src1, opsize, -1, &addr);
     dest = tcg_temp_new();
     tcg_gen_not_i32(dest, src1);
@@ -2272,7 +2272,7 @@ DISAS_INSN(tst)
     int opsize;
     TCGv tmp;
 
-    opsize = insn_opsize(insn, 6);
+    opsize = insn_opsize(insn);
     SRC_EA(env, tmp, opsize, -1, NULL);
     gen_logic_cc(s, tmp, opsize);
 }
@@ -2436,7 +2436,7 @@ DISAS_INSN(addsubq)
         /* Operation on address register is always long.  */
         opsize = OS_LONG;
     } else
-        opsize = insn_opsize(insn, 6);
+        opsize = insn_opsize(insn);
     SRC_EA(env, src, opsize, -1, &addr);
     imm = (insn >> 9) & 7;
     if (imm == 0)
@@ -2551,7 +2551,7 @@ DISAS_INSN(or)
     TCGv addr;
     int opsize;
 
-    opsize = insn_opsize(insn, 6);
+    opsize = insn_opsize(insn);
     reg = DREG(insn, 9);
     dest = tcg_temp_new();
     if (insn & 0x100) {
@@ -2582,7 +2582,7 @@ DISAS_INSN(subx_reg)
     TCGv src;
     int opsize;
 
-    opsize = insn_opsize(insn, 6);
+    opsize = insn_opsize(insn);
 
     gen_flush_flags(s);
     reg = DREG(insn, 9);
@@ -2609,7 +2609,7 @@ DISAS_INSN(subx_mem)
     TCGv addr_reg;
     int opsize;
 
-    opsize = insn_opsize(insn, 6);
+    opsize = insn_opsize(insn);
 
     gen_flush_flags(s);
 
@@ -2657,7 +2657,7 @@ DISAS_INSN(cmp)
     TCGv dest;
     int opsize;
 
-    opsize = insn_opsize(insn, 6);
+    opsize = insn_opsize(insn);
     SRC_EA(env, src, opsize, -1, NULL);
     reg = DREG(insn, 9);
     dest = tcg_temp_new();
@@ -2694,7 +2694,7 @@ DISAS_INSN(eor)
     TCGv addr;
     int opsize;
 
-    opsize = insn_opsize(insn, 6);
+    opsize = insn_opsize(insn);
 
     if (((insn >> 3) & 7) == 1 ) {
         /* cmpm */
@@ -2762,7 +2762,7 @@ DISAS_INSN(and)
         return;
     }
     /* and */
-    opsize = insn_opsize(insn, 6);
+    opsize = insn_opsize(insn);
     reg = DREG(insn, 9);
     if (insn & 0x100) {
         SRC_EA(env, src, opsize, -1, &addr);
@@ -2792,7 +2792,7 @@ DISAS_INSN(addx_reg)
     TCGv src;
     int opsize;
 
-    opsize = insn_opsize(insn, 6);
+    opsize = insn_opsize(insn);
 
     gen_flush_flags(s);
     reg = DREG(insn, 9);
@@ -2819,7 +2819,7 @@ DISAS_INSN(addx_mem)
     TCGv addr_reg;
     int opsize;
 
-    opsize = insn_opsize(insn, 6);
+    opsize = insn_opsize(insn);
 
     gen_flush_flags(s);
 
