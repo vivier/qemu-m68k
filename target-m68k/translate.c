@@ -2344,36 +2344,36 @@ DISAS_INSN(mull)
     tcg_gen_mov_i32(reg, dest);
 }
 
-DISAS_INSN(link)
+static void gen_link(DisasContext *s, uint16_t insn, int32_t offset)
 {
-    int16_t offset;
     TCGv reg;
     TCGv tmp;
 
-    offset = read_im16(env, s);
     reg = AREG(insn, 0);
     tmp = tcg_temp_new();
     tcg_gen_subi_i32(tmp, QREG_SP, 4);
     gen_store(s, OS_LONG, tmp, reg);
-    if ((insn & 7) != 7)
+    if ((insn & 7) != 7) {
         tcg_gen_mov_i32(reg, tmp);
+    }
     tcg_gen_addi_i32(QREG_SP, tmp, offset);
+    tcg_temp_free(tmp);
+}
+
+DISAS_INSN(link)
+{
+    int16_t offset;
+
+    offset = read_im16(env, s);
+    gen_link(s, insn, offset);
 }
 
 DISAS_INSN(linkl)
 {
     int32_t offset;
-    TCGv reg;
-    TCGv tmp;
 
     offset = read_im32(env, s);
-    reg = AREG(insn, 0);
-    tmp = tcg_temp_new();
-    tcg_gen_subi_i32(tmp, QREG_SP, 4);
-    gen_store(s, OS_LONG, tmp, reg);
-    if ((insn & 7) != 7)
-        tcg_gen_mov_i32(reg, tmp);
-    tcg_gen_addi_i32(QREG_SP, tmp, offset);
+    gen_link(s, insn, offset);
 }
 
 DISAS_INSN(unlk)
