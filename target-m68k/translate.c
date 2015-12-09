@@ -2725,6 +2725,45 @@ DISAS_INSN(eor)
     DEST_EA(env, insn, opsize, dest, &addr);
 }
 
+DISAS_INSN(exg)
+{
+    TCGv src;
+    TCGv reg;
+    TCGv dest;
+    int exg_mode;
+
+    exg_mode = insn & 0x1f8;
+
+    dest = tcg_temp_new();
+    switch (exg_mode) {
+    case 0x140:
+        /* exchange Dx and Dy */
+        src = DREG(insn, 9);
+        reg = DREG(insn, 0);
+        tcg_gen_mov_i32(dest, src);
+        tcg_gen_mov_i32(src, reg);
+        tcg_gen_mov_i32(reg, dest);
+        break;
+    case 0x148:
+        /* exchange Ax and Ay */
+        src = AREG(insn, 9);
+        reg = AREG(insn, 0);
+        tcg_gen_mov_i32(dest, src);
+        tcg_gen_mov_i32(src, reg);
+        tcg_gen_mov_i32(reg, dest);
+        break;
+    case 0x188:
+        /* exchange Dx and Ay */
+        src = DREG(insn, 9);
+        reg = AREG(insn, 0);
+        tcg_gen_mov_i32(dest, src);
+        tcg_gen_mov_i32(src, reg);
+        tcg_gen_mov_i32(reg, dest);
+        break;
+    }
+    tcg_temp_free(dest);
+}
+
 DISAS_INSN(and)
 {
     TCGv src;
@@ -2732,39 +2771,9 @@ DISAS_INSN(and)
     TCGv dest;
     TCGv addr;
     int opsize;
-    int exg_mode;
 
     dest = tcg_temp_new();
 
-    /* exg */
-
-    exg_mode = insn & 0x1f8;
-    if (exg_mode == 0x140) {
-        /* exchange Dx and Dy */
-        src = DREG(insn, 9);
-        reg = DREG(insn, 0);
-        tcg_gen_mov_i32(dest, src);
-        tcg_gen_mov_i32(src, reg);
-        tcg_gen_mov_i32(reg, dest);
-        return;
-    } else if (exg_mode == 0x148) {
-        /* exchange Ax and Ay */
-        src = AREG(insn, 9);
-        reg = AREG(insn, 0);
-        tcg_gen_mov_i32(dest, src);
-        tcg_gen_mov_i32(src, reg);
-        tcg_gen_mov_i32(reg, dest);
-        return;
-    } else if (exg_mode == 0x188) {
-        /* exchange Dx and Ay */
-        src = DREG(insn, 9);
-        reg = AREG(insn, 0);
-        tcg_gen_mov_i32(dest, src);
-        tcg_gen_mov_i32(src, reg);
-        tcg_gen_mov_i32(reg, dest);
-        return;
-    }
-    /* and */
     opsize = insn_opsize(insn);
     reg = DREG(insn, 9);
     if (insn & 0x100) {
@@ -2776,6 +2785,7 @@ DISAS_INSN(and)
         tcg_gen_and_i32(dest, src, reg);
         gen_partset_reg(opsize, reg, dest);
     }
+    tcg_temp_free(dest);
     gen_logic_cc(s, dest, opsize);
 }
 
@@ -4758,6 +4768,12 @@ void register_m68k_insns (CPUM68KState *env)
     INSN(cmpa,      b0c0, f0c0, M68000);
     INSN(eor,       b180, f1c0, CF_ISA_A);
     BASE(and,       c000, f000);
+    INSN(undef,     c140, f1f8, CF_ISA_A);
+    INSN(exg,       c140, f1f8, M68000);
+    INSN(undef,     c148, f1f8, CF_ISA_A);
+    INSN(exg,       c148, f1f8, M68000);
+    INSN(undef,     c188, f1f8, CF_ISA_A);
+    INSN(exg,       c188, f1f8, M68000);
     BASE(mulw,      c0c0, f0c0);
     INSN(abcd_reg,  c100, f1f8, M68000);
     INSN(abcd_mem,  c108, f1f8, M68000);
