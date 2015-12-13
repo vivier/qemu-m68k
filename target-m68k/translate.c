@@ -1807,7 +1807,7 @@ DISAS_INSN(arith_im)
         break;
     case 2: /* subi */
         tcg_gen_mov_i32(dest, src1);
-        tcg_gen_setcond_i32(TCG_COND_LTU, QREG_CC_X, dest, tcg_const_i32(im));
+        tcg_gen_setcondi_i32(TCG_COND_LTU, QREG_CC_X, dest, im);
         tcg_gen_subi_i32(dest, dest, im);
         gen_update_cc_add(dest, tcg_const_i32(im));
         SET_CC_OP(opsize, SUB);
@@ -1816,7 +1816,7 @@ DISAS_INSN(arith_im)
         tcg_gen_mov_i32(dest, src1);
         tcg_gen_addi_i32(dest, dest, im);
         gen_update_cc_add(dest, tcg_const_i32(im));
-        tcg_gen_setcond_i32(TCG_COND_LTU, QREG_CC_X, dest, tcg_const_i32(im));
+        tcg_gen_setcondi_i32(TCG_COND_LTU, QREG_CC_X, dest, im);
 	SET_CC_OP(opsize, ADD);
         break;
     case 5: /* eori */
@@ -2132,7 +2132,7 @@ DISAS_INSN(neg)
     tcg_gen_neg_i32(dest, src1);
     SET_CC_OP(opsize, SUB);
     gen_update_cc_add(dest, src1);
-    tcg_gen_setcond_i32(TCG_COND_LTU, QREG_CC_X, tcg_const_i32(0), dest);
+    tcg_gen_setcondi_i32(TCG_COND_NE, QREG_CC_X, dest, 0);
     DEST_EA(env, insn, opsize, dest, &addr);
 }
 
@@ -2504,6 +2504,7 @@ DISAS_INSN(moveq)
     val = tcg_const_i32((int8_t)insn);
     tcg_gen_mov_i32(DREG(insn, 9), val);
     gen_logic_cc(s, val, OS_LONG);
+    tcg_temp_free(val);
 }
 
 DISAS_INSN(mvzs)
