@@ -1408,6 +1408,8 @@ DISAS_INSN(divl)
     TCGv num;
     TCGv den;
     TCGv reg;
+    TCGv_i64 t64;
+    TCGv_i32 quot, rem;
     uint16_t ext;
 
     ext = read_im16(env, s);
@@ -1416,20 +1418,27 @@ DISAS_INSN(divl)
             gen_exception(s, s->pc - 4, EXCP_UNSUPPORTED);
             return;
         }
-        num = DREG(ext, 12);
-        reg = DREG(ext, 0);
-        tcg_gen_mov_i32(QREG_DIV1, num);
-        tcg_gen_mov_i32(QREG_QUADH, reg);
+
+        t64 = tcg_temp_new_i64();
+        tcg_gen_concat_i32_i64(t64, DREG(ext, 12), DREG(ext, 0));
+
         SRC_EA(env, den, OS_LONG, 0, NULL);
-        tcg_gen_mov_i32(QREG_DIV2, den);
+
         if (ext & 0x0800) {
-            gen_helper_divs64(cpu_env);
+            gen_helper_divs64(t64, cpu_env, t64, den);
         } else {
-            gen_helper_divu64(cpu_env);
+            gen_helper_divu64(t64, cpu_env, t64, den);
         }
-        tcg_gen_mov_i32(num, QREG_DIV1);
-        if (!TCGV_EQUAL(num, reg))
-            tcg_gen_mov_i32(reg, QREG_QUADH);
+        quot = tcg_temp_new();
+        rem = tcg_temp_new();
+        tcg_gen_extr_i64_i32(quot, rem, t64);
+        tcg_temp_free_i64(t64);
+
+        tcg_gen_mov_i32(DREG(ext, 0), rem);
+        tcg_temp_free(rem);
+        tcg_gen_mov_i32(DREG(ext, 12), quot);
+        tcg_temp_free(quot);
+
         set_cc_op(s, CC_OP_FLAGS);
         return;
     }
