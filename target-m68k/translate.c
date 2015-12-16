@@ -1387,9 +1387,7 @@ DISAS_INSN(divw)
 
 DISAS_INSN(divl)
 {
-    TCGv num;
     TCGv den;
-    TCGv reg;
     TCGv_i64 t64;
     TCGv_i32 quot, rem;
     uint16_t ext;
@@ -1424,25 +1422,31 @@ DISAS_INSN(divl)
         set_cc_op(s, CC_OP_FLAGS);
         return;
     }
-    num = DREG(ext, 12);
-    reg = DREG(ext, 0);
-    tcg_gen_mov_i32(QREG_DIV1, num);
+
     SRC_EA(env, den, OS_LONG, 0, NULL);
-    tcg_gen_mov_i32(QREG_DIV2, den);
+
+    t64 = tcg_temp_new_i64();
     if (ext & 0x0800) {
-        gen_helper_divs(cpu_env, tcg_const_i32(0));
+        gen_helper_divs(t64, cpu_env, DREG(ext, 12), den);
     } else {
-        gen_helper_divu(cpu_env, tcg_const_i32(0));
+        gen_helper_divu(t64, cpu_env, DREG(ext, 12), den);
     }
-    if (TCGV_EQUAL(num, reg) ||
-        m68k_feature(s->env, M68K_FEATURE_LONG_MULDIV)) {
-        /* div */
-        tcg_gen_mov_i32 (num, QREG_DIV1);
+
+    quot = tcg_temp_new();
+    rem = tcg_temp_new();
+    tcg_gen_extr_i64_i32(quot, rem, t64);
+    tcg_temp_free_i64(t64);
+
+    /* rem */
+    tcg_gen_mov_i32(DREG(ext, 0), rem);
+    tcg_temp_free(rem);
+
+    /* quot */
+    if (m68k_feature(s->env, M68K_FEATURE_LONG_MULDIV)) {
+        tcg_gen_mov_i32(DREG(ext, 12), quot);
     }
-    if (!TCGV_EQUAL(num, reg)) {
-        /* rem */
-        tcg_gen_mov_i32 (reg, QREG_DIV2);
-    }
+    tcg_temp_free(quot);
+
     set_cc_op(s, CC_OP_FLAGS);
 }
 
