@@ -335,12 +335,11 @@ uint32_t HELPER(muls32_cc)(CPUM68KState *env, uint32_t op1, uint32_t op2)
     return res;
 }
 
-uint32_t HELPER(mulu64)(CPUM68KState *env, uint32_t op1, uint32_t op2)
+uint64_t HELPER(mulu64)(CPUM68KState *env, uint32_t op1, uint32_t op2)
 {
     uint64_t res = (uint64_t)op1 * op2;
     uint32_t flags;
 
-    env->quadh = res >> 32;
     flags = 0;
     if (res == 0)
        flags |= CCF_Z;
@@ -351,12 +350,11 @@ uint32_t HELPER(mulu64)(CPUM68KState *env, uint32_t op1, uint32_t op2)
     return res;
 }
 
-uint32_t HELPER(muls64)(CPUM68KState *env, uint32_t op1, uint32_t op2)
+uint64_t HELPER(muls64)(CPUM68KState *env, uint32_t op1, uint32_t op2)
 {
     int64_t res = (uint64_t)(int32_t)op1 * (int32_t)op2;
     uint32_t flags;
 
-    env->quadh = res >> 32;
     flags = 0;
     if (res == 0)
        flags |= CCF_Z;

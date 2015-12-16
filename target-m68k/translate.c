@@ -2295,28 +2295,31 @@ DISAS_INSN(mull)
     TCGv reg;
     TCGv src1;
     TCGv dest;
-    TCGv regh;
 
     /* The upper 32 bits of the product are discarded, so
        muls.l and mulu.l are functionally equivalent.  */
     ext = read_im16(env, s);
     if (ext & 0x400) {
-       if (!m68k_feature(s->env, M68K_FEATURE_QUAD_MULDIV)) {
-           gen_exception(s, s->pc - 4, EXCP_UNSUPPORTED);
-           return;
-       }
-       reg = DREG(ext, 12);
-       regh = DREG(ext, 0);
-       SRC_EA(env, src1, OS_LONG, 0, NULL);
-       dest = tcg_temp_new();
-       if (ext & 0x800)
-           gen_helper_muls64(dest, cpu_env, src1, reg);
-       else
-           gen_helper_mulu64(dest, cpu_env, src1, reg);
-       tcg_gen_mov_i32(reg, dest);
-       tcg_gen_mov_i32(regh, QREG_QUADH);
-       set_cc_op(s, CC_OP_FLAGS);
-       return;
+        if (!m68k_feature(s->env, M68K_FEATURE_QUAD_MULDIV)) {
+            gen_exception(s, s->pc - 4, EXCP_UNSUPPORTED);
+            return;
+        }
+        TCGv_i64 dest64;
+
+        SRC_EA(env, src1, OS_LONG, 0, NULL);
+
+        dest64 = tcg_temp_new_i64();
+        if (ext & 0x800) {
+            gen_helper_muls64(dest64, cpu_env, src1, DREG(ext, 12));
+        } else {
+            gen_helper_mulu64(dest64, cpu_env, src1, DREG(ext, 12));
+        }
+
+        tcg_gen_extr_i64_i32(DREG(ext, 12), DREG(ext, 0), dest64);
+        tcg_temp_free_i64(dest64);
+
+        set_cc_op(s, CC_OP_FLAGS);
+        return;
     }
     reg = DREG(ext, 12);
     SRC_EA(env, src1, OS_LONG, 0, NULL);
