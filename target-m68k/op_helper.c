@@ -247,6 +247,74 @@ void HELPER(divs)(CPUM68KState *env, uint32_t word)
     env->cc_dest = flags;
 }
 
+uint32_t HELPER(divwu)(CPUM68KState *env, uint32_t num, uint32_t den)
+{
+    uint32_t quot;
+    uint32_t rem;
+    uint32_t flags;
+
+    /* ??? This needs to make sure the throwing location is accurate.  */
+    if (den == 0) {
+        raise_exception(env, EXCP_DIV0);
+    }
+    quot = num / den;
+    rem = num % den;
+    flags = 0;
+    /* Avoid using a PARAM1 of zero.  This breaks dyngen because it uses
+       the address of a symbol, and gcc knows symbols can't have address
+       zero.  */
+    if (quot > 0xffff) {
+        /* real 68040 keep Z and N on overflow,
+         * whereas documentation says "undefined"
+         */
+        flags |= CCF_V | (env->cc_dest & (CCF_Z|CCF_N));
+        /* return num unchanged */
+    } else {
+        if (quot == 0) {
+            flags |= CCF_Z;
+        } else if ((int16_t)quot < 0) {
+            flags |= CCF_N;
+        }
+        num = (rem << 16) | (uint16_t)quot;
+    }
+
+    env->cc_dest = flags;
+
+    return num;
+}
+
+uint32_t HELPER(divws)(CPUM68KState *env, uint32_t num, uint32_t den)
+{
+    int32_t quot;
+    int32_t rem;
+    int32_t flags;
+
+    if (den == 0) {
+        raise_exception(env, EXCP_DIV0);
+    }
+    quot = (int32_t)num / (int32_t)den;
+    rem = (int32_t)num % (int32_t)den;
+    flags = 0;
+    if (quot != (int16_t)quot) {
+        /* real 68040 keep Z and N on overflow,
+         * whereas documentation says "undefined"
+         */
+        flags |= CCF_V | (env->cc_dest & (CCF_Z|CCF_N));
+        /* return num unchanged */
+    } else {
+        if (quot == 0) {
+            flags |= CCF_Z;
+        } else if ((int16_t)quot < 0) {
+            flags |= CCF_N;
+        }
+        num = (rem << 16) | (uint16_t)quot;
+    }
+
+    env->cc_dest = flags;
+
+    return num;
+}
+
 uint64_t HELPER(divu64)(CPUM68KState *env, uint64_t num, uint32_t den)
 {
     uint64_t quot;
