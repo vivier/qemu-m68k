@@ -247,67 +247,58 @@ void HELPER(divs)(CPUM68KState *env, uint32_t word)
     env->cc_dest = flags;
 }
 
-void HELPER(divu64)(CPUM68KState *env)
+uint64_t HELPER(divu64)(CPUM68KState *env, uint64_t num, uint32_t den)
 {
-    uint32_t num;
-    uint32_t den;
     uint64_t quot;
     uint32_t rem;
     uint32_t flags;
-    uint64_t quad;
 
-    num = env->div1;
-    den = env->div2;
     /* ??? This needs to make sure the throwing location is accurate.  */
     if (den == 0)
         raise_exception(env, EXCP_DIV0);
-    quad = num | ((uint64_t)env->quadh << 32);
-    quot = quad / den;
-    rem = quad % den;
+
+    quot = num / den;
+    rem = num % den;
     if (quot > 0xffffffffULL) {
         flags = (env->cc_dest & ~ CCF_C) | CCF_V;
+        /* return num unchanged */
     } else {
         flags = 0;
         if (quot == 0)
             flags |= CCF_Z;
         else if ((int32_t)quot < 0)
             flags |= CCF_N;
-        env->div1 = quot;
-        env->quadh = rem;
+        num = ((uint64_t)rem << 32) | (uint32_t)quot;
     }
     env->cc_dest = flags;
+
+    return num;
 }
 
-void HELPER(divs64)(CPUM68KState *env)
+uint64_t HELPER(divs64)(CPUM68KState *env, uint64_t num, uint32_t den)
 {
-    uint32_t num;
-    int32_t den;
     int64_t quot;
     int32_t rem;
     int32_t flags;
-    int64_t quad;
 
-    num = env->div1;
-    den = env->div2;
     if (den == 0)
         raise_exception(env, EXCP_DIV0);
-    quad = num | ((int64_t)env->quadh << 32);
-    quot = quad / (int64_t)den;
-    rem = quad % (int64_t)den;
+    quot = (int64_t)num / (int64_t)den;
+    rem = (int64_t)num % (int64_t)den;
 
-    if ((quot & 0xffffffff80000000ULL) &&
-        (quot & 0xffffffff80000000ULL) != 0xffffffff80000000ULL) {
+    if (!((quot >> 31) == 0 || (quot >> 31) == -1)) {
 	flags = (env->cc_dest & ~ CCF_C) | CCF_V;
+        /* return num unchanged */
     } else {
         flags = 0;
         if (quot == 0)
 	    flags |= CCF_Z;
         else if ((int32_t)quot < 0)
 	    flags |= CCF_N;
-        env->div1 = quot;
-        env->quadh = rem;
+        num = ((uint64_t)rem << 32) | (uint32_t)quot;
     }
     env->cc_dest = flags;
+    return num;
 }
 
 uint32_t HELPER(mulu32_cc)(CPUM68KState *env, uint32_t op1, uint32_t op2)
