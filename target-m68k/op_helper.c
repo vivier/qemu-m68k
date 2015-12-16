@@ -178,16 +178,12 @@ void HELPER(raise_exception)(CPUM68KState *env, uint32_t tt)
     raise_exception(env, tt);
 }
 
-void HELPER(divu)(CPUM68KState *env, uint32_t word)
+uint64_t HELPER(divu)(CPUM68KState *env, uint32_t num, uint32_t den)
 {
-    uint32_t num;
-    uint32_t den;
     uint32_t quot;
     uint32_t rem;
     uint32_t flags;
 
-    num = env->div1;
-    den = env->div2;
     /* ??? This needs to make sure the throwing location is accurate.  */
     if (den == 0) {
         raise_exception(env, EXCP_DIV0);
@@ -195,57 +191,38 @@ void HELPER(divu)(CPUM68KState *env, uint32_t word)
     quot = num / den;
     rem = num % den;
     flags = 0;
-    /* Avoid using a PARAM1 of zero.  This breaks dyngen because it uses
-       the address of a symbol, and gcc knows symbols can't have address
-       zero.  */
-    if (word && quot > 0xffff) {
-	/* real 68040 keep Z and N on overflow,
-         * whereas documentation says "undefined"
-         */
-        flags |= CCF_V | (env->cc_dest & (CCF_Z|CCF_N));
-    } else {
-        if (quot == 0)
-            flags |= CCF_Z;
-        else if ((int16_t)quot < 0)
-            flags |= CCF_N;
+    if (quot == 0) {
+        flags |= CCF_Z;
+    } else if ((int16_t)quot < 0) {
+        flags |= CCF_N;
     }
 
-    env->div1 = quot;
-    env->div2 = rem;
     env->cc_dest = flags;
+
+    return ((uint64_t)rem << 32) | (uint32_t)quot;
 }
 
-void HELPER(divs)(CPUM68KState *env, uint32_t word)
+uint64 HELPER(divs)(CPUM68KState *env, uint32_t num, uint32_t den)
 {
-    int32_t num;
-    int32_t den;
     int32_t quot;
     int32_t rem;
     int32_t flags;
 
-    num = env->div1;
-    den = env->div2;
     if (den == 0) {
         raise_exception(env, EXCP_DIV0);
     }
-    quot = num / den;
-    rem = num % den;
+    quot = (int64_t)num / (int64_t)den;
+    rem = (int64_t)num % (int64_t)den;
     flags = 0;
-    if (word && quot != (int16_t)quot) {
-	/* real 68040 keep Z and N on overflow,
-         * whereas documentation says "undefined"
-         */
-        flags |= CCF_V | (env->cc_dest & (CCF_Z|CCF_N));
-    } else {
-        if (quot == 0)
-            flags |= CCF_Z;
-        else if ((int16_t)quot < 0)
-            flags |= CCF_N;
+    if (quot == 0) {
+        flags |= CCF_Z;
+    } else if ((int16_t)quot < 0) {
+        flags |= CCF_N;
     }
 
-    env->div1 = quot;
-    env->div2 = rem;
     env->cc_dest = flags;
+
+    return ((uint64_t)rem << 32) | (uint32_t)quot;
 }
 
 uint32_t HELPER(divwu)(CPUM68KState *env, uint32_t num, uint32_t den)
