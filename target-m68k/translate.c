@@ -176,7 +176,7 @@ enum {
 static const uint8_t cc_op_live[CC_OP_NB] = {
     [CC_OP_DYNAMIC] = USES_CC_DST | USES_CC_SRC,
     [CC_OP_FLAGS] = USES_CC_DST,
-    [CC_OP_LOGICB ... CC_OP_LOGIC] = USES_CC_DST,
+    [CC_OP_LOGIC] = USES_CC_DST,
     [CC_OP_ADD] = USES_CC_DST | USES_CC_SRC,
     [CC_OP_SUB] = USES_CC_DST | USES_CC_SRC,
     [CC_OP_ADDX] = USES_CC_DST | USES_CC_SRC,
@@ -514,13 +514,10 @@ static inline void gen_flush_flags(DisasContext *s)
     set_cc_op(s, CC_OP_FLAGS);
 }
 
-#define SET_CC_OP(opsize, op) \
-    set_cc_op(s, CC_OP_##op##B + opsize)
-
 static void gen_logic_cc(DisasContext *s, TCGv val, int opsize)
 {
     tcg_gen_mov_i32(QREG_CC_DEST, val);
-    SET_CC_OP(opsize, LOGIC);
+    set_cc_op(s, CC_OP_LOGIC);
 }
 
 static void gen_update_cc_add(TCGv dest, TCGv src)
