@@ -244,13 +244,11 @@ static uint32_t cpu_m68k_flush_flags(CPUM68KState *env, int op)
         flags |= CCF_N; \
     } while (0)
 
-#define SET_FLAGS_SUB(type, utype) do { \
-    SET_NZ(dest, type); \
+#define SET_FLAGS_SUB() do { \
+    SET_NZ(dest, int32_t); \
     tmp = dest + src; \
-    if ((utype) tmp < (utype) src) \
-        flags |= CCF_C; \
-    if (HIGHBIT(type) & (tmp ^ dest) & (tmp ^ src)) \
-        flags |= CCF_V; \
+    flags |= CCF_C * (tmp < src); \
+    flags |= CCF_V * ((int32_t)((tmp ^ dest) & (tmp ^ src)) < 0); \
     } while (0)
 
 #define SET_FLAGS_ADD() do { \
@@ -302,14 +300,8 @@ static uint32_t cpu_m68k_flush_flags(CPUM68KState *env, int op)
     case CC_OP_ADD:
         SET_FLAGS_ADD();
         break;
-    case CC_OP_SUBB:
-        SET_FLAGS_SUB(int8_t, uint8_t);
-        break;
-    case CC_OP_SUBW:
-        SET_FLAGS_SUB(int16_t, uint16_t);
-        break;
     case CC_OP_SUB:
-        SET_FLAGS_SUB(int32_t, uint32_t);
+        SET_FLAGS_SUB();
         break;
     case CC_OP_ADDXB:
         SET_FLAGS_ADDX(int8_t, uint8_t);
