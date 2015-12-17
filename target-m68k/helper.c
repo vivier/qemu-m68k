@@ -257,22 +257,18 @@ static uint32_t cpu_m68k_flush_flags(CPUM68KState *env, int op)
     flags |= CCF_V * ((int32_t)((src ^ dest) & ~(tmp ^ src)) < 0); \
     } while (0)
 
-#define SET_FLAGS_ADDX(type, utype) do { \
-    SET_NZ(dest, type); \
-    if ((utype) dest <= (utype) src) \
-        flags |= CCF_C; \
+#define SET_FLAGS_ADDX() do { \
+    SET_NZ(dest, int32_t); \
+    flags |= CCF_C * (dest <= src); \
     tmp = dest - src - 1; \
-    if (HIGHBIT(type) & (src ^ dest) & ~(tmp ^ src)) \
-        flags |= CCF_V; \
+    flags |= CCF_V * ((int32_t)((src ^ dest) & ~(tmp ^ src)) < 0); \
     } while (0)
 
-#define SET_FLAGS_SUBX(type, utype) do { \
-    SET_NZ(dest, type); \
+#define SET_FLAGS_SUBX() do { \
+    SET_NZ(dest, int32_t); \
     tmp = dest + src + 1; \
-    if ((utype) tmp <= (utype) src) \
-        flags |= CCF_C; \
-    if (HIGHBIT(type) & (tmp ^ dest) & (tmp ^ src)) \
-        flags |= CCF_V; \
+    flags |= CCF_C * (tmp <= src); \
+    flags |= CCF_V * ((int32_t)((tmp ^ dest) & (tmp ^ src)) < 0); \
     } while (0)
 
 #define SET_FLAGS_SHIFT(type) do { \
@@ -302,23 +298,11 @@ static uint32_t cpu_m68k_flush_flags(CPUM68KState *env, int op)
     case CC_OP_SUB:
         SET_FLAGS_SUB();
         break;
-    case CC_OP_ADDXB:
-        SET_FLAGS_ADDX(int8_t, uint8_t);
-        break;
-    case CC_OP_ADDXW:
-        SET_FLAGS_ADDX(int16_t, uint16_t);
-        break;
     case CC_OP_ADDX:
-        SET_FLAGS_ADDX(int32_t, uint32_t);
-        break;
-    case CC_OP_SUBXB:
-        SET_FLAGS_SUBX(int8_t, uint8_t);
-        break;
-    case CC_OP_SUBXW:
-        SET_FLAGS_SUBX(int16_t, uint16_t);
+        SET_FLAGS_ADDX();
         break;
     case CC_OP_SUBX:
-        SET_FLAGS_SUBX(int32_t, uint32_t);
+        SET_FLAGS_SUBX();
         break;
     case CC_OP_SHIFTB:
         SET_FLAGS_SHIFT(int8_t);

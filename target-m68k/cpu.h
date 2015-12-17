@@ -184,11 +184,7 @@ typedef enum {
     CC_OP_LOGIC, /* CC_DEST = result, CC_SRC = unused */
     CC_OP_ADD,   /* CC_DEST = result, CC_SRC = source */
     CC_OP_SUB,   /* CC_DEST = result, CC_SRC = source */
-    CC_OP_ADDXB,  /* CC_DEST = result, CC_SRC = source */
-    CC_OP_ADDXW,  /* CC_DEST = result, CC_SRC = source */
     CC_OP_ADDX,  /* CC_DEST = result, CC_SRC = source */
-    CC_OP_SUBXB,  /* CC_DEST = result, CC_SRC = source */
-    CC_OP_SUBXW,  /* CC_DEST = result, CC_SRC = source */
     CC_OP_SUBX,  /* CC_DEST = result, CC_SRC = source */
     CC_OP_SHIFTB, /* CC_DEST = result, CC_SRC = carry */
     CC_OP_SHIFTW, /* CC_DEST = result, CC_SRC = carry */
