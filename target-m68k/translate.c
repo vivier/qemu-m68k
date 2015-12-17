@@ -183,7 +183,7 @@ static const uint8_t cc_op_live[CC_OP_NB] = {
     [CC_OP_SUB] = USES_CC_DST | USES_CC_SRC,
     [CC_OP_ADDX] = USES_CC_DST | USES_CC_SRC,
     [CC_OP_SUBX] = USES_CC_DST | USES_CC_SRC,
-    [CC_OP_SHIFTB ... CC_OP_SHIFT] = USES_CC_DST | USES_CC_SRC,
+    [CC_OP_SHIFT] = USES_CC_DST | USES_CC_SRC,
 };
 
 static void set_cc_op(DisasContext *s, CCOp op)
@@ -2847,7 +2847,7 @@ DISAS_INSN(shift8_im)
         }
     }
     gen_partset_reg(OS_BYTE, reg, dest);
-    set_cc_op(s, CC_OP_SHIFTB);
+    set_cc_op(s, CC_OP_SHIFT);
 }
 
 /* TODO: This could be implemented without helper functions.  */
@@ -2879,7 +2879,7 @@ DISAS_INSN(shift16_im)
         }
     }
     gen_partset_reg(OS_WORD, reg, dest);
-    set_cc_op(s, CC_OP_SHIFTW);
+    set_cc_op(s, CC_OP_SHIFT);
 }
 
 
@@ -2939,7 +2939,7 @@ DISAS_INSN(shift8_reg)
         }
     }
     gen_partset_reg(OS_BYTE, reg, dest);
-    set_cc_op(s, CC_OP_SHIFTB);
+    set_cc_op(s, CC_OP_SHIFT);
 }
 
 DISAS_INSN(shift16_reg)
@@ -2969,7 +2969,7 @@ DISAS_INSN(shift16_reg)
         }
     }
     gen_partset_reg(OS_WORD, reg, dest);
-    set_cc_op(s, CC_OP_SHIFTW);
+    set_cc_op(s, CC_OP_SHIFT);
 }
 
 DISAS_INSN(shift_reg)
@@ -3016,7 +3016,7 @@ DISAS_INSN(shift_mem)
         }
     }
     DEST_EA(env, insn, OS_WORD, dest, &addr);
-    set_cc_op(s, CC_OP_SHIFTW);
+    set_cc_op(s, CC_OP_SHIFT);
 }
 
 DISAS_INSN(rotate_im)
