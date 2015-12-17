@@ -234,45 +234,41 @@ static uint32_t cpu_m68k_flush_flags(CPUM68KState *env, int op)
     uint32_t dest;
     uint32_t tmp;
 
-#define HIGHBIT(type) (1u << (sizeof(type) * 8 - 1))
-
-#define SET_NZ(x, type) do { \
-    if ((type)(x) == 0) \
-        flags |= CCF_Z; \
-    else if ((type)(x) < 0) \
-        flags |= CCF_N; \
+#define SET_NZ() do { \
+    flags |= CCF_Z * (dest == 0); \
+    flags |= CCF_N * ((int32_t)dest < 0); \
     } while (0)
 
 #define SET_FLAGS_SUB() do { \
-    SET_NZ(dest, int32_t); \
+    SET_NZ(); \
     tmp = dest + src; \
     flags |= CCF_C * (tmp < src); \
     flags |= CCF_V * ((int32_t)((tmp ^ dest) & (tmp ^ src)) < 0); \
     } while (0)
 
 #define SET_FLAGS_ADD() do { \
-    SET_NZ(dest, int32_t); \
+    SET_NZ(); \
     flags |= CCF_C * (dest < src); \
     tmp = dest - src; \
     flags |= CCF_V * ((int32_t)((src ^ dest) & ~(tmp ^ src)) < 0); \
     } while (0)
 
 #define SET_FLAGS_ADDX() do { \
-    SET_NZ(dest, int32_t); \
+    SET_NZ(); \
     flags |= CCF_C * (dest <= src); \
     tmp = dest - src - 1; \
     flags |= CCF_V * ((int32_t)((src ^ dest) & ~(tmp ^ src)) < 0); \
     } while (0)
 
 #define SET_FLAGS_SUBX() do { \
-    SET_NZ(dest, int32_t); \
+    SET_NZ(); \
     tmp = dest + src + 1; \
     flags |= CCF_C * (tmp <= src); \
     flags |= CCF_V * ((int32_t)((tmp ^ dest) & (tmp ^ src)) < 0); \
     } while (0)
 
-#define SET_FLAGS_SHIFT(type) do { \
-    SET_NZ(dest, type); \
+#define SET_FLAGS_SHIFT() do { \
+    SET_NZ(); \
     flags |= src; \
     } while(0)
 
@@ -284,7 +280,7 @@ static uint32_t cpu_m68k_flush_flags(CPUM68KState *env, int op)
         flags = dest;
         break;
     case CC_OP_LOGIC:
-        SET_NZ(dest, int32_t);
+        SET_NZ();
         break;
     case CC_OP_ADD:
         SET_FLAGS_ADD();
@@ -298,14 +294,8 @@ static uint32_t cpu_m68k_flush_flags(CPUM68KState *env, int op)
     case CC_OP_SUBX:
         SET_FLAGS_SUBX();
         break;
-    case CC_OP_SHIFTB:
-        SET_FLAGS_SHIFT(int8_t);
-	break;
-    case CC_OP_SHIFTW:
-        SET_FLAGS_SHIFT(int16_t);
-	break;
     case CC_OP_SHIFT:
-        SET_FLAGS_SHIFT(int32_t);
+        SET_FLAGS_SHIFT();
         break;
     default:
         g_assert_not_reached();
