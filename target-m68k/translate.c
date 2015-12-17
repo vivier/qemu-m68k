@@ -177,7 +177,7 @@ static const uint8_t cc_op_live[CC_OP_NB] = {
     [CC_OP_DYNAMIC] = USES_CC_DST | USES_CC_SRC,
     [CC_OP_FLAGS] = USES_CC_DST,
     [CC_OP_LOGICB ... CC_OP_LOGIC] = USES_CC_DST,
-    [CC_OP_ADDB ... CC_OP_ADD] = USES_CC_DST | USES_CC_SRC,
+    [CC_OP_ADD] = USES_CC_DST | USES_CC_SRC,
     [CC_OP_SUBB ... CC_OP_SUB] = USES_CC_DST | USES_CC_SRC,
     [CC_OP_ADDXB ... CC_OP_ADDX] = USES_CC_DST | USES_CC_SRC,
     [CC_OP_SUBXB ... CC_OP_SUBX] = USES_CC_DST | USES_CC_SRC,
@@ -1539,7 +1539,7 @@ DISAS_INSN(addsub)
 
     add = (insn & 0x4000) != 0;
     opsize = insn_opsize(insn);
-    reg = DREG(insn, 9);
+    reg = gen_extend(DREG(insn, 9), opsize, 0);
     dest = tcg_temp_new();
     if (insn & 0x100) {
         SRC_EA(env, tmp, opsize, 1, &addr);
@@ -1551,7 +1551,7 @@ DISAS_INSN(addsub)
     if (add) {
         tcg_gen_add_i32(dest, tmp, src);
         tcg_gen_setcond_i32(TCG_COND_LTU, QREG_CC_X, dest, src);
-        SET_CC_OP(opsize, ADD);
+        set_cc_op(s, CC_OP_ADD);
     } else {
         tcg_gen_setcond_i32(TCG_COND_LTU, QREG_CC_X, tmp, src);
         tcg_gen_sub_i32(dest, tmp, src);
@@ -1561,8 +1561,9 @@ DISAS_INSN(addsub)
     if (insn & 0x100) {
         DEST_EA(env, insn, opsize, dest, &addr);
     } else {
-        gen_partset_reg(opsize, reg, dest);
+        gen_partset_reg(opsize, DREG(insn, 9), dest);
     }
+    tcg_temp_free(dest);
 }
 
 
@@ -1812,7 +1813,7 @@ DISAS_INSN(arith_im)
         tcg_gen_addi_i32(dest, dest, im);
         gen_update_cc_add(dest, tcg_const_i32(im));
         tcg_gen_setcondi_i32(TCG_COND_LTU, QREG_CC_X, dest, im);
-	SET_CC_OP(opsize, ADD);
+        set_cc_op(s, CC_OP_ADD);
         break;
     case 5: /* eori */
         tcg_gen_xori_i32(dest, src1, im);
@@ -2437,7 +2438,7 @@ DISAS_INSN(addsubq)
         } else {
             tcg_gen_add_i32(dest, dest, val);
             tcg_gen_setcond_i32(TCG_COND_LTU, QREG_CC_X, dest, val);
-            SET_CC_OP(opsize, ADD);
+            set_cc_op(s, CC_OP_ADD);
         }
         gen_update_cc_add(dest, val);
     }
