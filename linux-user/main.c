@@ -3038,18 +3038,15 @@ static int do_cas(CPUM68KState *env)
     case OS_BYTE:
         segv = get_user_u8(dest1, addr1);
         cmp1 = (uint8_t)env->dregs[cmp1_reg];
-        env->cc_op = CC_OP_LOGICB;
         break;
     case OS_WORD:
         segv = get_user_u16(dest1, addr1);
         cmp1 = (uint16_t)env->dregs[cmp1_reg];
-        env->cc_op = CC_OP_LOGICW;
         break;
     case OS_LONG:
     default:
         segv = get_user_u32(dest1, addr1);
         cmp1 = env->dregs[cmp1_reg];
-        env->cc_op = CC_OP_LOGIC;
         break;
     }
     if (segv) {
@@ -3057,6 +3054,7 @@ static int do_cas(CPUM68KState *env)
         goto done;
     }
     env->cc_dest = dest1 - cmp1;
+    env->cc_op = CC_OP_LOGIC;
 
     if (is_cas) {
         /* CAS */
@@ -3104,18 +3102,15 @@ static int do_cas(CPUM68KState *env)
         case OS_BYTE:
             segv = get_user_u8(dest2, addr2);
             cmp2 = (uint8_t)env->dregs[cmp2_reg];
-            env->cc_op = CC_OP_LOGICB;
             break;
         case OS_WORD:
             segv = get_user_u16(dest2, addr2);
             cmp2 = (uint16_t)env->dregs[cmp2_reg];
-            env->cc_op = CC_OP_LOGICW;
             break;
         case OS_LONG:
         default:
             segv = get_user_u32(dest2, addr2);
             cmp2 = env->dregs[cmp2_reg];
-            env->cc_op = CC_OP_LOGIC;
             break;
         }
         if (segv) {
