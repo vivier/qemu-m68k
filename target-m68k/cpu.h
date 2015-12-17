@@ -179,8 +179,6 @@ void cpu_m68k_set_ccr(CPUM68KState *env, uint32_t);
 typedef enum {
     CC_OP_DYNAMIC, /* Use env->cc_op  */
     CC_OP_FLAGS, /* CC_DEST = CVZN, CC_SRC = unused */
-    CC_OP_LOGICB, /* CC_DEST = result, CC_SRC = unused */
-    CC_OP_LOGICW, /* CC_DEST = result, CC_SRC = unused */
     CC_OP_LOGIC, /* CC_DEST = result, CC_SRC = unused */
     CC_OP_ADD,   /* CC_DEST = result, CC_SRC = source */
     CC_OP_SUB,   /* CC_DEST = result, CC_SRC = source */
