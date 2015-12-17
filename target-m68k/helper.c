@@ -284,12 +284,6 @@ static uint32_t cpu_m68k_flush_flags(CPUM68KState *env, int op)
     case CC_OP_FLAGS:
         flags = dest;
         break;
-    case CC_OP_LOGICB:
-        SET_NZ(dest, int8_t);
-        break;
-    case CC_OP_LOGICW:
-        SET_NZ(dest, int16_t);
-        break;
     case CC_OP_LOGIC:
         SET_NZ(dest, int32_t);
         break;
