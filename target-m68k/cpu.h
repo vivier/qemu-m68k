@@ -182,8 +182,6 @@ typedef enum {
     CC_OP_LOGIC, /* CC_DEST = result, CC_SRC = unused */
     CC_OP_ADD,   /* CC_DEST = result, CC_SRC = source */
     CC_OP_SUB,   /* CC_DEST = result, CC_SRC = source */
-    CC_OP_ADDX,  /* CC_DEST = result, CC_SRC = source */
-    CC_OP_SUBX,  /* CC_DEST = result, CC_SRC = source */
     CC_OP_SHIFT, /* CC_DEST = result, CC_SRC = carry */
 
     CC_OP_NB,
