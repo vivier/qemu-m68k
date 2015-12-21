@@ -108,9 +108,11 @@ typedef struct CPUM68KState {
 
     /* Condition flags.  */
     uint32_t cc_op;
-    uint32_t cc_dest;
-    uint32_t cc_src;
-    uint32_t cc_x;
+    uint32_t cc_x; /* always 0/1 */
+    uint32_t cc_n; /* in bit 31 (i.e. negative) */
+    uint32_t cc_v; /* in bit 31, unused, or computed from cc_n and cc_v */
+    uint32_t cc_c; /* either 0/1, unused, or computed from cc_n and cc_v */
+    uint32_t cc_z; /* == 0 or unused */
 
     FPReg fregs[8];
     uint32_t fpcr;
@@ -177,14 +179,23 @@ uint32_t cpu_m68k_get_ccr(CPUM68KState *env);
 void cpu_m68k_set_ccr(CPUM68KState *env, uint32_t);
 
 typedef enum {
-    CC_OP_DYNAMIC, /* Use env->cc_op  */
-    CC_OP_FLAGS, /* CC_DEST = CVZN, CC_SRC = unused */
-    CC_OP_LOGIC, /* CC_DEST = result, CC_SRC = unused */
-    CC_OP_ADD,   /* CC_DEST = result, CC_SRC = source */
-    CC_OP_SUB,   /* CC_DEST = result, CC_SRC = source */
-    CC_OP_SHIFT, /* CC_DEST = result, CC_SRC = carry */
+    /* Translator only -- use env->cc_op.  */
+    CC_OP_DYNAMIC = -1,
 
-    CC_OP_NB,
+    /* Each flag bit computed into cc_[xcnvz].  */
+    CC_OP_FLAGS,
+
+    /* X in cc_x, C = X, N in cc_n, Z in cc_n, V via cc_n/cc_v.  */
+    CC_OP_ADD,
+    CC_OP_SUB,
+
+    /* X in cc_x, {N,Z,C,V} via cc_n/cc_v.  */
+    CC_OP_CMP,
+
+    /* X in cc_x, C = 0, V = 0, N in cc_n, Z in cc_n.  */
+    CC_OP_LOGIC,
+
+    CC_OP_NB
 } CCOp;
 
 #define CCF_C 0x01
