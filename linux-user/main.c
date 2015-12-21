@@ -2968,6 +2968,7 @@ static int do_cas(CPUM68KState *env)
     uint32_t dest1, cmp1, addr1;
     uint32_t dest2, cmp2, addr2;
     int segv = 0;
+    int z;
 
     start_exclusive();
 
@@ -3011,15 +3012,17 @@ static int do_cas(CPUM68KState *env)
         env->mmu.ar = addr1;
         goto done;
     }
-    env->cc_dest = dest1 - cmp1;
-    env->cc_op = CC_OP_LOGIC;
+    env->cc_n = dest1;
+    env->cc_v = cmp1;
+    z = dest1 - cmp1;
+    env->cc_op = CC_OP_CMP;
 
     if (is_cas) {
         /* CAS */
 
         /* if (addr1) == cmp1 then (addr1) = upd1 */
 
-        if (env->cc_dest == 0) {
+        if (z == 0) {
             switch (size) {
             case OS_BYTE:
                 segv = put_user_u8(env->dregs[upd1_reg], addr1);
@@ -3078,10 +3081,10 @@ static int do_cas(CPUM68KState *env)
         /* if (addr1) == cmp1 && (addr2) == cmp2 then
          *    (addr1) = upd1, (addr2) = udp2
          */
-        if (env->cc_dest == 0) {
-            env->cc_dest = dest2 - cmp2;
+        if (z == 0) {
+            z = dest2 - cmp2;
         }
-        if (env->cc_dest == 0) {
+        if (z == 0) {
             switch (size) {
             case OS_BYTE:
                 segv = put_user_u8(env->dregs[upd1_reg], addr1);
