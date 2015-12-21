@@ -66,7 +66,7 @@ static void m68k_cpu_reset(CPUState *s)
     env->fp1h = floatx80_default_nan.high;
     env->fp1l = floatx80_default_nan.low;
 
-    env->cc_op = CC_OP_FLAGS;
+    cpu_m68k_set_ccr(env, 0);
     /* TODO: We should set PC from the interrupt vector.  */
     env->pc = 0;
     tlb_flush(s, 1);
