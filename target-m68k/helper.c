@@ -1586,62 +1586,69 @@ void HELPER(mac_set_flags)(CPUM68KState *env, uint32_t acc)
     }
 }
 
+#define COMPUTE_CCR(op, x, n, z, v, c) {                                   \
+    switch (op) {                                                          \
+    case CC_OP_FLAGS:                                                      \
+        /* Everything in place.  */                                        \
+        break;                                                             \
+    case CC_OP_ADD:                                                        \
+        res = n;                                                           \
+        src2 = v;                                                          \
+        src1 = res - src2;                                                 \
+        c = x;                                                             \
+        z = n;                                                             \
+        v = (res ^ src1) & ~(src1 ^ src2);                                 \
+        break;                                                             \
+    case CC_OP_SUB:                                                        \
+        res = n;                                                           \
+        src2 = v;                                                          \
+        src1 = res + src2;                                                 \
+        c = x;                                                             \
+        z = n;                                                             \
+        v = (res ^ src1) & (src1 ^ src2);                                  \
+        break;                                                             \
+    case CC_OP_CMP:                                                        \
+        src1 = n;                                                          \
+        src2 = v;                                                          \
+        res = src1 - src2;                                                 \
+        n = res;                                                           \
+        z = res;                                                           \
+        c = src1 < src2;                                                   \
+        v = (res ^ src1) & (src1 ^ src2);                                  \
+        break;                                                             \
+    case CC_OP_LOGIC:                                                      \
+        c = v = 0;                                                         \
+        z = n;                                                             \
+        break;                                                             \
+    default:                                                               \
+        cpu_abort(CPU(m68k_env_get_cpu(env)), "Bad CC_OP %d", env->cc_op); \
+    }                                                                      \
+} while (0)
+
+void HELPER(flush_flags)(CPUM68KState *env, uint32_t cc_op)
+{
+    uint32_t res, src1, src2;
+
+    COMPUTE_CCR(cc_op, env->cc_x, env->cc_n, env->cc_z, env->cc_v, env->cc_c);
+    env->cc_op = CC_OP_FLAGS;
+}
+
 uint32_t cpu_m68k_get_ccr(CPUM68KState *env)
 {
     uint32_t x, c, n, z, v;
     uint32_t res, src1, src2;
 
     x = env->cc_x;
-    c = env->cc_c;
     n = env->cc_n;
     z = env->cc_z;
     v = env->cc_v;
+    c = env->cc_c;
 
-    switch (env->cc_op) {
-    case CC_OP_FLAGS:
-        /* Everything in place.  */
-        break;
-
-    case CC_OP_ADD:
-        res = n;
-        src2 = v;
-        src1 = res - src2;
-        c = x;
-        z = n;
-        v = (res ^ src1) & ~(src1 ^ src2);
-        break;
-
-    case CC_OP_SUB:
-        res = n;
-        src2 = v;
-        src1 = res + src2;
-        c = x;
-        z = n;
-        v = (res ^ src1) & (src1 ^ src2);
-        break;
-
-    case CC_OP_CMP:
-        src1 = n;
-        src2 = v;
-        res = src1 - src2;
-        n = res;
-        z = res;
-        c = src1 < src2;
-        v = (res ^ src1) & (src1 ^ src2);
-        break;
-
-    case CC_OP_LOGIC:
-        c = v = 0;
-        z = n;
-        break;
-
-    default:
-        cpu_abort(CPU(m68k_env_get_cpu(env)), "Bad CC_OP %d", env->cc_op);
-    }
+    COMPUTE_CCR(env->cc_op, x, n, z, v, c);
 
     n = n >> 31;
-    v = v >> 31;
     z = (z == 0);
+    v = v >> 31;
 
     return x*CCF_X + n*CCF_N + z*CCF_Z + v*CCF_V + c*CCF_C;
 }
@@ -1665,56 +1672,6 @@ void HELPER(set_ccr)(CPUM68KState *env, uint32_t ccr)
 {
     cpu_m68k_set_ccr(env, ccr);
 }
-
-void HELPER(flush_flags)(CPUM68KState *env, uint32_t cc_op)
-{
-    uint32_t res, src1, src2;
-
-    switch (cc_op) {
-    case CC_OP_FLAGS:
-        /* Everything up to date.  */
-        return;
-
-    case CC_OP_ADD:
-        res = env->cc_n;
-        src2 = env->cc_v;
-        src1 = res - src2;
-        env->cc_z = res;
-        env->cc_c = env->cc_x;
-        env->cc_v = (res ^ src1) & ~(src1 ^ src2);
-        break;
-
-    case CC_OP_SUB:
-        res = env->cc_n;
-        src2 = env->cc_v;
-        src1 = res + src2;
-        env->cc_z = res;
-        env->cc_c = env->cc_x;
-        env->cc_v = (res ^ src1) & (src1 ^ src2);
-        break;
-
-    case CC_OP_CMP:
-        src1 = env->cc_n;
-        src2 = env->cc_v;
-        res = src1 - src2;
-        env->cc_n = res;
-        env->cc_z = res;
-        env->cc_c = src1 < src2;
-        env->cc_v = (res ^ src1) & (src1 ^ src2);
-        break;
-
-    case CC_OP_LOGIC:
-        env->cc_c = 0;
-        env->cc_v = 0;
-        env->cc_z = env->cc_n;
-        break;
-
-    default:
-        cpu_abort(CPU(m68k_env_get_cpu(env)), "Bad CC_OP %d", cc_op);
-    }
-    env->cc_op = CC_OP_FLAGS;
-}
-
 
 uint32_t HELPER(get_macf)(CPUM68KState *env, uint64_t val)
 {
