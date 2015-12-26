@@ -3062,24 +3062,41 @@ DISAS_INSN(shift_reg)
 
 DISAS_INSN(shift_mem)
 {
+    int logical = insn & 8;
+    int left = insn & 0x100;
     TCGv src;
-    TCGv dest;
+    TCGv tmp;
     TCGv addr;
-    TCGv shift;
 
-    SRC_EA(env, src, OS_WORD, 0, &addr);
-    dest = tcg_temp_new_i32();
-    shift = tcg_const_i32(1);
-    if (insn & 0x100) {
-        gen_helper_shl16_cc(dest, cpu_env, src, shift);
+    SRC_EA(env, src, OS_WORD, !logical, &addr);
+    if (left) {
+        tcg_gen_shri_i32(QREG_CC_C, src, 15);
+        tcg_gen_shli_i32(QREG_CC_N, src, 1);
     } else {
-        if (insn & 8) {
-            gen_helper_shr16_cc(dest, cpu_env, src, shift);
+        tcg_gen_mov_i32(QREG_CC_C, src);
+        if (logical) {
+            tcg_gen_shri_i32(QREG_CC_N, src, 1);
         } else {
-            gen_helper_sar16_cc(dest, cpu_env, src, shift);
+            tcg_gen_sari_i32(QREG_CC_N, src, 1);
         }
     }
-    DEST_EA(env, insn, OS_WORD, dest, &addr);
+
+    tmp = gen_extend(QREG_CC_N, OS_WORD, 1);
+    tcg_gen_mov_i32(QREG_CC_N, tmp);
+    tcg_gen_andi_i32(QREG_CC_C, QREG_CC_C, 1);
+    tcg_gen_mov_i32(QREG_CC_Z, QREG_CC_N);
+    tcg_gen_mov_i32(QREG_CC_X, QREG_CC_C);
+
+    /* Note that ColdFire always clears V, while M68000 sets it for
+       a change in the sign bit.  */
+    if (!logical && m68k_feature(s->env, M68K_FEATURE_M68000)) {
+        src = gen_extend(src, OS_WORD, 1);
+        tcg_gen_xor_i32(QREG_CC_V, QREG_CC_N, src);
+    } else {
+        tcg_gen_movi_i32(QREG_CC_V, 0);
+    }
+
+    DEST_EA(env, insn, OS_WORD, QREG_CC_N, &addr);
     set_cc_op(s, CC_OP_FLAGS);
 }
 
