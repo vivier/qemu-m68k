@@ -2934,9 +2934,7 @@ static inline void shift_im(DisasContext *s, uint16_t insn, int opsize)
     TCGv reg = gen_extend(DREG(insn, 0), opsize, !logical);
     TCGv tmp;
 
-    if (count == 0) {
-        count = 8;
-    }
+    count = ((count - 1) & 0x7) + 1; /* 1..8 */
 
     if (left) {
         tcg_gen_shri_i32(QREG_CC_C, reg, bits - count);
@@ -2969,6 +2967,69 @@ static inline void shift_im(DisasContext *s, uint16_t insn, int opsize)
     set_cc_op(s, CC_OP_FLAGS);
 }
 
+static inline void shift_reg(DisasContext *s, uint16_t insn, int opsize)
+{
+    int logical = insn & 8;
+    int left = insn & 0x100;
+    int bits = opsize_bytes(opsize) * 8;
+    TCGv reg = gen_extend(DREG(insn, 0), opsize, !logical);
+    TCGv s32;
+    TCGv_i64 t64, s64;
+
+    t64 = tcg_temp_new_i64();
+    s64 = tcg_temp_new_i64();
+    s32 = tcg_temp_new();
+
+    /* Note that m68k truncates the shift count modulo 64, not 32.
+       In addition, a 64-bit shift makes it easy to find "the last
+       bit shifted out", for the carry flag.  */
+    tcg_gen_andi_i32(s32, DREG(insn, 9), 63);
+    tcg_gen_extu_i32_i64(s64, s32);
+
+    /* Non-arithmetic shift clears V.  Use it as a source zero here.  */
+    tcg_gen_movi_i32(QREG_CC_V, 0);
+
+    tcg_gen_extu_i32_i64(t64, reg);
+    if (left) {
+        tcg_gen_addi_i64(s64, s64, 32 - bits);
+        tcg_gen_shl_i64(t64, t64, s64);
+        tcg_temp_free_i64(s64);
+        tcg_gen_extr_i64_i32(QREG_CC_N, QREG_CC_C, t64);
+        tcg_temp_free_i64(t64);
+        tcg_gen_sari_i32(QREG_CC_N, QREG_CC_N, 32 - bits);
+        tcg_gen_andi_i32(QREG_CC_C, QREG_CC_C, 1);
+    } else {
+        tcg_gen_shli_i64(t64, t64, 64 - bits);
+        tcg_gen_addi_i64(s64, s64, 32 - bits);
+        if (logical) {
+            tcg_gen_shr_i64(t64, t64, s64);
+        } else {
+            tcg_gen_sar_i64(t64, t64, s64);
+        }
+        tcg_temp_free_i64(s64);
+        tcg_gen_extr_i64_i32(QREG_CC_C, QREG_CC_N, t64);
+        tcg_temp_free_i64(t64);
+        tcg_gen_shri_i32(QREG_CC_C, QREG_CC_C, 31);
+    }
+    tcg_gen_mov_i32(QREG_CC_Z, QREG_CC_N);
+
+    /* Note that X = C, but only if the shift count was non-zero.  */
+    tcg_gen_movcond_i32(TCG_COND_NE, QREG_CC_X, s32, QREG_CC_V,
+                        QREG_CC_C, QREG_CC_X);
+    tcg_temp_free(s32);
+
+    /* Note that ColdFire always clears V (which we have done above),
+       while M68000 sets it for a change in the sign bit.  */
+    if (!logical && m68k_feature(s->env, M68K_FEATURE_M68000)) {
+        reg = gen_extend(DREG(insn, 0), opsize, 1);
+        tcg_gen_xor_i32(QREG_CC_V, QREG_CC_N, reg);
+    }
+
+    /* Write back the result.  */
+    gen_partset_reg(opsize, DREG(insn, 0), QREG_CC_N);
+    set_cc_op(s, CC_OP_FLAGS);
+}
+
 DISAS_INSN(shift8_im)
 {
     shift_im(s, insn, OS_BYTE);
@@ -2986,86 +3047,17 @@ DISAS_INSN(shift_im)
 
 DISAS_INSN(shift8_reg)
 {
-    TCGv reg;
-    TCGv shift;
-    TCGv dest;
-    TCGv tmp;
-
-    reg = DREG(insn, 0);
-    shift = DREG(insn, 9);
-    tmp = tcg_temp_new_i32();
-    tcg_gen_andi_i32(tmp, shift, 63);
-    dest = tcg_temp_new_i32();
-    /* Shift by zero leaves C flag unmodified.   */
-    if (insn & 0x100) {
-        if (insn & 8) {
-            gen_helper_shl8_cc(dest, cpu_env, reg, tmp);
-        } else {
-            gen_helper_sal8_cc(dest, cpu_env, reg, tmp);
-        }
-    } else {
-        if (insn & 8) {
-            gen_helper_shr8_cc(dest, cpu_env, reg, tmp);
-        } else {
-            gen_helper_sar8_cc(dest, cpu_env, reg, tmp);
-        }
-    }
-    gen_partset_reg(OS_BYTE, reg, dest);
-    set_cc_op(s, CC_OP_FLAGS);
+    shift_reg(s, insn, OS_BYTE);
 }
 
 DISAS_INSN(shift16_reg)
 {
-    TCGv reg;
-    TCGv shift;
-    TCGv dest;
-    TCGv tmp;
-
-    reg = DREG(insn, 0);
-    shift = DREG(insn, 9);
-    tmp = tcg_temp_new_i32();
-    tcg_gen_andi_i32(tmp, shift, 63);
-    dest = tcg_temp_new_i32();
-    /* Shift by zero leaves C flag unmodified.   */
-    if (insn & 0x100) {
-        if (insn & 8) {
-            gen_helper_shl16_cc(dest, cpu_env, reg, tmp);
-        } else {
-            gen_helper_sal16_cc(dest, cpu_env, reg, tmp);
-        }
-    } else {
-        if (insn & 8) {
-            gen_helper_shr16_cc(dest, cpu_env, reg, tmp);
-        } else {
-            gen_helper_sar16_cc(dest, cpu_env, reg, tmp);
-        }
-    }
-    gen_partset_reg(OS_WORD, reg, dest);
-    set_cc_op(s, CC_OP_FLAGS);
+    shift_reg(s, insn, OS_WORD);
 }
 
 DISAS_INSN(shift_reg)
 {
-    TCGv reg;
-    TCGv shift;
-
-    reg = DREG(insn, 0);
-    shift = DREG(insn, 9);
-    /* Shift by zero leaves C flag unmodified.   */
-    if (insn & 0x100) {
-        if (insn & 8) {
-            gen_helper_shl32_cc(reg, cpu_env, reg, shift);
-        } else {
-            gen_helper_sal32_cc(reg, cpu_env, reg, shift);
-        }
-    } else {
-        if (insn & 8) {
-            gen_helper_shr32_cc(reg, cpu_env, reg, shift);
-        } else {
-            gen_helper_sar32_cc(reg, cpu_env, reg, shift);
-        }
-    }
-    set_cc_op(s, CC_OP_FLAGS);
+    shift_reg(s, insn, OS_LONG);
 }
 
 DISAS_INSN(shift_mem)
