@@ -2438,28 +2438,32 @@ DISAS_INSN(mull)
     TCGv reg;
     TCGv src1;
     TCGv dest;
+    int sign;
 
     /* The upper 32 bits of the product are discarded, so
        muls.l and mulu.l are functionally equivalent.  */
     ext = read_im16(env, s);
+
+    sign = ext & 0x800;
+
     if (ext & 0x400) {
         if (!m68k_feature(s->env, M68K_FEATURE_QUAD_MULDIV)) {
             gen_exception(s, s->pc - 4, EXCP_UNSUPPORTED);
             return;
         }
-        TCGv_i64 dest64;
 
         SRC_EA(env, src1, OS_LONG, 0, NULL);
 
-        dest64 = tcg_temp_new_i64();
-        if (ext & 0x800) {
-            gen_helper_muls64(dest64, cpu_env, src1, DREG(ext, 12));
+        if (sign) {
+            tcg_gen_muls2_i32(DREG(ext, 12), DREG(ext, 0), src1, DREG(ext, 12));
         } else {
-            gen_helper_mulu64(dest64, cpu_env, src1, DREG(ext, 12));
+            tcg_gen_mulu2_i32(DREG(ext, 12), DREG(ext, 0), src1, DREG(ext, 12));
         }
 
-        tcg_gen_extr_i64_i32(DREG(ext, 12), DREG(ext, 0), dest64);
-        tcg_temp_free_i64(dest64);
+        tcg_gen_movi_i32(QREG_CC_V, 0);
+        tcg_gen_mov_i32(QREG_CC_C, QREG_CC_V);
+        tcg_gen_mov_i32(QREG_CC_N, DREG(ext, 0));
+        tcg_gen_or_i32(QREG_CC_Z, DREG(ext, 12), DREG(ext, 0));
 
         set_cc_op(s, CC_OP_FLAGS);
         return;
