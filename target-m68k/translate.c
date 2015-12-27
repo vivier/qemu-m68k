@@ -2191,18 +2191,42 @@ DISAS_INSN(move)
 
 DISAS_INSN(negx)
 {
+    TCGv z;
     TCGv src;
-    TCGv dest;
     TCGv addr;
     int opsize;
 
     opsize = insn_opsize(insn);
-    gen_flush_flags(s);
     SRC_EA(env, src, opsize, 1, &addr);
-    dest = tcg_temp_new();
-    gen_helper_subx_cc(dest, cpu_env, tcg_const_i32(0), src);
-    DEST_EA(env, insn, opsize, dest, &addr);
+
+    gen_flush_flags(s); /* compute old Z */
+
+    /* Perform substract with borrow.
+     * (X, N) =  -(src + X);
+     */
+
+    z = tcg_const_i32(0);
+    tcg_gen_add2_i32(QREG_CC_N, QREG_CC_X, src, z, QREG_CC_X, z);
+    tcg_gen_sub2_i32(QREG_CC_N, QREG_CC_X, z, z, QREG_CC_N, QREG_CC_X);
+    tcg_temp_free(z);
+    tcg_gen_andi_i32(QREG_CC_X, QREG_CC_X, 1);
+
+    /* Compute signed-overflow for negation.  The normal formula for
+     * subtraction is (res ^ src) & (src ^ dest), but with dest==0
+     * this simplies to res & src.
+     */
+
+    tcg_gen_and_i32(QREG_CC_V, QREG_CC_N, src);
+
+    /* Copy the rest of the results into place.  */
+    tcg_gen_or_i32(QREG_CC_Z, QREG_CC_Z, QREG_CC_N); /* !Z is sticky */
+    tcg_gen_mov_i32(QREG_CC_C, QREG_CC_X);
+
     set_cc_op(s, CC_OP_FLAGS);
+
+    /* result is in QREG_CC_N */
+
+    DEST_EA(env, insn, opsize, QREG_CC_N, &addr);
 }
 
 DISAS_INSN(lea)
@@ -2685,48 +2709,74 @@ DISAS_INSN(suba)
     tcg_gen_sub_i32(reg, reg, src);
 }
 
+static inline void gen_subx(DisasContext *s, TCGv src, TCGv dest)
+{
+    TCGv tmp;
+
+    gen_flush_flags(s); /* compute old Z */
+
+    /* Perform substract with borrow.
+     * (X, N) = dest - (src + X);
+     */
+
+    tmp = tcg_const_i32(0);
+    tcg_gen_add2_i32(QREG_CC_N, QREG_CC_X, src, tmp, QREG_CC_X, tmp);
+    tcg_gen_sub2_i32(QREG_CC_N, QREG_CC_X, dest, tmp, QREG_CC_N, QREG_CC_X);
+    tcg_gen_andi_i32(QREG_CC_X, QREG_CC_X, 1);
+
+    /* Compute signed-overflow for substract.  */
+
+    tcg_gen_xor_i32(QREG_CC_V, QREG_CC_N, src);
+    tcg_gen_xor_i32(tmp, dest, src);
+    tcg_gen_and_i32(QREG_CC_V, QREG_CC_V, tmp);
+    tcg_temp_free(tmp);
+
+    /* Copy the rest of the results into place.  */
+    tcg_gen_or_i32(QREG_CC_Z, QREG_CC_Z, QREG_CC_N); /* !Z is sticky */
+    tcg_gen_mov_i32(QREG_CC_C, QREG_CC_X);
+
+    set_cc_op(s, CC_OP_FLAGS);
+
+    /* result is in QREG_CC_N */
+}
+
 DISAS_INSN(subx_reg)
 {
-    TCGv reg;
+    TCGv dest;
     TCGv src;
     int opsize;
 
     opsize = insn_opsize(insn);
 
-    gen_flush_flags(s);
-    reg = gen_extend(DREG(insn, 9), opsize, 1);
     src = gen_extend(DREG(insn, 0), opsize, 1);
-    gen_helper_subx_cc(reg, cpu_env, reg, src);
-    gen_partset_reg(opsize, DREG(insn, 9), reg);
+    dest = gen_extend(DREG(insn, 9), opsize, 1);
 
-    set_cc_op(s, CC_OP_FLAGS);
+    gen_subx(s, src, dest);
+
+    gen_partset_reg(opsize, DREG(insn, 9), QREG_CC_N);
 }
 
 DISAS_INSN(subx_mem)
 {
     TCGv src;
     TCGv addr_src;
-    TCGv reg;
-    TCGv addr_reg;
+    TCGv dest;
+    TCGv addr_dest;
     int opsize;
 
     opsize = insn_opsize(insn);
-
-    gen_flush_flags(s);
 
     addr_src = AREG(insn, 0);
     tcg_gen_subi_i32(addr_src, addr_src, opsize);
     src = gen_load(s, opsize, addr_src, 0);
 
-    addr_reg = AREG(insn, 9);
-    tcg_gen_subi_i32(addr_reg, addr_reg, opsize);
-    reg = gen_load(s, opsize, addr_reg, 0);
+    addr_dest = AREG(insn, 9);
+    tcg_gen_subi_i32(addr_dest, addr_dest, opsize);
+    dest = gen_load(s, opsize, addr_dest, 0);
 
-    gen_helper_subx_cc(reg, cpu_env, reg, src);
+    gen_subx(s, src, dest);
 
-    set_cc_op(s, CC_OP_FLAGS);
-
-    gen_store(s, opsize, addr_reg, reg);
+    gen_store(s, opsize, addr_dest, QREG_CC_N);
 }
 
 DISAS_INSN(mov3q)
