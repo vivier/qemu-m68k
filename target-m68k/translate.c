@@ -2435,13 +2435,9 @@ DISAS_INSN(tas)
 DISAS_INSN(mull)
 {
     uint16_t ext;
-    TCGv reg;
     TCGv src1;
-    TCGv dest;
     int sign;
 
-    /* The upper 32 bits of the product are discarded, so
-       muls.l and mulu.l are functionally equivalent.  */
     ext = read_im16(env, s);
 
     sign = ext & 0x800;
@@ -2468,20 +2464,25 @@ DISAS_INSN(mull)
         set_cc_op(s, CC_OP_FLAGS);
         return;
     }
-    reg = DREG(ext, 12);
     SRC_EA(env, src1, OS_LONG, 0, NULL);
-    dest = tcg_temp_new();
     if (m68k_feature(s->env, M68K_FEATURE_M68000)) {
-       if (ext & 0x800)
-           gen_helper_muls32_cc(dest, cpu_env, src1, reg);
-       else
-           gen_helper_mulu32_cc(dest, cpu_env, src1, reg);
-       set_cc_op(s, CC_OP_FLAGS);
+        if (sign) {
+            tcg_gen_muls2_i32(QREG_CC_N, QREG_CC_V, src1, DREG(ext, 12));
+        } else {
+            tcg_gen_mulu2_i32(QREG_CC_N, QREG_CC_V, src1, DREG(ext, 12));
+        }
+        tcg_gen_mov_i32(DREG(ext, 12), QREG_CC_N);
+
+        tcg_gen_mov_i32(QREG_CC_Z, QREG_CC_N);
+        tcg_gen_movi_i32(QREG_CC_C, 0);
+
+        set_cc_op(s, CC_OP_FLAGS);
     } else {
-       tcg_gen_mul_i32(dest, src1, reg);
+        /* The upper 32 bits of the product are discarded, so
+           muls.l and mulu.l are functionally equivalent.  */
+        tcg_gen_mul_i32(DREG(ext, 12), src1, DREG(ext, 12));
+        gen_logic_cc(s, DREG(ext, 12), OS_LONG);
     }
-    gen_logic_cc(s, dest, OS_LONG);
-    tcg_gen_mov_i32(reg, dest);
 }
 
 static void gen_link(DisasContext *s, uint16_t insn, int32_t offset)
