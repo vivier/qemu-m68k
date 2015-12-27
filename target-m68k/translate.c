@@ -1587,7 +1587,6 @@ DISAS_INSN(divl)
     TCGLabel *l1;
     TCGv t0, den;
     TCGv_i64 num64, den64, quot64, rem64;
-    TCGv_i32 quot, rem;
     uint16_t ext;
     int sign;
 
@@ -1611,77 +1610,58 @@ DISAS_INSN(divl)
     gen_set_label(l1);
 
     tcg_gen_movi_i32(QREG_CC_C, 0); /* used as 0 later */
-    if (ext & 0x400) {
-        num64 = tcg_temp_new_i64();
-        tcg_gen_concat_i32_i64(num64, DREG(ext, 12), DREG(ext, 0));
-        den64 = tcg_temp_new_i64();
-        quot64 = tcg_temp_new_i64();
-        rem64 = tcg_temp_new_i64();
-
-        if (sign) {
-            tcg_gen_ext_i32_i64(den64, den);
-            tcg_gen_div_i64(quot64, num64, den64);
-            tcg_gen_rem_i64(rem64, num64, den64);
-        } else {
-            tcg_gen_extu_i32_i64(den64, den);
-            tcg_gen_divu_i64(quot64, num64, den64);
-            tcg_gen_remu_i64(rem64, num64, den64);
-        }
-        tcg_temp_free_i64(den64);
-        tcg_temp_free_i64(num64);
-
-        /* compute flags */
-
-        tcg_gen_extr_i64_i32(QREG_CC_Z, QREG_CC_V, quot64); /* quot in CC_Z */
-        tcg_temp_free_i64(quot64);
-
-        tcg_gen_movi_i32(QREG_CC_N, -1); /* used as -1 below */
-        tcg_gen_movcond_i32(TCG_COND_EQ, QREG_CC_V,
-                            QREG_CC_V, QREG_CC_C /* zero */ ,
-                            QREG_CC_V, QREG_CC_N /* -1 */);
-
-        /* on overflow, operands are unaffected */
-
-        tcg_gen_trunc_i64_i32(QREG_CC_N, rem64); /* rem in CC_N */
-        tcg_temp_free_i64(rem64);
-
-        tcg_gen_movcond_i32(TCG_COND_EQ, DREG(ext, 0),
-                            QREG_CC_V, QREG_CC_C /* zero */ ,
-                            QREG_CC_N, DREG(ext, 0));
-        tcg_gen_movcond_i32(TCG_COND_EQ, DREG(ext, 12),
-                            QREG_CC_V, QREG_CC_C /* zero */ ,
-                            QREG_CC_Z, DREG(ext, 12));
-
-        /* update CC_N as it was used as temp */
-
-        tcg_gen_mov_i32(QREG_CC_N, QREG_CC_Z);
-
-        set_cc_op(s, CC_OP_FLAGS);
-        return;
-    }
 
     num64 = tcg_temp_new_i64();
-    if (sign) {
-        gen_helper_divs(num64, cpu_env, DREG(ext, 12), den);
+    den64 = tcg_temp_new_i64();
+    quot64 = tcg_temp_new_i64();
+    rem64 = tcg_temp_new_i64();
+    if (ext & 0x400) {
+        tcg_gen_concat_i32_i64(num64, DREG(ext, 12), DREG(ext, 0));
     } else {
-        gen_helper_divu(num64, cpu_env, DREG(ext, 12), den);
+        if (sign) {
+            tcg_gen_ext_i32_i64(num64, DREG(ext, 12));
+        } else {
+            tcg_gen_extu_i32_i64(num64, DREG(ext, 12));
+        }
     }
-    tcg_temp_free(den);
 
-    quot = tcg_temp_new();
-    rem = tcg_temp_new();
-    tcg_gen_extr_i64_i32(quot, rem, num64);
+    if (sign) {
+        tcg_gen_ext_i32_i64(den64, den);
+        tcg_gen_div_i64(quot64, num64, den64);
+        tcg_gen_rem_i64(rem64, num64, den64);
+    } else {
+        tcg_gen_extu_i32_i64(den64, den);
+        tcg_gen_divu_i64(quot64, num64, den64);
+        tcg_gen_remu_i64(rem64, num64, den64);
+    }
+    tcg_temp_free_i64(den64);
     tcg_temp_free_i64(num64);
 
-    /* rem */
-    tcg_gen_mov_i32(DREG(ext, 0), rem);
-    tcg_temp_free(rem);
+    /* compute flags */
 
-    /* quot */
-    if (m68k_feature(s->env, M68K_FEATURE_LONG_MULDIV)) {
-        tcg_gen_mov_i32(DREG(ext, 12), quot);
-    }
-    tcg_temp_free(quot);
+    tcg_gen_extr_i64_i32(QREG_CC_Z, QREG_CC_V, quot64); /* quot in CC_Z */
+    tcg_temp_free_i64(quot64);
+
+    tcg_gen_movi_i32(QREG_CC_N, -1); /* used as -1 below */
+    tcg_gen_movcond_i32(TCG_COND_EQ, QREG_CC_V,
+                        QREG_CC_V, QREG_CC_C /* zero */ ,
+                        QREG_CC_V, QREG_CC_N /* -1 */);
+
+    /* on overflow, operands are unaffected */
+
+    tcg_gen_trunc_i64_i32(QREG_CC_N, rem64); /* rem in CC_N */
+    tcg_temp_free_i64(rem64);
+
+    tcg_gen_movcond_i32(TCG_COND_EQ, DREG(ext, 0),
+                        QREG_CC_V, QREG_CC_C /* zero */ ,
+                        QREG_CC_N, DREG(ext, 0));
+    tcg_gen_movcond_i32(TCG_COND_EQ, DREG(ext, 12),
+                        QREG_CC_V, QREG_CC_C /* zero */ ,
+                        QREG_CC_Z, DREG(ext, 12));
+
+    /* update CC_N as it was used as temp */
+
+    tcg_gen_mov_i32(QREG_CC_N, QREG_CC_Z);
 
     set_cc_op(s, CC_OP_FLAGS);
 }
