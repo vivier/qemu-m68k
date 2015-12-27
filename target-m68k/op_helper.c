@@ -344,27 +344,3 @@ uint32_t HELPER(muls32_cc)(CPUM68KState *env, uint32_t op1, uint32_t op2)
 
     return res;
 }
-
-uint64_t HELPER(mulu64)(CPUM68KState *env, uint32_t op1, uint32_t op2)
-{
-    uint64_t res = (uint64_t)op1 * op2;
-
-    env->cc_v = 0;
-    env->cc_z = (res == 0) ? 0 : 1;
-    env->cc_n = ((int64_t)res < 0) ? -1 : 0;
-    env->cc_c = 0;
-
-    return res;
-}
-
-uint64_t HELPER(muls64)(CPUM68KState *env, uint32_t op1, uint32_t op2)
-{
-    int64_t res = (uint64_t)(int32_t)op1 * (int32_t)op2;
-
-    env->cc_v = 0;
-    env->cc_c = 0;
-    env->cc_z = (res == 0) ? 0 : 1;
-    env->cc_n = (res < 0) ? -1 : 0;
-
-    return res;
-}
