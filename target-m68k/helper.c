@@ -403,22 +403,6 @@ uint32_t HELPER(sats)(uint32_t val, uint32_t v)
     return val;
 }
 
-uint32_t HELPER(addx_cc)(CPUM68KState *env, uint32_t dest, uint32_t src)
-{
-    uint32_t res;
-
-    res = dest + src + env->cc_x;
-
-    env->cc_n = res;
-    env->cc_z |= res; /* !Z is sticky.  */
-
-    env->cc_c = (res < (src + env->cc_x));
-    env->cc_x = env->cc_c;
-    env->cc_v = (src ^ res) & ~(dest ^ src);
-
-    return res;
-}
-
 void HELPER(set_sr)(CPUM68KState *env, uint32_t val)
 {
     env->sr = val & 0xffe0;
