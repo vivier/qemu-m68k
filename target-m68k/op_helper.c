@@ -321,27 +321,3 @@ uint64_t HELPER(divs64)(CPUM68KState *env, uint64_t num, uint32_t den)
     env->cc_c = 0;
     return num;
 }
-
-uint32_t HELPER(mulu32_cc)(CPUM68KState *env, uint32_t op1, uint32_t op2)
-{
-    uint64_t res = (uint32_t)op1 * op2;
-
-    env->cc_v = (res >> 32) ? -1 : 0;
-    env->cc_z = (uint32_t)res;
-    env->cc_n = (uint32_t)res;
-    env->cc_c = 0;
-
-    return res;
-}
-
-uint32_t HELPER(muls32_cc)(CPUM68KState *env, uint32_t op1, uint32_t op2)
-{
-    int64_t res = (int32_t)op1 * (int32_t)op2;
-
-    env->cc_v = (res != (int64_t)(int32_t)res) ? -1 : 0;
-    env->cc_z = (uint32_t)res;
-    env->cc_n = (uint32_t)res;
-    env->cc_c = 0;
-
-    return res;
-}
