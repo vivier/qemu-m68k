@@ -2935,44 +2935,73 @@ DISAS_INSN(adda)
     tcg_gen_add_i32(reg, reg, src);
 }
 
+static inline void gen_addx(DisasContext *s, TCGv src, TCGv dest)
+{
+    TCGv tmp;
+
+    gen_flush_flags(s); /* compute old Z */
+
+    /* Perform addition with carry.
+     * (X, N) = src + dest + X;
+     */
+
+    tmp = tcg_const_i32(0);
+    tcg_gen_add2_i32(QREG_CC_N, QREG_CC_X, QREG_CC_X, tmp, dest, tmp);
+    tcg_gen_add2_i32(QREG_CC_N, QREG_CC_X, QREG_CC_N, QREG_CC_X, src, tmp);
+
+    /* Compute signed-overflow for addition.  */
+
+    tcg_gen_xor_i32(QREG_CC_V, QREG_CC_N, src);
+    tcg_gen_xor_i32(tmp, dest, src);
+    tcg_gen_andc_i32(QREG_CC_V, QREG_CC_V, tmp);
+    tcg_temp_free(tmp);
+
+    /* Copy the rest of the results into place.  */
+    tcg_gen_or_i32(QREG_CC_Z, QREG_CC_Z, QREG_CC_N); /* !Z is sticky */
+    tcg_gen_mov_i32(QREG_CC_C, QREG_CC_X);
+
+    set_cc_op(s, CC_OP_FLAGS);
+
+    /* result is in QREG_CC_N */
+}
+
 DISAS_INSN(addx_reg)
 {
-    TCGv reg;
+    TCGv dest;
     TCGv src;
     int opsize;
 
     opsize = insn_opsize(insn);
 
-    gen_flush_flags(s);
-    reg = gen_extend(DREG(insn, 9), opsize, 1);
+    dest = gen_extend(DREG(insn, 9), opsize, 1);
     src = gen_extend(DREG(insn, 0), opsize, 1);
-    gen_helper_addx_cc(reg, cpu_env, reg, src);
-    gen_partset_reg(opsize, DREG(insn, 9), reg);
+
+    gen_addx(s, src, dest);
+
+    gen_partset_reg(opsize, DREG(insn, 9), QREG_CC_N);
 }
 
 DISAS_INSN(addx_mem)
 {
     TCGv src;
     TCGv addr_src;
-    TCGv reg;
-    TCGv addr_reg;
+    TCGv dest;
+    TCGv addr_dest;
     int opsize;
 
     opsize = insn_opsize(insn);
-
-    gen_flush_flags(s);
 
     addr_src = AREG(insn, 0);
     tcg_gen_subi_i32(addr_src, addr_src, opsize_bytes(opsize));
     src = gen_load(s, opsize, addr_src, 0);
 
-    addr_reg = AREG(insn, 9);
-    tcg_gen_subi_i32(addr_reg, addr_reg, opsize_bytes(opsize));
-    reg = gen_load(s, opsize, addr_reg, 0);
+    addr_dest = AREG(insn, 9);
+    tcg_gen_subi_i32(addr_dest, addr_dest, opsize_bytes(opsize));
+    dest = gen_load(s, opsize, addr_dest, 0);
 
-    gen_helper_addx_cc(reg, cpu_env, reg, src);
+    gen_addx(s, src, dest);
 
-    gen_store(s, opsize, addr_reg, reg);
+    gen_store(s, opsize, addr_dest, QREG_CC_N);
 }
 
 static inline void shift_im(DisasContext *s, uint16_t insn, int opsize)
