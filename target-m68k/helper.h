@@ -1,8 +1,6 @@
 DEF_HELPER_1(bitrev, i32, i32)
 DEF_HELPER_1(ff1, i32, i32)
 DEF_HELPER_2(bfffo, i32, i32, i32)
-DEF_HELPER_2(rol32, i32, i32, i32)
-DEF_HELPER_2(ror32, i32, i32, i32)
 DEF_HELPER_FLAGS_2(sats, TCG_CALL_NO_RWG_SE, i32, i32, i32)
 DEF_HELPER_3(rol8_cc, i32, env, i32, i32)
 DEF_HELPER_3(rol16_cc, i32, env, i32, i32)
