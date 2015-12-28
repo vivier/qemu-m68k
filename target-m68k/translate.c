@@ -3252,23 +3252,60 @@ DISAS_INSN(shift_mem)
     set_cc_op(s, CC_OP_FLAGS);
 }
 
+static inline void rotate(TCGv reg, TCGv shift, int left, int size)
+{
+    if (size == 32) {
+        if (left) {
+            tcg_gen_rotl_i32(reg, reg, shift);
+        } else {
+            tcg_gen_rotr_i32(reg, reg, shift);
+        }
+    } else {
+        TCGv t0;
+
+        if (left) {
+            tcg_gen_shl_i32(reg, reg, shift);
+        } else {
+            tcg_gen_shli_i32(reg, reg, size);
+            tcg_gen_shr_i32(reg, reg, shift);
+        }
+
+        t0 = tcg_temp_new();
+        tcg_gen_shri_i32(t0, reg, size);
+        tcg_gen_or_i32(reg, reg, t0);
+        tcg_temp_free(t0);
+        if (size == 8) {
+            tcg_gen_ext8s_i32(reg, reg);
+        } else if (size == 16) {
+            tcg_gen_ext16s_i32(reg, reg);
+        }
+    }
+
+    if (left) {
+        tcg_gen_andi_i32(QREG_CC_C, reg, 1);
+    } else {
+        tcg_gen_shri_i32(QREG_CC_C, reg, 31);
+    }
+
+    tcg_gen_movi_i32(QREG_CC_V, 0);
+    tcg_gen_mov_i32(QREG_CC_N, reg);
+    tcg_gen_mov_i32(QREG_CC_N, reg);
+}
+
 DISAS_INSN(rotate_im)
 {
     TCGv reg;
     TCGv shift;
     int tmp;
+    int left = (insn & 0x100);
 
     reg = DREG(insn, 0);
     tmp = (insn >> 9) & 7;
-    if (tmp == 0)
-       tmp = 8;
+    tmp = ((tmp - 1) & 7) + 1; /* 1..8 */
+
     shift = tcg_const_i32(tmp);
     if (insn & 8) {
-       if (insn & 0x100) {
-           gen_helper_rol32_cc(reg, cpu_env, reg, shift);
-       } else {
-           gen_helper_ror32_cc(reg, cpu_env, reg, shift);
-       }
+        rotate(reg, shift, left, 32);
     } else {
         if (insn & 0x100) {
             gen_helper_roxl32_cc(reg, cpu_env, reg, shift);
@@ -3276,66 +3313,59 @@ DISAS_INSN(rotate_im)
             gen_helper_roxr32_cc(reg, cpu_env, reg, shift);
         }
     }
+    tcg_temp_free(shift);
+
     set_cc_op(s, CC_OP_FLAGS);
 }
 
 DISAS_INSN(rotate8_im)
 {
+    int left = (insn & 0x100);
     TCGv reg;
-    TCGv dest;
     TCGv shift;
     int tmp;
 
-    reg = DREG(insn, 0);
+    reg = gen_extend(DREG(insn, 0), OS_BYTE, 0);
+
     tmp = (insn >> 9) & 7;
-    if (tmp == 0)
-       tmp = 8;
-    dest = tcg_temp_new_i32();
+    tmp = ((tmp - 1) & 7) + 1; /* 1..8 */
+
     shift = tcg_const_i32(tmp);
     if (insn & 8) {
-       if (insn & 0x100) {
-           gen_helper_rol8_cc(dest, cpu_env, reg, shift);
-       } else {
-           gen_helper_ror8_cc(dest, cpu_env, reg, shift);
-       }
+        rotate(reg, shift, left, 8);
     } else {
         if (insn & 0x100) {
-            gen_helper_roxl8_cc(dest, cpu_env, reg, shift);
+            gen_helper_roxl8_cc(reg, cpu_env, reg, shift);
         } else {
-            gen_helper_roxr8_cc(dest, cpu_env, reg, shift);
+            gen_helper_roxr8_cc(reg, cpu_env, reg, shift);
         }
     }
-    gen_partset_reg(OS_BYTE, reg, dest);
+    gen_partset_reg(OS_BYTE, DREG(insn, 0), reg);
     set_cc_op(s, CC_OP_FLAGS);
 }
 
 DISAS_INSN(rotate16_im)
 {
+    int left = (insn & 0x100);
     TCGv reg;
-    TCGv dest;
     TCGv shift;
     int tmp;
 
-    reg = DREG(insn, 0);
+    reg = gen_extend(DREG(insn, 0), OS_WORD, 0);
     tmp = (insn >> 9) & 7;
-    if (tmp == 0)
-       tmp = 8;
-    dest = tcg_temp_new_i32();
+    tmp = ((tmp - 1) & 7) + 1; /* 1..8 */
+
     shift = tcg_const_i32(tmp);
     if (insn & 8) {
-       if (insn & 0x100) {
-           gen_helper_rol16_cc(dest, cpu_env, reg, shift);
-       } else {
-           gen_helper_ror16_cc(dest, cpu_env, reg, shift);
-       }
+        rotate(reg, shift, left, 16);
     } else {
         if (insn & 0x100) {
-            gen_helper_roxl16_cc(dest, cpu_env, reg, shift);
+            gen_helper_roxl16_cc(reg, cpu_env, reg, shift);
         } else {
-            gen_helper_roxr16_cc(dest, cpu_env, reg, shift);
+            gen_helper_roxr16_cc(reg, cpu_env, reg, shift);
         }
     }
-    gen_partset_reg(OS_WORD, reg, dest);
+    gen_partset_reg(OS_WORD, DREG(insn, 0), reg);
     set_cc_op(s, CC_OP_FLAGS);
 }
 
@@ -3344,17 +3374,17 @@ DISAS_INSN(rotate_reg)
     TCGv reg;
     TCGv src;
     TCGv tmp;
+    int left = (insn & 0x100);
 
     reg = DREG(insn, 0);
     src = DREG(insn, 9);
     tmp = tcg_temp_new_i32();
-    tcg_gen_andi_i32(tmp, src, 63);
+    tcg_gen_andi_i32(tmp, src, 31);
     if (insn & 8) {
-       if (insn & 0x100) {
-           gen_helper_rol32_cc(reg, cpu_env, reg, tmp);
-       } else {
-           gen_helper_ror32_cc(reg, cpu_env, reg, tmp);
-       }
+        rotate(reg, tmp, left, 32);
+        /* if shift == 0, clear C */
+        tcg_gen_setcond_i32(TCG_COND_EQ, tmp, src, QREG_CC_V); /* V is 0 */
+        tcg_gen_and_i32(QREG_CC_C, QREG_CC_C, tmp);
     } else {
         if (insn & 0x100) {
             gen_helper_roxl32_cc(reg, cpu_env, reg, tmp);
@@ -3369,28 +3399,26 @@ DISAS_INSN(rotate8_reg)
 {
     TCGv reg;
     TCGv src;
-    TCGv dest;
     TCGv tmp;
+    int left = (insn & 0x100);
 
-    reg = DREG(insn, 0);
+    reg = gen_extend(DREG(insn, 0), OS_BYTE, 0);
     src = DREG(insn, 9);
     tmp = tcg_temp_new_i32();
-    tcg_gen_andi_i32(tmp, src, 63);
-    dest = tcg_temp_new_i32();
+    tcg_gen_andi_i32(tmp, src, 7);
     if (insn & 8) {
-       if (insn & 0x100) {
-           gen_helper_rol8_cc(dest, cpu_env, reg, tmp);
-       } else {
-           gen_helper_ror8_cc(dest, cpu_env, reg, tmp);
-       }
+        rotate(reg, tmp, left, 8);
+        /* if shift == 0, clear C */
+        tcg_gen_setcond_i32(TCG_COND_EQ, tmp, src, QREG_CC_V); /* V is 0 */
+        tcg_gen_and_i32(QREG_CC_C, QREG_CC_C, tmp);
     } else {
         if (insn & 0x100) {
-            gen_helper_roxl8_cc(dest, cpu_env, reg, tmp);
+            gen_helper_roxl8_cc(reg, cpu_env, reg, tmp);
         } else {
-            gen_helper_roxr8_cc(dest, cpu_env, reg, tmp);
+            gen_helper_roxr8_cc(reg, cpu_env, reg, tmp);
         }
     }
-    gen_partset_reg(OS_BYTE, reg, dest);
+    gen_partset_reg(OS_BYTE, DREG(insn, 0), reg);
     set_cc_op(s, CC_OP_FLAGS);
 }
 
@@ -3398,55 +3426,49 @@ DISAS_INSN(rotate16_reg)
 {
     TCGv reg;
     TCGv src;
-    TCGv dest;
     TCGv tmp;
+    int left = (insn & 0x100);
 
-    reg = DREG(insn, 0);
+    reg = gen_extend(DREG(insn, 0), OS_BYTE, 0);
     src = DREG(insn, 9);
     tmp = tcg_temp_new_i32();
-    tcg_gen_andi_i32(tmp, src, 63);
-    dest = tcg_temp_new_i32();
+    tcg_gen_andi_i32(tmp, src, 15);
     if (insn & 8) {
-       if (insn & 0x100) {
-           gen_helper_rol16_cc(dest, cpu_env, reg, tmp);
-       } else {
-           gen_helper_ror16_cc(dest, cpu_env, reg, tmp);
-       }
+        rotate(reg, tmp, left, 16);
+        /* if shift == 0, clear C */
+        tcg_gen_setcond_i32(TCG_COND_EQ, tmp, src, QREG_CC_V); /* V is 0 */
+        tcg_gen_and_i32(QREG_CC_C, QREG_CC_C, tmp);
     } else {
         if (insn & 0x100) {
-            gen_helper_roxl16_cc(dest, cpu_env, reg, tmp);
+            gen_helper_roxl16_cc(reg, cpu_env, reg, tmp);
         } else {
-            gen_helper_roxr16_cc(dest, cpu_env, reg, tmp);
+            gen_helper_roxr16_cc(reg, cpu_env, reg, tmp);
         }
     }
-    gen_partset_reg(OS_WORD, reg, dest);
+    gen_partset_reg(OS_WORD, DREG(insn, 0), reg);
     set_cc_op(s, CC_OP_FLAGS);
 }
 
 DISAS_INSN(rotate_mem)
 {
     TCGv src;
-    TCGv dest;
     TCGv addr;
     TCGv shift;
+    int left = (insn & 0x100);
 
     SRC_EA(env, src, OS_WORD, 0, &addr);
-    dest = tcg_temp_new_i32();
+
     shift = tcg_const_i32(1);
     if (insn & 8) {
-       if (insn & 0x100) {
-           gen_helper_rol16_cc(dest, cpu_env, src, shift);
-       } else {
-           gen_helper_ror16_cc(dest, cpu_env, src, shift);
-       }
+        rotate(src, shift, left, 16);
     } else {
         if (insn & 0x100) {
-            gen_helper_roxl16_cc(dest, cpu_env, src, shift);
+            gen_helper_roxl16_cc(src, cpu_env, src, shift);
         } else {
-            gen_helper_roxr16_cc(dest, cpu_env, src, shift);
+            gen_helper_roxr16_cc(src, cpu_env, src, shift);
         }
     }
-    DEST_EA(env, insn, OS_WORD, dest, &addr);
+    DEST_EA(env, insn, OS_WORD, src, &addr);
     set_cc_op(s, CC_OP_FLAGS);
 }
 
