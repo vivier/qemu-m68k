@@ -3292,6 +3292,64 @@ static inline void rotate(TCGv reg, TCGv shift, int left, int size)
     tcg_gen_mov_i32(QREG_CC_N, reg);
 }
 
+static inline void rotate_x(TCGv reg, TCGv shift, int left, int size)
+{
+    TCGv_i64 t0, t1, shift64;
+
+    /* create a (size + 2) bit value: [X:reg:0] */
+
+    t0 = tcg_temp_new_i64();
+
+    if (size == 32) {
+        tcg_gen_concat_i32_i64(t0, reg, QREG_CC_X);
+    } else {
+        tcg_gen_shli_i32(QREG_CC_X, QREG_CC_X, size);
+        tcg_gen_or_i32(QREG_CC_X, reg, QREG_CC_X);
+        tcg_gen_extu_i32_i64(t0, QREG_CC_X);
+    }
+    tcg_gen_shli_i64(t0, t0, 1);
+
+    /* rotate the value */
+
+    shift64 = tcg_temp_new_i64();
+    tcg_gen_extu_i32_i64(shift64, shift);
+    if (left) {
+        tcg_gen_shl_i64(t0, t0, shift64);
+    } else {
+        tcg_gen_shli_i64(t0, t0, size + 1);
+        tcg_gen_shr_i64(t0, t0, shift64);
+    }
+    tcg_temp_free_i64(shift64);
+
+    /* result is a (size + 1) bit value: [reg:X] */
+
+    t1 = tcg_temp_new_i64();
+    tcg_gen_shri_i64(t1, t0, size + 1);
+    tcg_gen_or_i64(t0, t0, t1);
+    tcg_temp_free_i64(t1);
+
+    /* extract X */
+
+    tcg_gen_extrl_i64_i32(QREG_CC_X, t0);
+    tcg_gen_andi_i32(QREG_CC_X, QREG_CC_X, 1);
+
+    /* extract result */
+
+    tcg_gen_shri_i64(t0, t0, 1);
+    tcg_gen_extrl_i64_i32(reg, t0);
+    tcg_temp_free_i64(t0);
+    if (size == 8) {
+        tcg_gen_ext8s_i32(reg, reg);
+    } else if (size == 16) {
+        tcg_gen_ext16s_i32(reg, reg);
+    }
+
+    tcg_gen_movi_i32(QREG_CC_V, 0);
+    tcg_gen_mov_i32(QREG_CC_N, reg);
+    tcg_gen_mov_i32(QREG_CC_N, reg);
+    tcg_gen_mov_i32(QREG_CC_C, QREG_CC_X);
+}
+
 DISAS_INSN(rotate_im)
 {
     TCGv reg;
@@ -3307,11 +3365,7 @@ DISAS_INSN(rotate_im)
     if (insn & 8) {
         rotate(reg, shift, left, 32);
     } else {
-        if (insn & 0x100) {
-            gen_helper_roxl32_cc(reg, cpu_env, reg, shift);
-        } else {
-            gen_helper_roxr32_cc(reg, cpu_env, reg, shift);
-        }
+        rotate_x(reg, shift, left, 32);
     }
     tcg_temp_free(shift);
 
@@ -3334,11 +3388,7 @@ DISAS_INSN(rotate8_im)
     if (insn & 8) {
         rotate(reg, shift, left, 8);
     } else {
-        if (insn & 0x100) {
-            gen_helper_roxl8_cc(reg, cpu_env, reg, shift);
-        } else {
-            gen_helper_roxr8_cc(reg, cpu_env, reg, shift);
-        }
+        rotate_x(reg, shift, left, 8);
     }
     gen_partset_reg(OS_BYTE, DREG(insn, 0), reg);
     set_cc_op(s, CC_OP_FLAGS);
@@ -3359,11 +3409,7 @@ DISAS_INSN(rotate16_im)
     if (insn & 8) {
         rotate(reg, shift, left, 16);
     } else {
-        if (insn & 0x100) {
-            gen_helper_roxl16_cc(reg, cpu_env, reg, shift);
-        } else {
-            gen_helper_roxr16_cc(reg, cpu_env, reg, shift);
-        }
+        rotate_x(reg, shift, left, 16);
     }
     gen_partset_reg(OS_WORD, DREG(insn, 0), reg);
     set_cc_op(s, CC_OP_FLAGS);
@@ -3373,24 +3419,26 @@ DISAS_INSN(rotate_reg)
 {
     TCGv reg;
     TCGv src;
-    TCGv tmp;
+    TCGv tmp, t0;
     int left = (insn & 0x100);
 
     reg = DREG(insn, 0);
     src = DREG(insn, 9);
     tmp = tcg_temp_new_i32();
-    tcg_gen_andi_i32(tmp, src, 31);
     if (insn & 8) {
+        tcg_gen_andi_i32(tmp, src, 31);
         rotate(reg, tmp, left, 32);
         /* if shift == 0, clear C */
         tcg_gen_setcond_i32(TCG_COND_EQ, tmp, src, QREG_CC_V); /* V is 0 */
         tcg_gen_and_i32(QREG_CC_C, QREG_CC_C, tmp);
     } else {
-        if (insn & 0x100) {
-            gen_helper_roxl32_cc(reg, cpu_env, reg, tmp);
-        } else {
-            gen_helper_roxr32_cc(reg, cpu_env, reg, tmp);
-        }
+        /* shift in [0..63] */
+        tcg_gen_andi_i32(tmp, src, 63);
+        /* modulo 33 */
+        t0 = tcg_const_i32(33);
+        tcg_gen_remu_i32(tmp, tmp, t0);
+        tcg_temp_free(t0);
+        rotate_x(reg, tmp, left, 32);
     }
     set_cc_op(s, CC_OP_FLAGS);
 }
@@ -3399,24 +3447,26 @@ DISAS_INSN(rotate8_reg)
 {
     TCGv reg;
     TCGv src;
-    TCGv tmp;
+    TCGv tmp, t0;
     int left = (insn & 0x100);
 
     reg = gen_extend(DREG(insn, 0), OS_BYTE, 0);
     src = DREG(insn, 9);
     tmp = tcg_temp_new_i32();
-    tcg_gen_andi_i32(tmp, src, 7);
     if (insn & 8) {
+        tcg_gen_andi_i32(tmp, src, 7);
         rotate(reg, tmp, left, 8);
         /* if shift == 0, clear C */
         tcg_gen_setcond_i32(TCG_COND_EQ, tmp, src, QREG_CC_V); /* V is 0 */
         tcg_gen_and_i32(QREG_CC_C, QREG_CC_C, tmp);
     } else {
-        if (insn & 0x100) {
-            gen_helper_roxl8_cc(reg, cpu_env, reg, tmp);
-        } else {
-            gen_helper_roxr8_cc(reg, cpu_env, reg, tmp);
-        }
+        /* shift in [0..63] */
+        tcg_gen_andi_i32(tmp, src, 63);
+        /* modulo 9 */
+        t0 = tcg_const_i32(9);
+        tcg_gen_remu_i32(tmp, tmp, t0);
+        tcg_temp_free(t0);
+        rotate_x(reg, tmp, left, 8);
     }
     gen_partset_reg(OS_BYTE, DREG(insn, 0), reg);
     set_cc_op(s, CC_OP_FLAGS);
@@ -3426,24 +3476,26 @@ DISAS_INSN(rotate16_reg)
 {
     TCGv reg;
     TCGv src;
-    TCGv tmp;
+    TCGv tmp, t0;
     int left = (insn & 0x100);
 
     reg = gen_extend(DREG(insn, 0), OS_BYTE, 0);
     src = DREG(insn, 9);
     tmp = tcg_temp_new_i32();
-    tcg_gen_andi_i32(tmp, src, 15);
     if (insn & 8) {
+        tcg_gen_andi_i32(tmp, src, 15);
         rotate(reg, tmp, left, 16);
         /* if shift == 0, clear C */
         tcg_gen_setcond_i32(TCG_COND_EQ, tmp, src, QREG_CC_V); /* V is 0 */
         tcg_gen_and_i32(QREG_CC_C, QREG_CC_C, tmp);
     } else {
-        if (insn & 0x100) {
-            gen_helper_roxl16_cc(reg, cpu_env, reg, tmp);
-        } else {
-            gen_helper_roxr16_cc(reg, cpu_env, reg, tmp);
-        }
+        /* shift in [0..63] */
+        tcg_gen_andi_i32(tmp, src, 63);
+        /* modulo 17 */
+        t0 = tcg_const_i32(17);
+        tcg_gen_remu_i32(tmp, tmp, t0);
+        tcg_temp_free(t0);
+        rotate_x(reg, tmp, left, 16);
     }
     gen_partset_reg(OS_WORD, DREG(insn, 0), reg);
     set_cc_op(s, CC_OP_FLAGS);
@@ -3462,11 +3514,7 @@ DISAS_INSN(rotate_mem)
     if (insn & 8) {
         rotate(src, shift, left, 16);
     } else {
-        if (insn & 0x100) {
-            gen_helper_roxl16_cc(src, cpu_env, src, shift);
-        } else {
-            gen_helper_roxr16_cc(src, cpu_env, src, shift);
-        }
+        rotate_x(src, shift, left, 16);
     }
     DEST_EA(env, insn, OS_WORD, src, &addr);
     set_cc_op(s, CC_OP_FLAGS);
