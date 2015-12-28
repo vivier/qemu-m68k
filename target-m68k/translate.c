@@ -3504,7 +3504,7 @@ DISAS_INSN(bitfield_reg)
 
     if (ext & 0x0800)
         tcg_gen_andi_i32(offset, offset, 31);
-    gen_helper_ror32(mask, mask, offset);
+    tcg_gen_rotr_i32(mask, mask, offset);
 
     /* reg & mask */
 
@@ -3512,7 +3512,7 @@ DISAS_INSN(bitfield_reg)
     tcg_gen_and_i32(tmp, reg, mask);
 
     tmp1 = tcg_temp_new_i32();
-    gen_helper_rol32(tmp1, tmp, offset);
+    tcg_gen_rotl_i32(tmp1, tmp, offset);
 
     reg2 = DREG(ext, 12);
     if (op == 7) {
@@ -3535,13 +3535,13 @@ DISAS_INSN(bitfield_reg)
     case 1: /* bfextu */
         tcg_gen_add_i32(tmp1, offset, width);
         tcg_gen_andi_i32(tmp1, tmp1, 31);
-        gen_helper_rol32(reg2, tmp, tmp1);
+        tcg_gen_rotl_i32(reg2, tmp, tmp1);
         break;
     case 2: /* bfchg */
         tcg_gen_xor_i32(reg, reg, mask);
         break;
     case 3: /* bfexts */
-        gen_helper_rol32(reg2, tmp, offset);
+        tcg_gen_rotl_i32(reg2, tmp, offset);
         tcg_gen_sub_i32(width, tcg_const_i32(32), width);
         tcg_gen_sar_i32(reg2, reg2, width);
         break;
@@ -3550,7 +3550,7 @@ DISAS_INSN(bitfield_reg)
         tcg_gen_and_i32(reg, reg, mask);
         break;
     case 5: /* bfffo */
-        gen_helper_rol32(reg2, tmp, offset);
+        tcg_gen_rotl_i32(reg2, tmp, offset);
         gen_helper_bfffo(tmp, tmp, width);
         tcg_gen_add_i32(reg2, tmp, offset);
         break;
@@ -3563,7 +3563,7 @@ DISAS_INSN(bitfield_reg)
         tcg_gen_and_i32(tmp, reg2, tmp1);
         tcg_gen_add_i32(tmp1, offset, width);
         tcg_gen_andi_i32(tmp1, tmp1, 31);
-        gen_helper_ror32(tmp, tmp, tmp1);
+        tcg_gen_rotr_i32(tmp, tmp, tmp1);
         tcg_gen_not_i32(mask, mask);
         tcg_gen_and_i32(reg, reg, mask);
         tcg_gen_or_i32(reg, reg, tmp);
