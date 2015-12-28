@@ -48,42 +48,6 @@ typedef struct M68kCPUListState {
     FILE *file;
 } M68kCPUListState;
 
-/* modulo 33 table */
-const uint8_t rox32_table[64] = {
-    0, 1, 2, 3, 4, 5, 6, 7,
-    8, 9,10,11,12,13,14,15,
-   16,17,18,19,20,21,22,23,
-   24,25,26,27,28,29,30,31,
-   32, 0, 1, 2, 3, 4, 5, 6,
-    7, 8, 9,10,11,12,13,14,
-   15,16,17,18,19,20,21,22,
-   23,24,25,26,27,28,29,30,
-};
-
-/* modulo 17 table */
-const uint8_t rox16_table[64] = {
-    0, 1, 2, 3, 4, 5, 6, 7,
-    8, 9,10,11,12,13,14,15,
-   16, 0, 1, 2, 3, 4, 5, 6,
-    7, 8, 9,10,11,12,13,14,
-   15,16, 0, 1, 2, 3, 4, 5,
-    6, 7, 8, 9,10,11,12,13,
-   14,15,16, 0, 1, 2, 3, 4,
-    5, 6, 7, 8, 9,10,11,12,
-};
-
-/* modulo 9 table */
-const uint8_t rox8_table[64] = {
-    0, 1, 2, 3, 4, 5, 6, 7,
-    8, 0, 1, 2, 3, 4, 5, 6,
-    7, 8, 0, 1, 2, 3, 4, 5,
-    6, 7, 8, 0, 1, 2, 3, 4,
-    5, 6, 7, 8, 0, 1, 2, 3,
-    4, 5, 6, 7, 8, 0, 1, 2,
-    3, 4, 5, 6, 7, 8, 0, 1,
-    2, 3, 4, 5, 6, 7, 8, 0,
-};
-
 static gint m68k_cpu_list_compare(gconstpointer a, gconstpointer b)
 {
     ObjectClass *class_a = (ObjectClass *)a;
@@ -392,65 +356,6 @@ void HELPER(set_sr)(CPUM68KState *env, uint32_t val)
     cpu_m68k_set_ccr(env, val);
     m68k_switch_sp(env);
 }
-
-#define HELPER_ROXR(type, bits) \
-uint32_t HELPER(glue(glue(roxr,bits),_cc))(CPUM68KState *env, uint32_t val, uint32_t shift) \
-{ \
-    type result; \
-    int count = shift; \
-    if (bits == 8) count = rox8_table[count]; \
-    if (bits == 16) count = rox16_table[count]; \
-    if (bits == 32) count = rox32_table[count]; \
-    if (count) { \
-       if (count == bits)\
-           result = ((type)env->cc_x << (bits - count));\
-       else \
-           result = ((type)val >> count) | ((type)env->cc_x << (bits - count));\
-       if (count > 1) \
-           result |= (type)val << (bits + 1 - count); \
-       env->cc_x = ((type)val >> (count - 1)) & 1; \
-    } else \
-       result = (type)val; \
-    env->cc_v = 0; \
-    env->cc_z = result; \
-    env->cc_n = result; \
-    env->cc_c = env->cc_x; \
-    return result; \
-}
-
-HELPER_ROXR(uint8_t, 8)
-HELPER_ROXR(uint16_t, 16)
-HELPER_ROXR(uint32_t, 32)
-
-#define HELPER_ROXL(type, bits) \
-uint32_t HELPER(glue(glue(roxl,bits),_cc))(CPUM68KState *env, uint32_t val, uint32_t shift) \
-{ \
-    type result; \
-    int count; \
-    count = shift; \
-    if (bits == 8) count = rox8_table[count]; \
-    if (bits == 16) count = rox16_table[count]; \
-    if (bits == 32) count = rox32_table[count]; \
-    if (count) { \
-       if (count == bits) \
-           result = ((type)env->cc_x << (count - 1)); \
-       else \
-           result = ((type)val << count) | ((type)env->cc_x << (count - 1)); \
-       if (count > 1) \
-           result |= (type)val >> (bits + 1 - count); \
-       env->cc_x = ((type)val >> (bits - count)) & 1; \
-    } else \
-       result = (type)val; \
-    env->cc_v = 0; \
-    env->cc_z = result; \
-    env->cc_n = result; \
-    env->cc_c = env->cc_x; \
-    return result; \
-}
-
-HELPER_ROXL(uint8_t, 8)
-HELPER_ROXL(uint16_t, 16)
-HELPER_ROXL(uint32_t, 32)
 
 /* FPU helpers.  */
 
