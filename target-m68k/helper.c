@@ -376,24 +376,6 @@ uint32_t HELPER(bfffo)(uint32_t arg, uint32_t width)
     return n;
 }
 
-uint32_t HELPER(rol32)(uint32_t val, uint32_t shift)
-{
-    uint32_t result;
-    if (shift == 0 || shift == 32)
-        return val;
-    result = (val << shift) | (val >> (32 - shift));
-    return result;
-}
-
-uint32_t HELPER(ror32)(uint32_t val, uint32_t shift)
-{
-    uint32_t result;
-    if (shift == 0 || shift == 32)
-        return val;
-    result = (val >> shift) | (val << (32 - shift));
-    return result;
-}
-
 uint32_t HELPER(sats)(uint32_t val, uint32_t v)
 {
     /* The result has the opposite sign to the original value.  */
