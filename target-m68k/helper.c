@@ -393,46 +393,6 @@ void HELPER(set_sr)(CPUM68KState *env, uint32_t val)
     m68k_switch_sp(env);
 }
 
-#define HELPER_ROL(type, bits) \
-uint32_t HELPER(glue(glue(rol,bits),_cc))(CPUM68KState *env, uint32_t val, uint32_t shift) \
-{ \
-    type result; \
-    int count = shift & (bits - 1); \
-    if (count) \
-       result = ((type)val << count) | ((type)val >> (bits - count)); \
-    else \
-       result = (type)val; \
-    env->cc_v = 0; \
-    env->cc_z = result; \
-    env->cc_n = result; \
-    env->cc_c = (shift && result & 1) ? 1 : 0; \
-    return result; \
-}
-
-HELPER_ROL(uint8_t, 8)
-HELPER_ROL(uint16_t, 16)
-HELPER_ROL(uint32_t, 32)
-
-#define HELPER_ROR(type, bits) \
-uint32_t HELPER(glue(glue(ror,bits),_cc))(CPUM68KState *env, uint32_t val, uint32_t shift) \
-{ \
-    type result; \
-    int count = shift & (bits - 1); \
-    if (count) \
-       result = ((type)val >> count) | ((type)val << (bits - count)); \
-    else \
-       result = (type)val; \
-    env->cc_v = 0; \
-    env->cc_z = result; \
-    env->cc_n = result; \
-    env->cc_c = (shift && result & (1 << (bits - 1))) ? 1 : 0; \
-    return result; \
-}
-
-HELPER_ROR(uint8_t, 8)
-HELPER_ROR(uint16_t, 16)
-HELPER_ROR(uint32_t, 32)
-
 #define HELPER_ROXR(type, bits) \
 uint32_t HELPER(glue(glue(roxr,bits),_cc))(CPUM68KState *env, uint32_t val, uint32_t shift) \
 { \
