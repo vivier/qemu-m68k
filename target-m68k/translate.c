@@ -2328,6 +2328,7 @@ static TCGv gen_get_ccr(DisasContext *s)
     TCGv dest;
 
     gen_flush_flags(s);
+    update_cc_op(s);
     dest = tcg_temp_new();
     gen_helper_get_ccr(dest, cpu_env);
     return dest;
@@ -2335,12 +2336,10 @@ static TCGv gen_get_ccr(DisasContext *s)
 
 DISAS_INSN(move_from_ccr)
 {
-    TCGv reg;
     TCGv ccr;
 
     ccr = gen_get_ccr(s);
-    reg = DREG(insn, 0);
-    gen_partset_reg(OS_WORD, reg, ccr);
+    DEST_EA(env, insn, OS_WORD, ccr, NULL);
 }
 
 DISAS_INSN(neg)
@@ -4934,6 +4933,7 @@ void register_m68k_insns (CPUM68KState *env)
     BASE(clr,       4200, ff00);
     BASE(undef,     42c0, ffc0);
     INSN(move_from_ccr, 42c0, fff8, CF_ISA_A);
+    INSN(move_from_ccr, 42c0, ffc0, M68000);
     INSN(neg,       4480, fff8, CF_ISA_A);
     INSN(neg,       4400, ff00, M68000);
     INSN(undef,     44c0, ffc0, M68000);
