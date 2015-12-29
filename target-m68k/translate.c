@@ -1671,10 +1671,14 @@ DISAS_INSN(abcd_reg)
     TCGv src;
     TCGv dest;
 
-    src = DREG(insn, 0);
-    dest = DREG(insn, 9);
-    gen_flush_flags(s);
+    gen_flush_flags(s); /* !Z is sticky */
+
+    src = gen_extend(DREG(insn, 0), OS_BYTE, 0);
+    dest = gen_extend(DREG(insn, 9), OS_BYTE, 0);
     gen_helper_abcd_cc(dest, cpu_env, src, dest);
+    gen_partset_reg(OS_BYTE, DREG(insn, 9), dest);
+
+    set_cc_op(s, CC_OP_FLAGS);
 }
 
 DISAS_INSN(abcd_mem)
@@ -1684,6 +1688,8 @@ DISAS_INSN(abcd_mem)
     TCGv dest;
     TCGv addr_dest;
 
+    gen_flush_flags(s); /* !Z is sticky */
+
     addr_src = AREG(insn, 0);
     tcg_gen_subi_i32(addr_src, addr_src, opsize_bytes(OS_BYTE));
     src = gen_load(s, OS_BYTE, addr_src, 0);
@@ -1692,10 +1698,11 @@ DISAS_INSN(abcd_mem)
     tcg_gen_subi_i32(addr_dest, addr_dest, opsize_bytes(OS_BYTE));
     dest = gen_load(s, OS_BYTE, addr_dest, 0);
 
-    gen_flush_flags(s);
     gen_helper_abcd_cc(dest, cpu_env, src, dest);
 
     gen_store(s, OS_BYTE, addr_dest, dest);
+
+    set_cc_op(s, CC_OP_FLAGS);
 }
 
 DISAS_INSN(sbcd_reg)
@@ -1703,10 +1710,14 @@ DISAS_INSN(sbcd_reg)
     TCGv src;
     TCGv dest;
 
-    src = DREG(insn, 0);
-    dest = DREG(insn, 9);
-    gen_flush_flags(s);
+    gen_flush_flags(s); /* !Z is sticky */
+
+    src = gen_extend(DREG(insn, 0), OS_BYTE, 0);
+    dest = gen_extend(DREG(insn, 9), OS_BYTE, 0);
     gen_helper_sbcd_cc(dest, cpu_env, src, dest);
+    gen_partset_reg(OS_BYTE, DREG(insn, 9), dest);
+
+    set_cc_op(s, CC_OP_FLAGS);
 }
 
 DISAS_INSN(sbcd_mem)
@@ -1716,6 +1727,8 @@ DISAS_INSN(sbcd_mem)
     TCGv dest;
     TCGv addr_dest;
 
+    gen_flush_flags(s); /* !Z is sticky */
+
     addr_src = AREG(insn, 0);
     tcg_gen_subi_i32(addr_src, addr_src, opsize_bytes(OS_BYTE));
     src = gen_load(s, OS_BYTE, addr_src, 0);
@@ -1724,10 +1737,11 @@ DISAS_INSN(sbcd_mem)
     tcg_gen_subi_i32(addr_dest, addr_dest, opsize_bytes(OS_BYTE));
     dest = gen_load(s, OS_BYTE, addr_dest, 0);
 
-    gen_flush_flags(s);
     gen_helper_sbcd_cc(dest, cpu_env, src, dest);
 
     gen_store(s, OS_BYTE, addr_dest, dest);
+
+    set_cc_op(s, CC_OP_FLAGS);
 }
 
 DISAS_INSN(nbcd)
@@ -1735,12 +1749,13 @@ DISAS_INSN(nbcd)
     TCGv dest;
     TCGv addr;
 
-    SRC_EA(env, dest, OS_BYTE, 1, &addr);
+    gen_flush_flags(s); /* !Z is sticky */
 
-    gen_flush_flags(s);
-    gen_helper_sbcd_cc(dest, cpu_env, dest, tcg_const_i32(0));
-
+    SRC_EA(env, dest, OS_BYTE, 0, &addr);
+    gen_helper_nbcd_cc(dest, cpu_env, dest);
     DEST_EA(env, insn, OS_BYTE, dest, &addr);
+
+    set_cc_op(s, CC_OP_FLAGS);
 }
 
 DISAS_INSN(addsub)
