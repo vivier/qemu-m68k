@@ -716,82 +716,91 @@ void HELPER(set_mac_extu)(CPUM68KState *env, uint32_t val, uint32_t acc)
     env->macc[acc + 1] = res;
 }
 
+static inline uint16_t bcd_add(uint16_t src, uint16_t dest)
+{
+    uint16_t t1, t2, t3, t4, t5, t6, res;
+
+    t1 = src + 0x0066;
+    t2 = t1 + dest; /* result with some possible exceding 0x6 */
+
+    /* remove the exceding 0x6 where there is no carry */
+
+    t3 = t1 ^ dest; /* t3 = t2 without the carries */
+    t4 = t2 ^ t3;   /* t4 is only the carries */
+
+    /* generate a 0x6 for each BCD digit that didn't generate a carry */
+
+    t5 = ~t4 & 0x110;  /* generate 1 for each BCD digit without carry */
+    t6 = (t5 >> 2) | (t5 >> 3); /* build 0x6 where there is no carry */
+    res = t2 - t6;              /* substract 0x6 where needed */
+
+    return res;
+}
+
 uint32_t HELPER(abcd_cc)(CPUM68KState *env, uint32_t src, uint32_t dest)
 {
-    uint16_t hi, lo;
+    uint32_t res;
+
+    res = bcd_add(src + env->cc_x, dest);
+
+    env->cc_c = (res & 0xff00) != 0;
+    env->cc_z |= res & 0xff; /* !Z is sticky */
+    env->cc_x = env->cc_c;
+    env->cc_op = CC_OP_FLAGS;
+
+    return res;
+}
+
+static inline uint16_t bcd_neg(uint32_t val)
+{
+    uint16_t t1, t2, t3, t4, t5, t6;
     uint16_t res;
-    int extend = 0;
 
-    env->cc_c = 0;
+    /* compute the 10's complement
+     *
+     *    bcd_add(0xff99 - val, 0x0001)
+     *
+     * reduced in:
+     */
 
-    lo = (src & 0x0f) + (dest & 0x0f);
-    if (env->cc_x)
-        lo ++;
-    hi = (src & 0xf0) + (dest & 0xf0);
+    t1 = 0xFFFF - val;
+    t2 = -val;
+    t3 = t1 ^ 1;
+    t4 = t2 ^ t3;
+    t5 = ~t4 & 0x110;
+    t6 = (t5 >> 2) | (t5 >> 3);
+    res = t2 - t6;
 
-    res = hi + lo;
-    if (lo > 9)
-        res += 0x06;
+    return res;
+}
 
-    /* C and X flags: set if decimal carry, cleared otherwise */
+uint32_t HELPER(nbcd_cc)(CPUM68KState *env, uint32_t val)
+{
+    uint32_t res;
 
-    if ((res & 0x3F0) > 0x90) {
-        res += 0x60;
-        env->cc_c = 1;
-        extend = 1;
-    }
+    res = bcd_neg(val + env->cc_x);
 
-    /* Z flag: cleared if nonzero */
+    env->cc_c = (int16_t)res < 0;
+    env->cc_z |= res & 0xff; /* !Z is sticky */
+    env->cc_x = env->cc_c;
+    env->cc_op = CC_OP_FLAGS;
 
-    env->cc_z = (res & 0xff);
-
-    dest = (dest & 0xffffff00) | (res & 0xff);
-
-    env->cc_x = extend;
-
-    return dest;
+    return res;
 }
 
 uint32_t HELPER(sbcd_cc)(CPUM68KState *env, uint32_t src, uint32_t dest)
 {
-    uint16_t hi, lo;
     uint16_t res;
-    int bcd = 0, carry = 0, extend = 0;
 
-    env->cc_c = 0;
+    src = bcd_neg(src + env->cc_x);
+    res = bcd_add(src, dest);
 
-    if (env->cc_x)
-        carry = 1;
+    env->cc_c = (int16_t)res < 0;
+    env->cc_z |= res & 0xff; /* !Z is sticky */
+    env->cc_x = env->cc_c;
+    env->cc_op = CC_OP_FLAGS;
 
-    lo = (dest & 0x0f) - (src & 0x0f) - carry;
-    hi = (dest & 0xf0) - (src & 0xf0);
-
-    res = hi + lo;
-    if (lo & 0xf0) {
-        res -= 0x06;
-        bcd = 0x06;
-    }
-
-    if ((((dest & 0xff) - (src & 0xff) - carry) & 0x100) > 0xff) {
-        res -= 0x60;
-    }
-
-    /* C and X flags: set if decimal carry, cleared otherwise */
-
-    if ((((dest & 0xff) - (src & 0xff) - (bcd + carry)) & 0x300) > 0xff) {
-        env->cc_c = 1;
-        extend = 1;
-    }
-
-    /* Z flag: cleared if nonzero */
-
-    env->cc_z = (res & 0xff);
-
-    dest = (dest & 0xffffff00) | (res & 0xff);
-
-    env->cc_x = extend;
-
-    return dest;
+    return res;
 }
 
 void m68k_cpu_exec_enter(CPUState *cs)
