@@ -1666,6 +1666,97 @@ DISAS_INSN(divl)
     set_cc_op(s, CC_OP_FLAGS);
 }
 
+static inline void bcd_add(TCGv src, TCGv dest)
+{
+    TCGv t0, t1;
+
+    /* t1 = (src + 0x0066) + dest
+     *    = result with some possible exceding 0x6
+     */
+
+    t0 = tcg_const_i32(0x0066);
+    tcg_gen_add_i32(t0, t0, src);
+
+    t1 = tcg_temp_new();
+    tcg_gen_add_i32(t1, t0, dest);
+
+    /* we will remove exceding 0x6 where there is no carry */
+
+    /* t0 = (src + 0x0066) ^ dest
+     *    = t1 without carries
+     */
+
+    tcg_gen_xor_i32(t0, t0, dest);
+
+    /* extract the carries
+     * t0 = t0 ^ t1
+     *    = only the carries
+     */
+
+    tcg_gen_xor_i32(t0, t0, t1);
+
+    /* generate 0x1 where there is no carry */
+
+    tcg_gen_not_i32(t0, t0);
+    tcg_gen_andi_i32(t0, t0, 0x110);
+
+    /* for each 0x10, generate a 0x6 */
+
+    tcg_gen_shri_i32(dest, t0, 2);
+    tcg_gen_shri_i32(t0, t0, 3);
+    tcg_gen_or_i32(dest, dest, t0);
+    tcg_temp_free(t0);
+
+    /* remove the exceding 0x6
+     * for digits that have not generated a carry
+     */
+
+    tcg_gen_sub_i32(dest, t1, dest);
+    tcg_temp_free(t1);
+}
+
+static inline void bcd_neg(TCGv val)
+{
+    TCGv t0, t1;
+
+    /* compute the 10's complement
+     *
+     *    bcd_add(0xff99 - val, 0x0001)
+     *
+     * reduced in:
+     */
+
+    tcg_gen_neg_i32(val, val);
+
+    t0 = tcg_temp_new();
+    tcg_gen_addi_i32(t0, val, 0xffff);
+    tcg_gen_xori_i32(t0, t0, 1);
+    tcg_gen_xor_i32(t0, t0, val);
+    tcg_gen_not_i32(t0, t0);
+    tcg_gen_andi_i32(t0, t0, 0x110);
+
+    t1 = tcg_temp_new();
+    tcg_gen_shri_i32(t1, t0, 2);
+    tcg_gen_shri_i32(t0, t0, 3);
+    tcg_gen_or_i32(t0, t0, t1);
+    tcg_temp_free(t1);
+
+    tcg_gen_sub_i32(val, val, t0);
+    tcg_temp_free(t0);
+}
+
+static inline void bcd_flags(TCGv val)
+{
+    tcg_gen_andi_i32(QREG_CC_C, val, 0x00ff);
+    tcg_gen_or_i32(QREG_CC_Z, QREG_CC_Z, QREG_CC_C);
+
+    tcg_gen_movi_i32(QREG_CC_X, 0);
+    tcg_gen_andi_i32(val, val, 0xff00);
+    tcg_gen_setcond_i32(TCG_COND_NE, QREG_CC_C, val, QREG_CC_X);
+
+    tcg_gen_mov_i32(QREG_CC_X, QREG_CC_C);
+}
+
 DISAS_INSN(abcd_reg)
 {
     TCGv src;
@@ -1675,8 +1766,10 @@ DISAS_INSN(abcd_reg)
 
     src = gen_extend(DREG(insn, 0), OS_BYTE, 0);
     dest = gen_extend(DREG(insn, 9), OS_BYTE, 0);
-    gen_helper_abcd_cc(dest, cpu_env, src, dest);
+    bcd_add(src, dest);
     gen_partset_reg(OS_BYTE, DREG(insn, 9), dest);
+
+    bcd_flags(dest);
 
     set_cc_op(s, CC_OP_FLAGS);
 }
@@ -1698,9 +1791,11 @@ DISAS_INSN(abcd_mem)
     tcg_gen_subi_i32(addr_dest, addr_dest, opsize_bytes(OS_BYTE));
     dest = gen_load(s, OS_BYTE, addr_dest, 0);
 
-    gen_helper_abcd_cc(dest, cpu_env, src, dest);
+    bcd_add(src, dest);
 
     gen_store(s, OS_BYTE, addr_dest, dest);
+
+    bcd_flags(dest);
 
     set_cc_op(s, CC_OP_FLAGS);
 }
@@ -1709,13 +1804,22 @@ DISAS_INSN(sbcd_reg)
 {
     TCGv src;
     TCGv dest;
+    TCGv tmp;
 
     gen_flush_flags(s); /* !Z is sticky */
 
     src = gen_extend(DREG(insn, 0), OS_BYTE, 0);
     dest = gen_extend(DREG(insn, 9), OS_BYTE, 0);
-    gen_helper_sbcd_cc(dest, cpu_env, src, dest);
+
+    tmp = tcg_temp_new();
+    tcg_gen_add_i32(tmp, src, QREG_CC_X);
+    bcd_neg(tmp);
+    bcd_add(tmp, dest);
+    tcg_temp_free(tmp);
+
     gen_partset_reg(OS_BYTE, DREG(insn, 9), dest);
+
+    bcd_flags(dest);
 
     set_cc_op(s, CC_OP_FLAGS);
 }
@@ -1726,6 +1830,7 @@ DISAS_INSN(sbcd_mem)
     TCGv addr_src;
     TCGv dest;
     TCGv addr_dest;
+    TCGv tmp;
 
     gen_flush_flags(s); /* !Z is sticky */
 
@@ -1737,9 +1842,15 @@ DISAS_INSN(sbcd_mem)
     tcg_gen_subi_i32(addr_dest, addr_dest, opsize_bytes(OS_BYTE));
     dest = gen_load(s, OS_BYTE, addr_dest, 0);
 
-    gen_helper_sbcd_cc(dest, cpu_env, src, dest);
+    tmp = tcg_temp_new();
+    tcg_gen_add_i32(tmp, src, QREG_CC_X);
+    bcd_neg(tmp);
+    bcd_add(tmp, dest);
+    tcg_temp_free(tmp);
 
     gen_store(s, OS_BYTE, addr_dest, dest);
+
+    bcd_flags(dest);
 
     set_cc_op(s, CC_OP_FLAGS);
 }
@@ -1752,8 +1863,13 @@ DISAS_INSN(nbcd)
     gen_flush_flags(s); /* !Z is sticky */
 
     SRC_EA(env, dest, OS_BYTE, 0, &addr);
-    gen_helper_nbcd_cc(dest, cpu_env, dest);
+
+    tcg_gen_add_i32(dest, dest, QREG_CC_X);
+    bcd_neg(dest);
+
     DEST_EA(env, insn, OS_BYTE, dest, &addr);
+
+    bcd_flags(dest);
 
     set_cc_op(s, CC_OP_FLAGS);
 }
