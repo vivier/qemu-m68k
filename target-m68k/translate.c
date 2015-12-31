@@ -577,31 +577,42 @@ static void gen_flush_flags(DisasContext *s)
 }
 
 /* Sign or zero extend a value.  */
-static inline TCGv gen_extend(TCGv val, int opsize, int sign)
-{
-    TCGv tmp;
 
+static inline void gen_ext(TCGv res, TCGv val, int opsize, int sign)
+{
     switch (opsize) {
     case OS_BYTE:
-        tmp = tcg_temp_new();
-        if (sign)
-            tcg_gen_ext8s_i32(tmp, val);
-        else
-            tcg_gen_ext8u_i32(tmp, val);
+        if (sign) {
+            tcg_gen_ext8s_i32(res, val);
+        } else {
+            tcg_gen_ext8u_i32(res, val);
+        }
         break;
     case OS_WORD:
-        tmp = tcg_temp_new();
-        if (sign)
-            tcg_gen_ext16s_i32(tmp, val);
-        else
-            tcg_gen_ext16u_i32(tmp, val);
+        if (sign) {
+            tcg_gen_ext16s_i32(res, val);
+        } else {
+            tcg_gen_ext16u_i32(res, val);
+        }
         break;
     case OS_LONG:
-        tmp = val;
         break;
     default:
         g_assert_not_reached();
     }
+}
+
+static inline TCGv gen_extend(TCGv val, int opsize, int sign)
+{
+    TCGv tmp;
+
+    if (opsize == OS_LONG) {
+        tmp = val;
+    } else {
+        tmp = tcg_temp_new();
+        gen_ext(tmp, val, opsize, sign);
+    }
+
     return tmp;
 }
 
@@ -2408,6 +2419,8 @@ DISAS_INSN(negx)
     tcg_gen_add2_i32(QREG_CC_N, QREG_CC_X, src, z, QREG_CC_X, z);
     tcg_gen_sub2_i32(QREG_CC_N, QREG_CC_X, z, z, QREG_CC_N, QREG_CC_X);
     tcg_temp_free(z);
+    gen_ext(QREG_CC_N, QREG_CC_N, opsize, 1);
+
     tcg_gen_andi_i32(QREG_CC_X, QREG_CC_X, 1);
 
     /* Compute signed-overflow for negation.  The normal formula for
@@ -2419,6 +2432,8 @@ DISAS_INSN(negx)
 
     /* Copy the rest of the results into place.  */
     tcg_gen_or_i32(QREG_CC_Z, QREG_CC_Z, QREG_CC_N); /* !Z is sticky */
+    gen_ext(QREG_CC_Z, QREG_CC_Z, opsize, 0);
+
     tcg_gen_mov_i32(QREG_CC_C, QREG_CC_X);
 
     set_cc_op(s, CC_OP_FLAGS);
@@ -2912,7 +2927,7 @@ DISAS_INSN(suba)
     tcg_gen_sub_i32(reg, reg, src);
 }
 
-static inline void gen_subx(DisasContext *s, TCGv src, TCGv dest)
+static inline void gen_subx(DisasContext *s, TCGv src, TCGv dest, int opsize)
 {
     TCGv tmp;
 
@@ -2925,17 +2940,20 @@ static inline void gen_subx(DisasContext *s, TCGv src, TCGv dest)
     tmp = tcg_const_i32(0);
     tcg_gen_add2_i32(QREG_CC_N, QREG_CC_X, src, tmp, QREG_CC_X, tmp);
     tcg_gen_sub2_i32(QREG_CC_N, QREG_CC_X, dest, tmp, QREG_CC_N, QREG_CC_X);
+    gen_ext(QREG_CC_N, QREG_CC_N, opsize, 1);
     tcg_gen_andi_i32(QREG_CC_X, QREG_CC_X, 1);
 
     /* Compute signed-overflow for substract.  */
 
-    tcg_gen_xor_i32(QREG_CC_V, QREG_CC_N, src);
+    tcg_gen_xor_i32(QREG_CC_V, QREG_CC_N, dest);
     tcg_gen_xor_i32(tmp, dest, src);
     tcg_gen_and_i32(QREG_CC_V, QREG_CC_V, tmp);
     tcg_temp_free(tmp);
 
     /* Copy the rest of the results into place.  */
     tcg_gen_or_i32(QREG_CC_Z, QREG_CC_Z, QREG_CC_N); /* !Z is sticky */
+    gen_ext(QREG_CC_Z, QREG_CC_Z, opsize, 0);
+
     tcg_gen_mov_i32(QREG_CC_C, QREG_CC_X);
 
     set_cc_op(s, CC_OP_FLAGS);
@@ -2954,7 +2972,7 @@ DISAS_INSN(subx_reg)
     src = gen_extend(DREG(insn, 0), opsize, 1);
     dest = gen_extend(DREG(insn, 9), opsize, 1);
 
-    gen_subx(s, src, dest);
+    gen_subx(s, src, dest, opsize);
 
     gen_partset_reg(opsize, DREG(insn, 9), QREG_CC_N);
 }
@@ -2971,13 +2989,13 @@ DISAS_INSN(subx_mem)
 
     addr_src = AREG(insn, 0);
     tcg_gen_subi_i32(addr_src, addr_src, opsize);
-    src = gen_load(s, opsize, addr_src, 0);
+    src = gen_load(s, opsize, addr_src, 1);
 
     addr_dest = AREG(insn, 9);
     tcg_gen_subi_i32(addr_dest, addr_dest, opsize);
-    dest = gen_load(s, opsize, addr_dest, 0);
+    dest = gen_load(s, opsize, addr_dest, 1);
 
-    gen_subx(s, src, dest);
+    gen_subx(s, src, dest, opsize);
 
     gen_store(s, opsize, addr_dest, QREG_CC_N);
 }
@@ -3138,7 +3156,7 @@ DISAS_INSN(adda)
     tcg_gen_add_i32(reg, reg, src);
 }
 
-static inline void gen_addx(DisasContext *s, TCGv src, TCGv dest)
+static inline void gen_addx(DisasContext *s, TCGv src, TCGv dest, int opsize)
 {
     TCGv tmp;
 
@@ -3151,6 +3169,7 @@ static inline void gen_addx(DisasContext *s, TCGv src, TCGv dest)
     tmp = tcg_const_i32(0);
     tcg_gen_add2_i32(QREG_CC_N, QREG_CC_X, QREG_CC_X, tmp, dest, tmp);
     tcg_gen_add2_i32(QREG_CC_N, QREG_CC_X, QREG_CC_N, QREG_CC_X, src, tmp);
+    gen_ext(QREG_CC_N, QREG_CC_N, opsize, 1);
 
     /* Compute signed-overflow for addition.  */
 
@@ -3161,6 +3180,8 @@ static inline void gen_addx(DisasContext *s, TCGv src, TCGv dest)
 
     /* Copy the rest of the results into place.  */
     tcg_gen_or_i32(QREG_CC_Z, QREG_CC_Z, QREG_CC_N); /* !Z is sticky */
+    gen_ext(QREG_CC_Z, QREG_CC_Z, opsize, 0);
+
     tcg_gen_mov_i32(QREG_CC_C, QREG_CC_X);
 
     set_cc_op(s, CC_OP_FLAGS);
@@ -3179,7 +3200,7 @@ DISAS_INSN(addx_reg)
     dest = gen_extend(DREG(insn, 9), opsize, 1);
     src = gen_extend(DREG(insn, 0), opsize, 1);
 
-    gen_addx(s, src, dest);
+    gen_addx(s, src, dest, opsize);
 
     gen_partset_reg(opsize, DREG(insn, 9), QREG_CC_N);
 }
@@ -3196,13 +3217,13 @@ DISAS_INSN(addx_mem)
 
     addr_src = AREG(insn, 0);
     tcg_gen_subi_i32(addr_src, addr_src, opsize_bytes(opsize));
-    src = gen_load(s, opsize, addr_src, 0);
+    src = gen_load(s, opsize, addr_src, 1);
 
     addr_dest = AREG(insn, 9);
     tcg_gen_subi_i32(addr_dest, addr_dest, opsize_bytes(opsize));
-    dest = gen_load(s, opsize, addr_dest, 0);
+    dest = gen_load(s, opsize, addr_dest, 1);
 
-    gen_addx(s, src, dest);
+    gen_addx(s, src, dest, opsize);
 
     gen_store(s, opsize, addr_dest, QREG_CC_N);
 }
