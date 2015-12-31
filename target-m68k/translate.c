@@ -3442,7 +3442,7 @@ static inline void rotate(TCGv reg, TCGv shift, int left, int size)
 
     tcg_gen_movi_i32(QREG_CC_V, 0);
     tcg_gen_mov_i32(QREG_CC_N, reg);
-    tcg_gen_mov_i32(QREG_CC_N, reg);
+    tcg_gen_mov_i32(QREG_CC_Z, reg);
 }
 
 static inline void rotate_x(TCGv reg, TCGv shift, int left, int size)
@@ -3499,7 +3499,7 @@ static inline void rotate_x(TCGv reg, TCGv shift, int left, int size)
 
     tcg_gen_movi_i32(QREG_CC_V, 0);
     tcg_gen_mov_i32(QREG_CC_N, reg);
-    tcg_gen_mov_i32(QREG_CC_N, reg);
+    tcg_gen_mov_i32(QREG_CC_Z, reg);
     tcg_gen_mov_i32(QREG_CC_C, QREG_CC_X);
 }
 
