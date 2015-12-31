@@ -2903,16 +2903,16 @@ DISAS_INSN(or)
     int opsize;
 
     opsize = insn_opsize(insn);
-    reg = DREG(insn, 9);
+    reg = gen_extend(DREG(insn, 9), opsize, 0);
     dest = tcg_temp_new();
     if (insn & 0x100) {
-        SRC_EA(env, src, opsize, 1, &addr);
+        SRC_EA(env, src, opsize, 0, &addr);
         tcg_gen_or_i32(dest, src, reg);
         DEST_EA(env, insn, opsize, dest, &addr);
     } else {
-        SRC_EA(env, src, opsize, 1, NULL);
+        SRC_EA(env, src, opsize, 0, NULL);
         tcg_gen_or_i32(dest, src, reg);
-        gen_partset_reg(opsize, reg, dest);
+        gen_partset_reg(opsize, DREG(insn, 9), dest);
     }
     gen_logic_cc(s, dest, opsize);
 }
