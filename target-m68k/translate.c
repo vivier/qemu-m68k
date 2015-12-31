@@ -596,6 +596,7 @@ static inline void gen_ext(TCGv res, TCGv val, int opsize, int sign)
         }
         break;
     case OS_LONG:
+        tcg_gen_mov_i32(res, val);
         break;
     default:
         g_assert_not_reached();
@@ -618,8 +619,7 @@ static inline TCGv gen_extend(TCGv val, int opsize, int sign)
 
 static void gen_logic_cc(DisasContext *s, TCGv val, int opsize)
 {
-    tcg_gen_mov_i32(QREG_CC_N, val);
-    gen_extend(QREG_CC_N, opsize, 1);
+    gen_ext(QREG_CC_N, val, opsize, 1);
     set_cc_op(s, CC_OP_LOGIC);
 }
 
@@ -3067,17 +3067,15 @@ DISAS_INSN(cmpm)
 DISAS_INSN(eor)
 {
     TCGv src;
-    TCGv reg;
     TCGv dest;
     TCGv addr;
     int opsize;
 
     opsize = insn_opsize(insn);
 
-    SRC_EA(env, src, opsize, 1, &addr);
-    reg = DREG(insn, 9);
+    SRC_EA(env, src, opsize, 0, &addr);
     dest = tcg_temp_new();
-    tcg_gen_xor_i32(dest, src, reg);
+    tcg_gen_xor_i32(dest, src, DREG(insn, 9));
     gen_logic_cc(s, dest, opsize);
     DEST_EA(env, insn, opsize, dest, &addr);
 }
@@ -3134,11 +3132,11 @@ DISAS_INSN(and)
     opsize = insn_opsize(insn);
     reg = DREG(insn, 9);
     if (insn & 0x100) {
-        SRC_EA(env, src, opsize, 1, &addr);
+        SRC_EA(env, src, opsize, 0, &addr);
         tcg_gen_and_i32(dest, src, reg);
         DEST_EA(env, insn, opsize, dest, &addr);
     } else {
-        SRC_EA(env, src, opsize, 1, NULL);
+        SRC_EA(env, src, opsize, 0, NULL);
         tcg_gen_and_i32(dest, src, reg);
         gen_partset_reg(opsize, reg, dest);
     }
