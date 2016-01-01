@@ -1538,8 +1538,11 @@ DISAS_INSN(divw)
     TCGv t0, src;
     TCGv quot, rem;
     int sign;
+    TCGv minusone;
 
     sign = (insn & 0x100) != 0;
+
+    tcg_gen_movi_i32(QREG_CC_C, 0); /* C is always cleared, use as 0 */
 
     /* dest.l / src.w */
 
@@ -1566,29 +1569,32 @@ DISAS_INSN(divw)
 
     /* set flags */
 
-    tcg_gen_movi_i32(QREG_CC_C, 0); /* used as 0 */
-    tcg_gen_movi_i32(QREG_CC_N, -1); /* used as -1 */
-
+    minusone = tcg_const_i32(-1);
     tcg_gen_andi_i32(QREG_CC_V, quot, 0xffff0000);
     tcg_gen_movcond_i32(TCG_COND_EQ, QREG_CC_V,
-                        QREG_CC_V, QREG_CC_C /* zero */ ,
-                        QREG_CC_V, QREG_CC_N /* -1 */);
+                        QREG_CC_V, QREG_CC_C /* zero */,
+                        QREG_CC_V, minusone);
+    tcg_temp_free(minusone);
 
-    tcg_gen_ext16s_i32(QREG_CC_N, quot);
+    /* result rem:quot */
 
-    /* on overflow, operands are unaffected */
-
-    tcg_gen_ext16u_i32(QREG_CC_Z, quot);
-    tcg_temp_free(quot);
-    tcg_gen_deposit_i32(QREG_CC_Z, QREG_CC_Z, rem, 16, 16);
+    tcg_gen_ext16u_i32(quot, quot);
+    tcg_gen_deposit_i32(quot, quot, rem, 16, 16);
     tcg_temp_free(rem);
+
+    /* on overflow, operands and flags are unaffected */
+
     tcg_gen_movcond_i32(TCG_COND_EQ, DREG(insn, 9),
-                        QREG_CC_V, QREG_CC_C /* zero */ ,
-                        QREG_CC_Z, DREG(insn, 9));
-
-    /* update CC_Z as it was used as temp */
-
-    tcg_gen_mov_i32(QREG_CC_Z, QREG_CC_N);
+                        QREG_CC_V, QREG_CC_C /* zero */,
+                        quot, DREG(insn, 9));
+    tcg_gen_ext16s_i32(quot, quot);
+    tcg_gen_movcond_i32(TCG_COND_EQ, QREG_CC_Z,
+                        QREG_CC_V, QREG_CC_C /* zero */,
+                        quot, QREG_CC_Z);
+    tcg_gen_movcond_i32(TCG_COND_EQ, QREG_CC_N,
+                        QREG_CC_V, QREG_CC_C /* zero */,
+                        quot, QREG_CC_N);
+    tcg_temp_free(quot);
 
     set_cc_op(s, CC_OP_FLAGS);
 }
