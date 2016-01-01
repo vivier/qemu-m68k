@@ -3233,12 +3233,42 @@ static inline void shift_im(DisasContext *s, uint16_t insn, int opsize)
     int left = insn & 0x100;
     int bits = opsize_bytes(opsize) * 8;
     TCGv reg = gen_extend(DREG(insn, 0), opsize, !logical);
+    TCGv zero;
 
     count = ((count - 1) & 0x7) + 1; /* 1..8 */
 
+    zero = tcg_const_i32(0);
     if (left) {
         tcg_gen_shri_i32(QREG_CC_C, reg, bits - count);
         tcg_gen_shli_i32(QREG_CC_N, reg, count);
+
+        /* Note that ColdFire always clears V,
+           while M68000 sets if the most significant bit is changed at
+           any time during the shift operation */
+        tcg_gen_mov_i32(QREG_CC_V, zero);
+        if (!logical && m68k_feature(s->env, M68K_FEATURE_M68000)) {
+            /* if shift count >= bits, V is (reg != 0) */
+            if (count >= bits) {
+                tcg_gen_setcond_i32(TCG_COND_EQ, QREG_CC_V, reg, zero);
+                /* adjust V: (1,0) -> (0,-1) */
+                tcg_gen_subi_i32(QREG_CC_V, QREG_CC_V, 1);
+            } else {
+                TCGv t0 = tcg_temp_new();
+
+                tcg_gen_shri_i32(QREG_CC_V, reg, bits - 1 - count);
+                tcg_gen_sar_i32(t0, reg, t0);
+                tcg_gen_not_i32(t0, t0);
+
+                tcg_gen_setcond_i32(TCG_COND_EQ, QREG_CC_V, QREG_CC_V, zero);
+                tcg_gen_setcond_i32(TCG_COND_EQ, t0, t0, zero);
+                tcg_gen_or_i32(QREG_CC_V, QREG_CC_V, t0); /* V is !V here */
+
+                tcg_temp_free(t0);
+
+                /* adjust V: (1,0) -> (0,-1) */
+                tcg_gen_subi_i32(QREG_CC_V, QREG_CC_V, 1);
+            }
+        }
     } else {
         tcg_gen_shri_i32(QREG_CC_C, reg, count - 1);
         if (logical) {
@@ -3246,21 +3276,13 @@ static inline void shift_im(DisasContext *s, uint16_t insn, int opsize)
         } else {
             tcg_gen_sari_i32(QREG_CC_N, reg, count);
         }
+        tcg_gen_mov_i32(QREG_CC_V, zero);
     }
 
     gen_ext(QREG_CC_N, QREG_CC_N, opsize, 1);
     tcg_gen_andi_i32(QREG_CC_C, QREG_CC_C, 1);
     tcg_gen_mov_i32(QREG_CC_Z, QREG_CC_N);
     tcg_gen_mov_i32(QREG_CC_X, QREG_CC_C);
-
-    /* Note that ColdFire always clears V, while M68000 sets it for
-       a change in the sign bit.  */
-    if (!logical && m68k_feature(s->env, M68K_FEATURE_M68000)) {
-        reg = gen_extend(DREG(insn, 0), opsize, 1);
-        tcg_gen_xor_i32(QREG_CC_V, QREG_CC_N, reg);
-    } else {
-        tcg_gen_movi_i32(QREG_CC_V, 0);
-    }
 
     gen_partset_reg(opsize, DREG(insn, 0), QREG_CC_N);
     set_cc_op(s, CC_OP_FLAGS);
@@ -3274,6 +3296,7 @@ static inline void shift_reg(DisasContext *s, uint16_t insn, int opsize)
     TCGv reg = gen_extend(DREG(insn, 0), opsize, !logical);
     TCGv s32;
     TCGv_i64 t64, s64;
+    TCGv zero;
 
     t64 = tcg_temp_new_i64();
     s64 = tcg_temp_new_i64();
@@ -3285,8 +3308,7 @@ static inline void shift_reg(DisasContext *s, uint16_t insn, int opsize)
     tcg_gen_andi_i32(s32, DREG(insn, 9), 63);
     tcg_gen_extu_i32_i64(s64, s32);
 
-    /* Non-arithmetic shift clears V.  Use it as a source zero here.  */
-    tcg_gen_movi_i32(QREG_CC_V, 0);
+    zero = tcg_const_i32(0);
 
     tcg_gen_extu_i32_i64(t64, reg);
     if (left) {
@@ -3297,6 +3319,39 @@ static inline void shift_reg(DisasContext *s, uint16_t insn, int opsize)
         tcg_temp_free_i64(t64);
         tcg_gen_sari_i32(QREG_CC_N, QREG_CC_N, 32 - bits);
         tcg_gen_andi_i32(QREG_CC_C, QREG_CC_C, 1);
+
+        /* Note that ColdFire always clears V,
+           while M68000 sets if the most significant bit is changed at
+           any time during the shift operation */
+        tcg_gen_mov_i32(QREG_CC_V, zero);
+        if (!logical && m68k_feature(s->env, M68K_FEATURE_M68000)) {
+
+            TCGv t1 = tcg_const_i32(bits - 1);
+            TCGv t0 = tcg_temp_new();
+
+            tcg_gen_sub_i32(t0, t1, s32);
+            tcg_gen_shr_i32(QREG_CC_V, reg, t0);
+            tcg_gen_sar_i32(t0, reg, t0);
+            tcg_gen_not_i32(t0, t0);
+
+            tcg_gen_setcond_i32(TCG_COND_EQ, QREG_CC_V, QREG_CC_V, zero);
+            tcg_gen_setcond_i32(TCG_COND_EQ, t0, t0, zero);
+            tcg_gen_or_i32(QREG_CC_V, QREG_CC_V, t0); /* V is !V here */
+
+            /* if shift count >= bits, V is (reg != 0) */
+            tcg_gen_setcond_i32(TCG_COND_EQ, t0, reg, zero);
+            tcg_gen_movcond_i32(TCG_COND_GT, QREG_CC_V, s32, t1, t0, QREG_CC_V);
+
+            tcg_temp_free(t0);
+            tcg_temp_free(t1);
+
+            /* adjust V: (1,0) -> (0,-1) */
+            tcg_gen_subi_i32(QREG_CC_V, QREG_CC_V, 1);
+
+            /* if shift count is zero, V is 0 */
+            tcg_gen_movcond_i32(TCG_COND_NE, QREG_CC_V, s32, zero,
+                                QREG_CC_V, zero);
+        }
     } else {
         tcg_gen_shli_i64(t64, t64, 64 - bits);
         if (logical) {
@@ -3311,20 +3366,19 @@ static inline void shift_reg(DisasContext *s, uint16_t insn, int opsize)
         tcg_temp_free_i64(t64);
         gen_ext(QREG_CC_N, QREG_CC_N, opsize, 1);
         tcg_gen_shri_i32(QREG_CC_C, QREG_CC_C, 31);
+        tcg_gen_mov_i32(QREG_CC_V, zero);
     }
     tcg_gen_mov_i32(QREG_CC_Z, QREG_CC_N);
 
-    /* Note that X = C, but only if the shift count was non-zero.  */
-    tcg_gen_movcond_i32(TCG_COND_NE, QREG_CC_X, s32, QREG_CC_V,
-                        QREG_CC_C, QREG_CC_X);
-    tcg_temp_free(s32);
+    /* C is cleared if shift count was zero */
+    tcg_gen_movcond_i32(TCG_COND_NE, QREG_CC_C, s32, zero,
+                        QREG_CC_C, zero);
 
-    /* Note that ColdFire always clears V (which we have done above),
-       while M68000 sets it for a change in the sign bit.  */
-    if (!logical && m68k_feature(s->env, M68K_FEATURE_M68000)) {
-        reg = gen_extend(DREG(insn, 0), opsize, 1);
-        tcg_gen_xor_i32(QREG_CC_V, QREG_CC_N, reg);
-    }
+    /* X = C, but only if the shift count was non-zero.  */
+    tcg_gen_movcond_i32(TCG_COND_NE, QREG_CC_X, s32, zero,
+                        QREG_CC_C, QREG_CC_X);
+    tcg_temp_free(zero);
+    tcg_temp_free(s32);
 
     /* Write back the result.  */
     gen_partset_reg(opsize, DREG(insn, 0), QREG_CC_N);
@@ -3369,9 +3423,18 @@ DISAS_INSN(shift_mem)
     TCGv addr;
 
     SRC_EA(env, src, OS_WORD, !logical, &addr);
+    tcg_gen_movi_i32(QREG_CC_V, 0);
     if (left) {
         tcg_gen_shri_i32(QREG_CC_C, src, 15);
         tcg_gen_shli_i32(QREG_CC_N, src, 1);
+
+        /* Note that ColdFire always clears V,
+           while M68000 sets if the most significant bit is changed at
+           any time during the shift operation */
+        if (!logical && m68k_feature(s->env, M68K_FEATURE_M68000)) {
+            src = gen_extend(src, OS_WORD, 1);
+            tcg_gen_xor_i32(QREG_CC_V, QREG_CC_N, src);
+        }
     } else {
         tcg_gen_mov_i32(QREG_CC_C, src);
         if (logical) {
@@ -3385,15 +3448,6 @@ DISAS_INSN(shift_mem)
     tcg_gen_andi_i32(QREG_CC_C, QREG_CC_C, 1);
     tcg_gen_mov_i32(QREG_CC_Z, QREG_CC_N);
     tcg_gen_mov_i32(QREG_CC_X, QREG_CC_C);
-
-    /* Note that ColdFire always clears V, while M68000 sets it for
-       a change in the sign bit.  */
-    if (!logical && m68k_feature(s->env, M68K_FEATURE_M68000)) {
-        src = gen_extend(src, OS_WORD, 1);
-        tcg_gen_xor_i32(QREG_CC_V, QREG_CC_N, src);
-    } else {
-        tcg_gen_movi_i32(QREG_CC_V, 0);
-    }
 
     DEST_EA(env, insn, OS_WORD, QREG_CC_N, &addr);
     set_cc_op(s, CC_OP_FLAGS);
