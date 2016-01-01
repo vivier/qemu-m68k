@@ -3233,7 +3233,6 @@ static inline void shift_im(DisasContext *s, uint16_t insn, int opsize)
     int left = insn & 0x100;
     int bits = opsize_bytes(opsize) * 8;
     TCGv reg = gen_extend(DREG(insn, 0), opsize, !logical);
-    TCGv tmp;
 
     count = ((count - 1) & 0x7) + 1; /* 1..8 */
 
@@ -3249,8 +3248,7 @@ static inline void shift_im(DisasContext *s, uint16_t insn, int opsize)
         }
     }
 
-    tmp = gen_extend(QREG_CC_N, opsize, 1);
-    tcg_gen_mov_i32(QREG_CC_N, tmp);
+    gen_ext(QREG_CC_N, QREG_CC_N, opsize, 1);
     tcg_gen_andi_i32(QREG_CC_C, QREG_CC_C, 1);
     tcg_gen_mov_i32(QREG_CC_Z, QREG_CC_N);
     tcg_gen_mov_i32(QREG_CC_X, QREG_CC_C);
@@ -3292,7 +3290,7 @@ static inline void shift_reg(DisasContext *s, uint16_t insn, int opsize)
 
     tcg_gen_extu_i32_i64(t64, reg);
     if (left) {
-        tcg_gen_addi_i64(s64, s64, 32 - bits);
+        tcg_gen_shli_i64(t64, t64, 32 - bits);
         tcg_gen_shl_i64(t64, t64, s64);
         tcg_temp_free_i64(s64);
         tcg_gen_extr_i64_i32(QREG_CC_N, QREG_CC_C, t64);
@@ -3301,15 +3299,17 @@ static inline void shift_reg(DisasContext *s, uint16_t insn, int opsize)
         tcg_gen_andi_i32(QREG_CC_C, QREG_CC_C, 1);
     } else {
         tcg_gen_shli_i64(t64, t64, 64 - bits);
-        tcg_gen_addi_i64(s64, s64, 32 - bits);
         if (logical) {
+            tcg_gen_shri_i64(t64, t64, 32 - bits);
             tcg_gen_shr_i64(t64, t64, s64);
         } else {
+            tcg_gen_sari_i64(t64, t64, 32 - bits);
             tcg_gen_sar_i64(t64, t64, s64);
         }
         tcg_temp_free_i64(s64);
         tcg_gen_extr_i64_i32(QREG_CC_C, QREG_CC_N, t64);
         tcg_temp_free_i64(t64);
+        gen_ext(QREG_CC_N, QREG_CC_N, opsize, 1);
         tcg_gen_shri_i32(QREG_CC_C, QREG_CC_C, 31);
     }
     tcg_gen_mov_i32(QREG_CC_Z, QREG_CC_N);
@@ -3366,7 +3366,6 @@ DISAS_INSN(shift_mem)
     int logical = insn & 8;
     int left = insn & 0x100;
     TCGv src;
-    TCGv tmp;
     TCGv addr;
 
     SRC_EA(env, src, OS_WORD, !logical, &addr);
@@ -3382,8 +3381,7 @@ DISAS_INSN(shift_mem)
         }
     }
 
-    tmp = gen_extend(QREG_CC_N, OS_WORD, 1);
-    tcg_gen_mov_i32(QREG_CC_N, tmp);
+    gen_ext(QREG_CC_N, QREG_CC_N, OS_WORD, 1);
     tcg_gen_andi_i32(QREG_CC_C, QREG_CC_C, 1);
     tcg_gen_mov_i32(QREG_CC_Z, QREG_CC_N);
     tcg_gen_mov_i32(QREG_CC_X, QREG_CC_C);
