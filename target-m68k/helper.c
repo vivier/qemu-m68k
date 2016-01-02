@@ -520,10 +520,17 @@ add:                                                                       \
         z = n;                                                             \
         v = (res ^ src1) & ~(src1 ^ src2);                                 \
         break;                                                             \
-    case CC_OP_SUB:                                                        \
+    case CC_OP_SUBB:                                                       \
+        src1 = (int8_t)(n + v);                                            \
+        goto sub;                                                          \
+    case CC_OP_SUBW:                                                       \
+        src1 = (int16_t)(n + v);                                           \
+        goto sub;                                                          \
+    case CC_OP_SUBL:                                                       \
+        src1 = n + v;                                                      \
+sub:                                                                       \
         res = n;                                                           \
         src2 = v;                                                          \
-        src1 = res + src2;                                                 \
         c = x;                                                             \
         z = n;                                                             \
         v = (res ^ src1) & (src1 ^ src2);                                  \
