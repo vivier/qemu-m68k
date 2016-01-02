@@ -1656,23 +1656,29 @@ DISAS_INSN(divl)
     tcg_temp_free_i64(den64);
     tcg_temp_free_i64(num64);
 
-    /* convert results to i32 */
+    /* compute result and overflow flag */
 
     quot = tcg_temp_new();
     tcg_gen_extr_i64_i32(quot, QREG_CC_V, quot64);
-    tcg_temp_free_i64(quot64);
 
     rem = tcg_temp_new();
+    minusone = tcg_const_i32(-1);
+    if (sign) {
+        tcg_gen_ext32s_i64(quot64, quot64);
+        tcg_gen_trunc_shr_i64_i32(rem, quot64, 32);
+        tcg_gen_movcond_i32(TCG_COND_EQ, QREG_CC_V,
+                            QREG_CC_V, rem,
+                            QREG_CC_C /* 0 */, minusone /* -1 */);
+    } else {
+        tcg_gen_movcond_i32(TCG_COND_EQ, QREG_CC_V,
+                            QREG_CC_V, QREG_CC_C /* 0 */ ,
+                            QREG_CC_V /* 0 */, minusone /* -1 */);
+    }
+    tcg_temp_free(minusone);
+    tcg_temp_free_i64(quot64);
+
     tcg_gen_trunc_i64_i32(rem, rem64);
     tcg_temp_free_i64(rem64);
-
-    /* compute overflow flag */
-
-    minusone = tcg_const_i32(-1);
-    tcg_gen_movcond_i32(TCG_COND_EQ, QREG_CC_V,
-                        QREG_CC_V, QREG_CC_C /* 0 */ ,
-                        QREG_CC_V, minusone /* -1 */);
-    tcg_temp_free(minusone);
 
     /* on overflow, operands and flags are unaffected */
 
