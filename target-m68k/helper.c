@@ -510,10 +510,12 @@ void HELPER(mac_set_flags)(CPUM68KState *env, uint32_t acc)
     case CC_OP_FLAGS:                                                      \
         /* Everything in place.  */                                        \
         break;                                                             \
-    case CC_OP_ADD:                                                        \
+    case CC_OP_ADDB:                                                       \
+    case CC_OP_ADDW:                                                       \
+    case CC_OP_ADDL:                                                       \
         res = n;                                                           \
         src2 = v;                                                          \
-        src1 = res - src2;                                                 \
+        src1 = EXTSIGN(res - src2, op - CC_OP_ADDB);                       \
         c = x;                                                             \
         z = n;                                                             \
         v = (res ^ src1) & ~(src1 ^ src2);                                 \
