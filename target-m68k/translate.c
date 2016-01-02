@@ -173,7 +173,7 @@ static const uint8_t cc_op_live[CC_OP_NB] = {
     [CC_OP_FLAGS] = CCF_C | CCF_V | CCF_Z | CCF_N | CCF_X,
     [CC_OP_ADD] = CCF_X | CCF_N | CCF_V,
     [CC_OP_SUB] = CCF_X | CCF_N | CCF_V,
-    [CC_OP_CMP] = CCF_X | CCF_N | CCF_V,
+    [CC_OP_CMPB ... CC_OP_CMPL] = CCF_X | CCF_N | CCF_V,
     [CC_OP_LOGIC] = CCF_X | CCF_N
 };
 
@@ -542,9 +542,18 @@ static void gen_flush_flags(DisasContext *s)
         tcg_temp_free(t1);
         break;
 
-    case CC_OP_CMP:
-        tcg_gen_setcond_i32(TCG_COND_LTU, QREG_CC_C, QREG_CC_N, QREG_CC_V);
+    case CC_OP_CMPB:
         tcg_gen_sub_i32(QREG_CC_Z, QREG_CC_N, QREG_CC_V);
+        tcg_gen_ext8s_i32(QREG_CC_Z, QREG_CC_Z);
+        goto cmp;
+    case CC_OP_CMPW:
+        tcg_gen_sub_i32(QREG_CC_Z, QREG_CC_N, QREG_CC_V);
+        tcg_gen_ext16s_i32(QREG_CC_Z, QREG_CC_Z);
+        goto cmp;
+    case CC_OP_CMPL:
+        tcg_gen_sub_i32(QREG_CC_Z, QREG_CC_N, QREG_CC_V);
+cmp:
+        tcg_gen_setcond_i32(TCG_COND_LTU, QREG_CC_C, QREG_CC_N, QREG_CC_V);
         /* Compute signed overflow for subtraction.  */
         t0 = tcg_temp_new();
         tcg_gen_xor_i32(t0, QREG_CC_Z, QREG_CC_N);
@@ -1197,7 +1206,7 @@ static void gen_cc_cond(DisasCompare *c, DisasContext *s, int cond)
     CCOp op = s->cc_op;
 
     /* The CC_OP_CMP form can handle most normal comparisons directly.  */
-    if (op == CC_OP_CMP) {
+    if (op == CC_OP_CMPB || op == CC_OP_CMPW || op == CC_OP_CMPL) {
         c->g1 = c->g2 = 1;
         c->v1 = QREG_CC_N;
         c->v2 = QREG_CC_V;
@@ -1220,6 +1229,16 @@ static void gen_cc_cond(DisasCompare *c, DisasContext *s, int cond)
             c->v2 = tcg_const_i32(0);
             c->v1 = tmp = tcg_temp_new();
             tcg_gen_sub_i32(tmp, QREG_CC_N, QREG_CC_V);
+            switch (op) {
+            case CC_OP_CMPB:
+                tcg_gen_ext8s_i32(tmp, tmp);
+                break;
+            case CC_OP_CMPW:
+                tcg_gen_ext16s_i32(tmp, tmp);
+                break;
+            default:
+                break;
+            }
             /* fallthru */
         case 12: /* GE */
         case 13: /* LT */
@@ -2208,7 +2227,7 @@ DISAS_INSN(arith_im)
         break;
     case 6: /* cmpi */
         gen_update_cc_add(src1, im);
-        set_cc_op(s, CC_OP_CMP);
+        set_cc_op(s, CC_OP_CMPB + opsize);
         break;
     default:
         abort();
@@ -3062,7 +3081,7 @@ DISAS_INSN(cmp)
     SRC_EA(env, src, opsize, 1, NULL);
     reg = gen_extend(DREG(insn, 9), opsize, 1);
     gen_update_cc_add(reg, src);
-    set_cc_op(s, CC_OP_CMP);
+    set_cc_op(s, CC_OP_CMPB + opsize);
 }
 
 DISAS_INSN(cmpa)
@@ -3079,7 +3098,7 @@ DISAS_INSN(cmpa)
     SRC_EA(env, src, opsize, 1, NULL);
     reg = AREG(insn, 9);
     gen_update_cc_add(reg, src);
-    set_cc_op(s, CC_OP_CMP);
+    set_cc_op(s, CC_OP_CMPB + opsize);
 }
 
 DISAS_INSN(cmpm)
@@ -3100,7 +3119,7 @@ DISAS_INSN(cmpm)
     tcg_gen_addi_i32(reg, reg, opsize_bytes(opsize));
 
     gen_update_cc_add(dest, src);
-    set_cc_op(s, CC_OP_CMP);
+    set_cc_op(s, CC_OP_CMPB + opsize);
 }
 
 DISAS_INSN(eor)

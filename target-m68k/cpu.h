@@ -190,7 +190,7 @@ typedef enum {
     CC_OP_SUB,
 
     /* X in cc_x, {N,Z,C,V} via cc_n/cc_v.  */
-    CC_OP_CMP,
+    CC_OP_CMPB, CC_OP_CMPW, CC_OP_CMPL,
 
     /* X in cc_x, C = 0, V = 0, N in cc_n, Z in cc_n.  */
     CC_OP_LOGIC,

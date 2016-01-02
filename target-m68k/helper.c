@@ -521,10 +521,17 @@ void HELPER(mac_set_flags)(CPUM68KState *env, uint32_t acc)
         z = n;                                                             \
         v = (res ^ src1) & (src1 ^ src2);                                  \
         break;                                                             \
-    case CC_OP_CMP:                                                        \
+    case CC_OP_CMPB:                                                       \
+        res = (int8_t)(n - v);                                             \
+        goto cmp;                                                          \
+    case CC_OP_CMPW:                                                       \
+        res = (int16_t)(n - v);                                            \
+        goto cmp;                                                          \
+    case CC_OP_CMPL:                                                       \
+        res = n - v;                                                       \
+cmp:                                                                       \
         src1 = n;                                                          \
         src2 = v;                                                          \
-        res = src1 - src2;                                                 \
         n = res;                                                           \
         z = res;                                                           \
         c = src1 < src2;                                                   \
