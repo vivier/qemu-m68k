@@ -501,6 +501,10 @@ void HELPER(mac_set_flags)(CPUM68KState *env, uint32_t acc)
     }
 }
 
+#define EXTSIGN(val, index) (     \
+    (index == 0) ? (int8_t)(val) : ((index == 1) ? (int16_t)(val) : (val)) \
+)
+
 #define COMPUTE_CCR(op, x, n, z, v, c) {                                   \
     switch (op) {                                                          \
     case CC_OP_FLAGS:                                                      \
@@ -522,10 +526,12 @@ void HELPER(mac_set_flags)(CPUM68KState *env, uint32_t acc)
         z = n;                                                             \
         v = (res ^ src1) & (src1 ^ src2);                                  \
         break;                                                             \
-    case CC_OP_CMP:                                                        \
+    case CC_OP_CMPB:                                                       \
+    case CC_OP_CMPW:                                                       \
+    case CC_OP_CMPL:                                                       \
         src1 = n;                                                          \
         src2 = v;                                                          \
-        res = src1 - src2;                                                 \
+        res = EXTSIGN(src1 - src2, op - CC_OP_CMPB);                       \
         n = res;                                                           \
         z = res;                                                           \
         c = src1 < src2;                                                   \
