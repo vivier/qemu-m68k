@@ -1538,7 +1538,6 @@ DISAS_INSN(divw)
     TCGv t0, src;
     TCGv quot, rem;
     int sign;
-    TCGv minusone;
 
     sign = (insn & 0x100) != 0;
 
@@ -1556,25 +1555,28 @@ DISAS_INSN(divw)
     gen_raise_exception(EXCP_DIV0);
     gen_set_label(l1);
 
+    tcg_gen_movi_i32(QREG_CC_C, 0); /* C is always cleared, use as 0 */
+
     quot = tcg_temp_new();
     rem = tcg_temp_new();
     if (sign) {
         tcg_gen_div_i32(quot, DREG(insn, 9), src);
         tcg_gen_rem_i32(rem, DREG(insn, 9), src);
+        tcg_gen_ext16s_i32(QREG_CC_V, quot);
+        tcg_gen_movi_i32(src, -1);
+        tcg_gen_movcond_i32(TCG_COND_EQ, QREG_CC_V,
+                            QREG_CC_V, quot,
+                            QREG_CC_C /* 0 */, src /* -1 */);
     } else {
         tcg_gen_divu_i32(quot, DREG(insn, 9), src);
         tcg_gen_remu_i32(rem, DREG(insn, 9), src);
+        tcg_gen_shri_i32(QREG_CC_V, quot, 16);
+        tcg_gen_movi_i32(src, -1);
+        tcg_gen_movcond_i32(TCG_COND_EQ, QREG_CC_V,
+                            QREG_CC_V, QREG_CC_C /* 0 */,
+                            QREG_CC_V /* 0 */, src /* -1 */);
     }
     tcg_temp_free(src);
-
-    /* set flags */
-
-    minusone = tcg_const_i32(-1);
-    tcg_gen_andi_i32(QREG_CC_V, quot, 0xffff0000);
-    tcg_gen_movcond_i32(TCG_COND_EQ, QREG_CC_V,
-                        QREG_CC_V, QREG_CC_C /* zero */,
-                        QREG_CC_V, minusone);
-    tcg_temp_free(minusone);
 
     /* result rem:quot */
 
