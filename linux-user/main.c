@@ -3057,7 +3057,7 @@ static int do_cas(CPUM68KState *env)
     env->cc_n = dest1;
     env->cc_v = cmp1;
     z = dest1 - cmp1;
-    env->cc_op = CC_OP_CMP;
+    env->cc_op = CC_OP_CMPB + size;
 
     if (is_cas) {
         /* CAS */
