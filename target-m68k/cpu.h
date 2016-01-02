@@ -183,7 +183,7 @@ typedef enum {
     CC_OP_FLAGS,
 
     /* X in cc_x, C = X, N in cc_n, Z in cc_n, V via cc_n/cc_v.  */
-    CC_OP_ADD,
+    CC_OP_ADDB, CC_OP_ADDW, CC_OP_ADDL,
     CC_OP_SUB,
 
     /* X in cc_x, {N,Z,C,V} via cc_n/cc_v.  */
