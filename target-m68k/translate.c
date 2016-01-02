@@ -1748,23 +1748,43 @@ static inline void bcd_add(TCGv src, TCGv dest)
     tcg_temp_free(t1);
 }
 
-static inline void bcd_neg(TCGv val)
+static inline void bcd_neg(TCGv dest, TCGv src)
 {
     TCGv t0, t1;
 
     /* compute the 10's complement
      *
-     *    bcd_add(0xff99 - val, 0x0001)
+     *    bcd_add(0xff99 - (src + X), 0x0001)
+     *
+     *        t1 = 0xF9999999 - src - X)
+     *        t2 = t1 + 0x06666666
+     *        t3 = t2 + 0x00000001
+     *        t4 = t2 ^ 0x00000001
+     *        t5 = t3 ^ t4
+     *        t6 = ~t5 & 0x11111110
+     *        t7 = (t6 >> 2) | (t6 >> 3)
+     *        return t3 - t7
      *
      * reduced in:
+     *
+     *        t2 = 0xFFFFFFFF + (-src)
+     *        t3 = (-src)
+     *        t4 = t2  ^ (X ^ 1)
+     *        t5 = (t3 - X) ^ t4
+     *        t6 = ~t5 & 0x11111110
+     *        t7 = (t6 >> 2) | (t6 >> 3)
+     *        return (t3 - X) - t7
+     *
      */
 
-    tcg_gen_neg_i32(val, val);
+    tcg_gen_neg_i32(src, src);
 
     t0 = tcg_temp_new();
-    tcg_gen_addi_i32(t0, val, 0xffff);
+    tcg_gen_addi_i32(t0, src, 0xffff);
     tcg_gen_xori_i32(t0, t0, 1);
-    tcg_gen_xor_i32(t0, t0, val);
+    tcg_gen_xor_i32(t0, t0, QREG_CC_X);
+    tcg_gen_sub_i32(src, src, QREG_CC_X);
+    tcg_gen_xor_i32(t0, t0, src);
     tcg_gen_not_i32(t0, t0);
     tcg_gen_andi_i32(t0, t0, 0x110);
 
@@ -1774,7 +1794,7 @@ static inline void bcd_neg(TCGv val)
     tcg_gen_or_i32(t0, t0, t1);
     tcg_temp_free(t1);
 
-    tcg_gen_sub_i32(val, val, t0);
+    tcg_gen_sub_i32(dest, src, t0);
     tcg_temp_free(t0);
 }
 
@@ -1845,8 +1865,7 @@ DISAS_INSN(sbcd_reg)
     dest = gen_extend(DREG(insn, 9), OS_BYTE, 0);
 
     tmp = tcg_temp_new();
-    tcg_gen_add_i32(tmp, src, QREG_CC_X);
-    bcd_neg(tmp);
+    bcd_neg(tmp, src);
     bcd_add(tmp, dest);
     tcg_temp_free(tmp);
 
@@ -1876,8 +1895,7 @@ DISAS_INSN(sbcd_mem)
     dest = gen_load(s, OS_BYTE, addr_dest, 0);
 
     tmp = tcg_temp_new();
-    tcg_gen_add_i32(tmp, src, QREG_CC_X);
-    bcd_neg(tmp);
+    bcd_neg(tmp, src);
     bcd_add(tmp, dest);
     tcg_temp_free(tmp);
 
@@ -1897,8 +1915,7 @@ DISAS_INSN(nbcd)
 
     SRC_EA(env, dest, OS_BYTE, 0, &addr);
 
-    tcg_gen_add_i32(dest, dest, QREG_CC_X);
-    bcd_neg(dest);
+    bcd_neg(dest, dest);
 
     DEST_EA(env, insn, OS_BYTE, dest, &addr);
 
