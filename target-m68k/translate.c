@@ -175,7 +175,7 @@ static const uint8_t cc_op_live[CC_OP_NB] = {
     [CC_OP_FLAGS] = CCF_C | CCF_V | CCF_Z | CCF_N | CCF_X,
     [CC_OP_ADD] = CCF_X | CCF_N | CCF_V,
     [CC_OP_SUB] = CCF_X | CCF_N | CCF_V,
-    [CC_OP_CMP] = CCF_X | CCF_N | CCF_V,
+    [CC_OP_CMPB ... CC_OP_CMPL] = CCF_X | CCF_N | CCF_V,
     [CC_OP_LOGIC] = CCF_X | CCF_N
 };
 
@@ -508,6 +508,33 @@ static TCGv gen_lea_indexed(CPUM68KState *env, DisasContext *s, TCGv base)
     return add;
 }
 
+/* Sign or zero extend a value.  */
+
+static inline void gen_ext(TCGv res, TCGv val, int opsize, int sign)
+{
+    switch (opsize) {
+    case OS_BYTE:
+        if (sign) {
+            tcg_gen_ext8s_i32(res, val);
+        } else {
+            tcg_gen_ext8u_i32(res, val);
+        }
+        break;
+    case OS_WORD:
+        if (sign) {
+            tcg_gen_ext16s_i32(res, val);
+        } else {
+            tcg_gen_ext16u_i32(res, val);
+        }
+        break;
+    case OS_LONG:
+        tcg_gen_mov_i32(res, val);
+        break;
+    default:
+        g_assert_not_reached();
+    }
+}
+
 /* Evaluate all the CC flags.  */
 
 static void gen_flush_flags(DisasContext *s)
@@ -546,9 +573,12 @@ static void gen_flush_flags(DisasContext *s)
         tcg_temp_free(t1);
         break;
 
-    case CC_OP_CMP:
+    case CC_OP_CMPB:
+    case CC_OP_CMPW:
+    case CC_OP_CMPL:
         tcg_gen_setcond_i32(TCG_COND_LTU, QREG_CC_C, QREG_CC_N, QREG_CC_V);
         tcg_gen_sub_i32(QREG_CC_Z, QREG_CC_N, QREG_CC_V);
+        gen_ext(QREG_CC_Z, QREG_CC_Z, s->cc_op - CC_OP_CMPB, 1);
         /* Compute signed overflow for subtraction.  */
         t0 = tcg_temp_new();
         tcg_gen_xor_i32(t0, QREG_CC_Z, QREG_CC_N);
@@ -580,33 +610,6 @@ static void gen_flush_flags(DisasContext *s)
     s->cc_op_synced = 1;
 }
 
-/* Sign or zero extend a value.  */
-
-static inline void gen_ext(TCGv res, TCGv val, int opsize, int sign)
-{
-    switch (opsize) {
-    case OS_BYTE:
-        if (sign) {
-            tcg_gen_ext8s_i32(res, val);
-        } else {
-            tcg_gen_ext8u_i32(res, val);
-        }
-        break;
-    case OS_WORD:
-        if (sign) {
-            tcg_gen_ext16s_i32(res, val);
-        } else {
-            tcg_gen_ext16u_i32(res, val);
-        }
-        break;
-    case OS_LONG:
-        tcg_gen_mov_i32(res, val);
-        break;
-    default:
-        g_assert_not_reached();
-    }
-}
-
 static inline TCGv gen_extend(TCGv val, int opsize, int sign)
 {
     TCGv tmp;
@@ -625,6 +628,13 @@ static void gen_logic_cc(DisasContext *s, TCGv val, int opsize)
 {
     gen_ext(QREG_CC_N, val, opsize, 1);
     set_cc_op(s, CC_OP_LOGIC);
+}
+
+static void gen_update_cc_cmp(DisasContext *s, TCGv dest, TCGv src, int opsize)
+{
+    tcg_gen_mov_i32(QREG_CC_N, dest);
+    tcg_gen_mov_i32(QREG_CC_V, src);
+    set_cc_op(s, CC_OP_CMPB + opsize);
 }
 
 static void gen_update_cc_add(TCGv dest, TCGv src)
@@ -1201,7 +1211,7 @@ static void gen_cc_cond(DisasCompare *c, DisasContext *s, int cond)
     CCOp op = s->cc_op;
 
     /* The CC_OP_CMP form can handle most normal comparisons directly.  */
-    if (op == CC_OP_CMP) {
+    if (op == CC_OP_CMPB || op == CC_OP_CMPW || op == CC_OP_CMPL) {
         c->g1 = c->g2 = 1;
         c->v1 = QREG_CC_N;
         c->v2 = QREG_CC_V;
@@ -1224,6 +1234,7 @@ static void gen_cc_cond(DisasCompare *c, DisasContext *s, int cond)
             c->v2 = tcg_const_i32(0);
             c->v1 = tmp = tcg_temp_new();
             tcg_gen_sub_i32(tmp, QREG_CC_N, QREG_CC_V);
+            gen_ext(tmp, tmp, op - CC_OP_CMPB, 1);
             /* fallthru */
         case 12: /* GE */
         case 13: /* LT */
@@ -2217,8 +2228,7 @@ DISAS_INSN(arith_im)
         gen_logic_cc(s, dest, opsize);
         break;
     case 6: /* cmpi */
-        gen_update_cc_add(src1, im);
-        set_cc_op(s, CC_OP_CMP);
+        gen_update_cc_cmp(s, src1, im, opsize);
         break;
     default:
         abort();
@@ -3071,8 +3081,7 @@ DISAS_INSN(cmp)
     opsize = insn_opsize(insn);
     SRC_EA(env, src, opsize, 1, NULL);
     reg = gen_extend(DREG(insn, 9), opsize, 1);
-    gen_update_cc_add(reg, src);
-    set_cc_op(s, CC_OP_CMP);
+    gen_update_cc_cmp(s, reg, src, opsize);
 }
 
 DISAS_INSN(cmpa)
@@ -3088,8 +3097,7 @@ DISAS_INSN(cmpa)
     }
     SRC_EA(env, src, opsize, 1, NULL);
     reg = AREG(insn, 9);
-    gen_update_cc_add(reg, src);
-    set_cc_op(s, CC_OP_CMP);
+    gen_update_cc_cmp(s, reg, src, opsize);
 }
 
 DISAS_INSN(cmpm)
@@ -3109,8 +3117,7 @@ DISAS_INSN(cmpm)
     dest = gen_load(s, opsize, reg, 1);
     tcg_gen_addi_i32(reg, reg, opsize_bytes(opsize));
 
-    gen_update_cc_add(dest, src);
-    set_cc_op(s, CC_OP_CMP);
+    gen_update_cc_cmp(s, dest, src, opsize);
 }
 
 DISAS_INSN(eor)
