@@ -546,7 +546,7 @@ void HELPER(mac_set_flags)(CPUM68KState *env, uint32_t acc)
         z = n;                                                             \
         break;                                                             \
     default:                                                               \
-        cpu_abort(CPU(m68k_env_get_cpu(env)), "Bad CC_OP %d", env->cc_op); \
+        cpu_abort(CPU(m68k_env_get_cpu(env)), "Bad CC_OP %d", op);         \
     }                                                                      \
 } while (0)
 
