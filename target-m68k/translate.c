@@ -63,7 +63,7 @@ static TCGv NULL_QREG;
 /* Used to distinguish stores from bad addressing modes.  */
 static TCGv store_dummy;
 
-static uint8_t gen_opc_cc_op[OPC_BUF_SIZE];
+static int8_t gen_opc_cc_op[OPC_BUF_SIZE];
 
 #include "exec/gen-icount.h"
 
