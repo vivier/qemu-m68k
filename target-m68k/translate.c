@@ -3598,13 +3598,16 @@ static inline void rotate_x_flags(TCGv reg, int size)
 static inline void rotate_x(TCGv dest, TCGv X, TCGv reg, TCGv shift,
                             int left, int size)
 {
-    TCGv_i64 t0, t1, shift64;
+    TCGv_i64 t0, shift64;
     TCGv lo, hi;
 
     shift64 = tcg_temp_new_i64();
     tcg_gen_extu_i32_i64(shift64, shift);
 
     t0 = tcg_temp_new_i64();
+
+    lo = tcg_temp_new();
+    hi = tcg_temp_new();
 
     if (left) {
         /* create [reg:X:..] */
@@ -3626,19 +3629,12 @@ static inline void rotate_x(TCGv dest, TCGv X, TCGv reg, TCGv shift,
 
         /* result is [reg:..:reg:X] */
 
-        lo = tcg_temp_new();
-        hi = tcg_temp_new();
-
         tcg_gen_extr_i64_i32(lo, hi, t0);
         tcg_gen_andi_i32(X, lo, 1);
 
         tcg_gen_shri_i32(lo, lo, 1);
         tcg_gen_shri_i32(hi, hi, 32 - size);
         tcg_gen_or_i32(dest, lo, hi);
-
-        tcg_temp_free(hi);
-        tcg_temp_free(lo);
-
     } else {
         if (size == 32) {
             tcg_gen_concat_i32_i64(t0, reg, QREG_CC_X);
@@ -3647,28 +3643,26 @@ static inline void rotate_x(TCGv dest, TCGv X, TCGv reg, TCGv shift,
             tcg_gen_or_i32(X, reg, X);
             tcg_gen_extu_i32_i64(t0, X);
         }
-        tcg_gen_shli_i64(t0, t0, 1);
-        tcg_gen_shli_i64(t0, t0, size + 1);
-        tcg_gen_shr_i64(t0, t0, shift64);
+
+        tcg_gen_rotr_i64(t0, t0, shift64);
         tcg_temp_free_i64(shift64);
 
-        /* result is a (size + 1) bit value: [reg:X] */
+        /* result is value: [X:reg:..:reg] */
 
-        t1 = tcg_temp_new_i64();
-        tcg_gen_shri_i64(t1, t0, size + 1);
-        tcg_gen_or_i64(t0, t0, t1);
-        tcg_temp_free_i64(t1);
+        tcg_gen_extr_i64_i32(lo, hi, t0);
 
         /* extract X */
 
-        tcg_gen_trunc_i64_i32(X, t0);
-        tcg_gen_andi_i32(X, X, 1);
+        tcg_gen_shri_i32(X, hi, 31);
 
         /* extract result */
 
-        tcg_gen_shri_i64(t0, t0, 1);
-        tcg_gen_trunc_i64_i32(dest, t0);
+        tcg_gen_shli_i32(hi, hi, 1);
+        tcg_gen_shri_i32(hi, hi, 32 - size);
+        tcg_gen_or_i32(dest, lo, hi);
     }
+    tcg_temp_free(hi);
+    tcg_temp_free(lo);
     tcg_temp_free_i64(t0);
 
     tcg_gen_movi_i32(QREG_CC_V, 0); /* always cleared */
