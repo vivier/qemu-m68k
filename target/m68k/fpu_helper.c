@@ -745,3 +745,38 @@ void HELPER(fsincos)(CPUM68KState *env, FPReg *res0, FPReg *res1, FPReg *val)
     res1->d = ldouble_to_floatx80(dcos, &env->fp_status);
     res0->d = ldouble_to_floatx80(dsin, &env->fp_status);
 }
+
+static void make_quotient(CPUM68KState *env, long double val, uint32_t sign)
+{
+    uint32_t quotient = (uint32_t)fabsl(val);
+    quotient = (sign << 7) | (quotient & 0x7f);
+    env->fpsr = (env->fpsr & ~FPSR_QT_MASK) | (quotient << FPSR_QT_SHIFT);
+}
+
+void HELPER(fmod)(CPUM68KState *env, FPReg *res, FPReg *val0, FPReg *val1)
+{
+    long double src, dst;
+    uint32_t sign = floatx80_is_neg(val0->d) ^  floatx80_is_neg(val1->d);
+
+    src = floatx80_to_ldouble(val0->d);
+    dst = floatx80_to_ldouble(val1->d);
+
+    dst = fmodl(dst, src);
+
+    make_quotient(env, dst, sign);
+    res->d = ldouble_to_floatx80(dst, &env->fp_status);
+}
+
+void HELPER(frem)(CPUM68KState *env, FPReg *res, FPReg *val0, FPReg *val1)
+{
+    long double src, dst;
+    uint32_t sign = floatx80_is_neg(val0->d) ^  floatx80_is_neg(val1->d);
+
+    src = floatx80_to_ldouble(val0->d);
+    dst = floatx80_to_ldouble(val1->d);
+
+    dst = remainderl(dst, src);
+
+    make_quotient(env, dst, sign);
+    res->d = ldouble_to_floatx80(dst, &env->fp_status);
+}
