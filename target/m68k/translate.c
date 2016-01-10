@@ -4625,6 +4625,9 @@ DISAS_INSN(fpu)
     case 1: /* fint */
         gen_helper_iround_FP0(cpu_env);
         break;
+    case 2: /* fsinh */
+        gen_helper_sinh_FP0(cpu_env);
+        break;
     case 3: /* fintrz */
         gen_helper_itrunc_FP0(cpu_env);
         break;
@@ -4637,6 +4640,42 @@ DISAS_INSN(fpu)
     case 0x45: /* fdsqrt */
         gen_helper_dsqrt_FP0(cpu_env);
         break;
+    case 0x06: /* flognp1 */
+        gen_helper_lognp1_FP0(cpu_env);
+        break;
+    case 0x09: /* ftanh */
+        gen_helper_tanh_FP0(cpu_env);
+        break;
+    case 0x0a: /* fatan */
+        gen_helper_atan_FP0(cpu_env);
+        break;
+    case 0x0c: /* fasin */
+        gen_helper_asin_FP0(cpu_env);
+        break;
+    case 0x0d: /* fatanh */
+        gen_helper_atanh_FP0(cpu_env);
+        break;
+    case 0x0e: /* fsin */
+        gen_helper_sin_FP0(cpu_env);
+        break;
+    case 0x0f: /* ftan */
+        gen_helper_tan_FP0(cpu_env);
+        break;
+    case 0x10: /* fetox */
+        gen_helper_exp_FP0(cpu_env);
+        break;
+    case 0x11: /* ftwotox */
+        gen_helper_exp2_FP0(cpu_env);
+        break;
+    case 0x12: /* ftentox */
+        gen_helper_exp10_FP0(cpu_env);
+        break;
+    case 0x14: /* flogn */
+        gen_helper_ln_FP0(cpu_env);
+        break;
+    case 0x15: /* flog10 */
+        gen_helper_log10_FP0(cpu_env);
+        break;
     case 0x18: /* fabs */
         gen_helper_abs_FP0(cpu_env);
         break;
@@ -4646,6 +4685,9 @@ DISAS_INSN(fpu)
     case 0x5c: /* fdabs */
         gen_helper_dabs_FP0(cpu_env);
         break;
+    case 0x19: /* fcosh */
+        gen_helper_cosh_FP0(cpu_env);
+        break;
     case 0x1a: /* fneg */
         gen_helper_neg_FP0(cpu_env);
         break;
@@ -4654,6 +4696,12 @@ DISAS_INSN(fpu)
         break;
     case 0x5e: /* fdneg */
         gen_helper_dneg_FP0(cpu_env);
+        break;
+    case 0x1c: /* facos */
+        gen_helper_acos_FP0(cpu_env);
+        break;
+    case 0x1d: /* fcos */
+        gen_helper_cos_FP0(cpu_env);
         break;
     case 0x1e: /* fgetexp */
         gen_helper_getexp_FP0(cpu_env);

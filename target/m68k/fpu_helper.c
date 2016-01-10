@@ -23,6 +23,7 @@
 #include "cpu.h"
 #include "exec/helper-proto.h"
 #include "exec/exec-all.h"
+#include <math.h>
 
 static const floatx80 fpu_rom[128] = {
     [0x00] = floatx80_pi,                                   /* Pi */
@@ -710,5 +711,241 @@ void HELPER(mod_FP0_FP1)(CPUM68KState *env)
                        &env->fp_status);
     make_quotient(env, res);
 
+    floatx80_to_FP0(env, res);
+}
+
+static long double floatx80_to_ldouble(floatx80 val)
+{
+    if (floatx80_is_infinity(val)) {
+            if (floatx80_is_neg(val)) {
+                    return -__builtin_infl();
+            }
+            return __builtin_infl();
+    }
+    if (floatx80_is_any_nan(val)) {
+            char low[20];
+            sprintf(low, "0x%016"PRIx64, val.low);
+
+            return nanl(low);
+    }
+
+    return *(long double *)&val;
+}
+
+static floatx80 ldouble_to_floatx80(long double val)
+{
+    floatx80 res;
+
+    if (isinf(val)) {
+            res.high = floatx80_default_nan(NULL).high;
+            res.low = 0;
+    }
+    if (isinf(val) < 0) {
+            res.high |= 0x8000;
+    }
+    if (isnan(val)) {
+            res.high = floatx80_default_nan(NULL).high;
+            res.low = *(uint64_t *)((char *)&val + 4);
+    }
+    return *(floatx80 *)&val;
+}
+
+void HELPER(sinh_FP0)(CPUM68KState *env)
+{
+    floatx80 res;
+    long double val;
+
+    val = sinhl(floatx80_to_ldouble(FP0_to_floatx80(env)));
+    res = ldouble_to_floatx80(val);
+
+    floatx80_to_FP0(env, res);
+}
+
+void HELPER(lognp1_FP0)(CPUM68KState *env)
+{
+    floatx80 val;
+    long double res;
+
+    val = FP0_to_floatx80(env);
+    res = logl(floatx80_to_ldouble(val) + 1.0);
+
+    floatx80_to_FP0(env, ldouble_to_floatx80(res));
+}
+
+void HELPER(ln_FP0)(CPUM68KState *env)
+{
+    floatx80 val;
+    long double res;
+
+    val = FP0_to_floatx80(env);
+    res = logl(floatx80_to_ldouble(val));
+
+    floatx80_to_FP0(env, ldouble_to_floatx80(res));
+}
+
+void HELPER(log10_FP0)(CPUM68KState *env)
+{
+    floatx80 val;
+    long double res;
+
+    val = FP0_to_floatx80(env);
+    res = log10l(floatx80_to_ldouble(val));
+
+    floatx80_to_FP0(env, ldouble_to_floatx80(res));
+}
+
+void HELPER(atan_FP0)(CPUM68KState *env)
+{
+    floatx80 res;
+    long double val;
+
+    val = floatx80_to_ldouble(FP0_to_floatx80(env));
+
+    val = atanl(val);
+    res = ldouble_to_floatx80(val);
+    floatx80_to_FP0(env, res);
+}
+
+void HELPER(asin_FP0)(CPUM68KState *env)
+{
+    floatx80 res;
+    long double val;
+
+    val = floatx80_to_ldouble(FP0_to_floatx80(env));
+    if (val < -1.0 || val > 1.0) {
+        floatx80_to_FP0(env, floatx80_default_nan(NULL));
+        return;
+    }
+
+    val = asinl(val);
+    res = ldouble_to_floatx80(val);
+    floatx80_to_FP0(env, res);
+}
+
+void HELPER(atanh_FP0)(CPUM68KState *env)
+{
+    floatx80 res;
+    long double val;
+
+    val = floatx80_to_ldouble(FP0_to_floatx80(env));
+    if (val < -1.0 || val > 1.0) {
+        floatx80_to_FP0(env, floatx80_default_nan(NULL));
+        return;
+    }
+
+    val = atanhl(val);
+    res = ldouble_to_floatx80(val);
+    floatx80_to_FP0(env, res);
+}
+
+void HELPER(sin_FP0)(CPUM68KState *env)
+{
+    floatx80 res;
+    long double val;
+
+    val = floatx80_to_ldouble(FP0_to_floatx80(env));
+
+    val = sinl(val);
+    res = ldouble_to_floatx80(val);
+    floatx80_to_FP0(env, res);
+}
+
+void HELPER(tanh_FP0)(CPUM68KState *env)
+{
+    floatx80 res;
+    long double val;
+
+    val = floatx80_to_ldouble(FP0_to_floatx80(env));
+
+    val = tanhl(val);
+    res = ldouble_to_floatx80(val);
+    floatx80_to_FP0(env, res);
+}
+
+void HELPER(tan_FP0)(CPUM68KState *env)
+{
+    floatx80 res;
+    long double val;
+
+    val = floatx80_to_ldouble(FP0_to_floatx80(env));
+
+    val = tanl(val);
+    res = ldouble_to_floatx80(val);
+    floatx80_to_FP0(env, res);
+}
+
+void HELPER(exp_FP0)(CPUM68KState *env)
+{
+    floatx80 f;
+    long double res;
+
+    f = FP0_to_floatx80(env);
+
+    res = expl(floatx80_to_ldouble(f));
+
+    floatx80_to_FP0(env, ldouble_to_floatx80(res));
+}
+
+void HELPER(exp2_FP0)(CPUM68KState *env)
+{
+    floatx80 f;
+    long double res;
+
+    f = FP0_to_floatx80(env);
+
+    res = exp2l(floatx80_to_ldouble(f));
+
+    floatx80_to_FP0(env, ldouble_to_floatx80(res));
+}
+
+void HELPER(exp10_FP0)(CPUM68KState *env)
+{
+    floatx80 res;
+    long double val;
+
+    val = floatx80_to_ldouble(FP0_to_floatx80(env));
+
+    val = exp10l(val);
+    res = ldouble_to_floatx80(val);
+    floatx80_to_FP0(env, res);
+}
+
+void HELPER(cosh_FP0)(CPUM68KState *env)
+{
+    floatx80 res;
+    long double val;
+
+    val = floatx80_to_ldouble(FP0_to_floatx80(env));
+
+    val = coshl(val);
+    res = ldouble_to_floatx80(val);
+    floatx80_to_FP0(env, res);
+}
+
+void HELPER(acos_FP0)(CPUM68KState *env)
+{
+    floatx80 res;
+    long double val;
+
+    val = floatx80_to_ldouble(FP0_to_floatx80(env));
+    if (val < -1.0 || val > 1.0) {
+        floatx80_to_FP0(env, floatx80_default_nan(NULL));
+        return;
+    }
+
+    val = acosl(val);
+    res = ldouble_to_floatx80(val);
+    floatx80_to_FP0(env, res);
+}
+
+void HELPER(cos_FP0)(CPUM68KState *env)
+{
+    floatx80 res;
+    long double val;
+
+    val = floatx80_to_ldouble(FP0_to_floatx80(env));
+
+    val = cosl(val);
+    res = ldouble_to_floatx80(val);
     floatx80_to_FP0(env, res);
 }
