@@ -3089,6 +3089,352 @@ DISAS_INSN(shift_mem)
     set_cc_op(s, CC_OP_FLAGS);
 }
 
+static inline void rotate(TCGv reg, TCGv shift, int left, int size)
+{
+    if (size == 32) {
+        if (left) {
+            tcg_gen_rotl_i32(reg, reg, shift);
+        } else {
+            tcg_gen_rotr_i32(reg, reg, shift);
+        }
+    } else {
+        TCGv t0;
+
+        if (left) {
+            tcg_gen_shl_i32(reg, reg, shift);
+        } else {
+            tcg_gen_shli_i32(reg, reg, size);
+            tcg_gen_shr_i32(reg, reg, shift);
+        }
+
+        t0 = tcg_temp_new();
+        tcg_gen_shri_i32(t0, reg, size);
+        tcg_gen_or_i32(reg, reg, t0);
+        tcg_temp_free(t0);
+        if (size == 8) {
+            tcg_gen_ext8s_i32(reg, reg);
+        } else if (size == 16) {
+            tcg_gen_ext16s_i32(reg, reg);
+        }
+    }
+
+    if (left) {
+        tcg_gen_andi_i32(QREG_CC_C, reg, 1);
+    } else {
+        tcg_gen_shri_i32(QREG_CC_C, reg, 31);
+    }
+
+    tcg_gen_movi_i32(QREG_CC_V, 0);
+    tcg_gen_mov_i32(QREG_CC_N, reg);
+    tcg_gen_mov_i32(QREG_CC_Z, reg);
+}
+
+static inline void rotate_x_flags(TCGv reg, int size)
+{
+    switch (size) {
+    case 8:
+        tcg_gen_ext8s_i32(reg, reg);
+        break;
+    case 16:
+        tcg_gen_ext16s_i32(reg, reg);
+        break;
+    default:
+        break;
+    }
+    tcg_gen_mov_i32(QREG_CC_N, reg);
+    tcg_gen_mov_i32(QREG_CC_Z, reg);
+    tcg_gen_mov_i32(QREG_CC_C, QREG_CC_X);
+}
+
+static inline void rotate_x(TCGv dest, TCGv X, TCGv reg, TCGv shift,
+                            int left, int size)
+{
+    TCGv_i64 t0, shift64;
+    TCGv lo, hi;
+
+    shift64 = tcg_temp_new_i64();
+    tcg_gen_extu_i32_i64(shift64, shift);
+
+    t0 = tcg_temp_new_i64();
+
+    lo = tcg_temp_new();
+    hi = tcg_temp_new();
+
+    if (left) {
+        /* create [reg:X:..] */
+
+        if (size == 32) {
+            tcg_gen_shli_i32(X, QREG_CC_X, 31);
+            tcg_gen_concat_i32_i64(t0, X, reg);
+        } else {
+            tcg_gen_shli_i32(X, reg, 1);
+            tcg_gen_or_i32(X, X, QREG_CC_X);
+            tcg_gen_extu_i32_i64(t0, X);
+            tcg_gen_shli_i64(t0, t0, 64 - size - 1);
+        }
+
+        /* rotate */
+
+        tcg_gen_rotl_i64(t0, t0, shift64);
+        tcg_temp_free_i64(shift64);
+
+        /* result is [reg:..:reg:X] */
+
+        tcg_gen_extr_i64_i32(lo, hi, t0);
+        tcg_gen_andi_i32(X, lo, 1);
+
+        tcg_gen_shri_i32(lo, lo, 1);
+        tcg_gen_shri_i32(hi, hi, 32 - size);
+        tcg_gen_or_i32(dest, lo, hi);
+    } else {
+        if (size == 32) {
+            tcg_gen_concat_i32_i64(t0, reg, QREG_CC_X);
+        } else {
+            tcg_gen_shli_i32(X, QREG_CC_X, size);
+            tcg_gen_or_i32(X, reg, X);
+            tcg_gen_extu_i32_i64(t0, X);
+        }
+
+        tcg_gen_rotr_i64(t0, t0, shift64);
+        tcg_temp_free_i64(shift64);
+
+        /* result is value: [X:reg:..:reg] */
+
+        tcg_gen_extr_i64_i32(lo, hi, t0);
+
+        /* extract X */
+
+        tcg_gen_shri_i32(X, hi, 31);
+
+        /* extract result */
+
+        tcg_gen_shli_i32(hi, hi, 1);
+        tcg_gen_shri_i32(hi, hi, 32 - size);
+        tcg_gen_or_i32(dest, lo, hi);
+    }
+    tcg_temp_free(hi);
+    tcg_temp_free(lo);
+    tcg_temp_free_i64(t0);
+
+    tcg_gen_movi_i32(QREG_CC_V, 0); /* always cleared */
+}
+
+DISAS_INSN(rotate_im)
+{
+    TCGv reg;
+    TCGv shift;
+    int tmp;
+    int left = (insn & 0x100);
+
+    reg = DREG(insn, 0);
+    tmp = (insn >> 9) & 7;
+    tmp = ((tmp - 1) & 7) + 1; /* 1..8 */
+
+    shift = tcg_const_i32(tmp);
+    if (insn & 8) {
+        rotate(reg, shift, left, 32);
+    } else {
+        rotate_x(reg, QREG_CC_X, reg, shift, left, 32);
+        rotate_x_flags(reg, 32);
+    }
+    tcg_temp_free(shift);
+
+    set_cc_op(s, CC_OP_FLAGS);
+}
+
+DISAS_INSN(rotate8_im)
+{
+    int left = (insn & 0x100);
+    TCGv reg;
+    TCGv shift;
+    int tmp;
+
+    reg = gen_extend(DREG(insn, 0), OS_BYTE, 0);
+
+    tmp = (insn >> 9) & 7;
+    tmp = ((tmp - 1) & 7) + 1; /* 1..8 */
+
+    shift = tcg_const_i32(tmp);
+    if (insn & 8) {
+        rotate(reg, shift, left, 8);
+    } else {
+        rotate_x(reg, QREG_CC_X, reg, shift, left, 8);
+        rotate_x_flags(reg, 8);
+    }
+    gen_partset_reg(OS_BYTE, DREG(insn, 0), reg);
+    set_cc_op(s, CC_OP_FLAGS);
+}
+
+DISAS_INSN(rotate16_im)
+{
+    int left = (insn & 0x100);
+    TCGv reg;
+    TCGv shift;
+    int tmp;
+
+    reg = gen_extend(DREG(insn, 0), OS_WORD, 0);
+    tmp = (insn >> 9) & 7;
+    tmp = ((tmp - 1) & 7) + 1; /* 1..8 */
+
+    shift = tcg_const_i32(tmp);
+    if (insn & 8) {
+        rotate(reg, shift, left, 16);
+    } else {
+        rotate_x(reg, QREG_CC_X, reg, shift, left, 16);
+        rotate_x_flags(reg, 8);
+    }
+    gen_partset_reg(OS_WORD, DREG(insn, 0), reg);
+    set_cc_op(s, CC_OP_FLAGS);
+}
+
+DISAS_INSN(rotate_reg)
+{
+    TCGv reg;
+    TCGv src;
+    TCGv tmp, t0;
+    int left = (insn & 0x100);
+
+    reg = DREG(insn, 0);
+    src = DREG(insn, 9);
+    tmp = tcg_temp_new_i32();
+    if (insn & 8) {
+        tcg_gen_andi_i32(tmp, src, 31);
+        rotate(reg, tmp, left, 32);
+        /* if shift == 0, clear C */
+        tcg_gen_andi_i32(tmp, src, 63);
+        tcg_gen_movcond_i32(TCG_COND_EQ, QREG_CC_C,
+                            tmp, QREG_CC_V /* 0 */,
+                            QREG_CC_V /* 0 */, QREG_CC_C);
+    } else {
+        TCGv dest, X;
+        dest = tcg_temp_new();
+        X = tcg_temp_new();
+        /* shift in [0..63] */
+        tcg_gen_andi_i32(tmp, src, 63);
+        /* modulo 33 */
+        t0 = tcg_const_i32(33);
+        tcg_gen_remu_i32(tmp, tmp, t0);
+        tcg_temp_free(t0);
+        rotate_x(dest, X, reg, tmp, left, 32);
+        tcg_gen_movcond_i32(TCG_COND_EQ, QREG_CC_X,
+                            tmp, QREG_CC_V /* 0 */,
+                            QREG_CC_X /* 0 */, X);
+        tcg_gen_movcond_i32(TCG_COND_EQ, reg,
+                            tmp, QREG_CC_V /* 0 */,
+                            reg /* 0 */, dest);
+        tcg_temp_free(X);
+        tcg_temp_free(dest);
+        rotate_x_flags(reg, 32);
+    }
+    set_cc_op(s, CC_OP_FLAGS);
+}
+
+DISAS_INSN(rotate8_reg)
+{
+    TCGv reg;
+    TCGv src;
+    TCGv tmp, t0;
+    int left = (insn & 0x100);
+
+    reg = gen_extend(DREG(insn, 0), OS_BYTE, 0);
+    src = DREG(insn, 9);
+    tmp = tcg_temp_new_i32();
+    if (insn & 8) {
+        tcg_gen_andi_i32(tmp, src, 7);
+        rotate(reg, tmp, left, 8);
+        /* if shift == 0, clear C */
+        tcg_gen_andi_i32(tmp, src, 63);
+        tcg_gen_movcond_i32(TCG_COND_EQ, QREG_CC_C,
+                            tmp, QREG_CC_V /* 0 */,
+                            QREG_CC_V /* 0 */, QREG_CC_C);
+    } else {
+        TCGv dest, X;
+        dest = tcg_temp_new();
+        X = tcg_temp_new();
+        /* shift in [0..63] */
+        tcg_gen_andi_i32(tmp, src, 63);
+        /* modulo 9 */
+        t0 = tcg_const_i32(9);
+        tcg_gen_remu_i32(tmp, tmp, t0);
+        tcg_temp_free(t0);
+        rotate_x(dest, X, reg, tmp, left, 8);
+        tcg_gen_movcond_i32(TCG_COND_EQ, QREG_CC_X,
+                            tmp, QREG_CC_V /* 0 */,
+                            QREG_CC_X /* 0 */, X);
+        tcg_gen_movcond_i32(TCG_COND_EQ, reg,
+                            tmp, QREG_CC_V /* 0 */,
+                            reg /* 0 */, dest);
+        tcg_temp_free(X);
+        tcg_temp_free(dest);
+        rotate_x_flags(reg, 8);
+    }
+    gen_partset_reg(OS_BYTE, DREG(insn, 0), reg);
+    set_cc_op(s, CC_OP_FLAGS);
+}
+
+DISAS_INSN(rotate16_reg)
+{
+    TCGv reg;
+    TCGv src;
+    TCGv tmp, t0;
+    int left = (insn & 0x100);
+
+    reg = gen_extend(DREG(insn, 0), OS_WORD, 0);
+    src = DREG(insn, 9);
+    tmp = tcg_temp_new_i32();
+    if (insn & 8) {
+        tcg_gen_andi_i32(tmp, src, 15);
+        rotate(reg, tmp, left, 16);
+        /* if shift == 0, clear C */
+        tcg_gen_andi_i32(tmp, src, 63);
+        tcg_gen_movcond_i32(TCG_COND_EQ, QREG_CC_C,
+                            tmp, QREG_CC_V /* 0 */,
+                            QREG_CC_V /* 0 */, QREG_CC_C);
+    } else {
+        TCGv dest, X;
+        dest = tcg_temp_new();
+        X = tcg_temp_new();
+        /* shift in [0..63] */
+        tcg_gen_andi_i32(tmp, src, 63);
+        /* modulo 17 */
+        t0 = tcg_const_i32(17);
+        tcg_gen_remu_i32(tmp, tmp, t0);
+        tcg_temp_free(t0);
+        rotate_x(dest, X, reg, tmp, left, 16);
+        tcg_gen_movcond_i32(TCG_COND_EQ, QREG_CC_X,
+                            tmp, QREG_CC_V /* 0 */,
+                            QREG_CC_X /* 0 */, X);
+        tcg_gen_movcond_i32(TCG_COND_EQ, reg,
+                            tmp, QREG_CC_V /* 0 */,
+                            reg /* 0 */, dest);
+        tcg_temp_free(X);
+        tcg_temp_free(dest);
+        rotate_x_flags(reg, 16);
+    }
+    gen_partset_reg(OS_WORD, DREG(insn, 0), reg);
+    set_cc_op(s, CC_OP_FLAGS);
+}
+
+DISAS_INSN(rotate_mem)
+{
+    TCGv src;
+    TCGv addr;
+    TCGv shift;
+    int left = (insn & 0x100);
+
+    SRC_EA(env, src, OS_WORD, 0, &addr);
+
+    shift = tcg_const_i32(1);
+    if (insn & 8) {
+        rotate(src, shift, left, 16);
+    } else {
+        rotate_x(src, QREG_CC_X, src, shift, left, 16);
+        rotate_x_flags(src, 16);
+    }
+    DEST_EA(env, insn, OS_WORD, src, &addr);
+    set_cc_op(s, CC_OP_FLAGS);
+}
+
 DISAS_INSN(bfext_reg)
 {
     int ext = read_im16(env, s);
@@ -4500,6 +4846,13 @@ void register_m68k_insns (CPUM68KState *env)
     INSN(shift16_reg, e060, f0f0, M68000);
     INSN(shift_reg, e0a0, f0f0, M68000);
     INSN(shift_mem, e0c0, fcc0, M68000);
+    INSN(rotate_im, e090, f0f0, M68000);
+    INSN(rotate8_im, e010, f0f0, M68000);
+    INSN(rotate16_im, e050, f0f0, M68000);
+    INSN(rotate_reg, e0b0, f0f0, M68000);
+    INSN(rotate8_reg, e030, f0f0, M68000);
+    INSN(rotate16_reg,e070, f0f0, M68000);
+    INSN(rotate_mem, e4c0, fcc0, M68000);
     INSN(bfext_mem, e9c0, fdc0, BITFIELD);  /* bfextu & bfexts */
     INSN(bfext_reg, e9c0, fdf8, BITFIELD);
     INSN(bfins_mem, efc0, ffc0, BITFIELD);
