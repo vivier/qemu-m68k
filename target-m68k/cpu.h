@@ -64,6 +64,23 @@
 #define NB_MMU_MODES 2
 #define TARGET_INSN_START_EXTRA_WORDS 1
 
+typedef uint32_t CPUM68K_SingleU;
+typedef uint64_t CPUM68K_DoubleU;
+
+typedef struct {
+    uint32_t high;
+    uint64_t low;
+} __attribute__((packed)) CPUM68K_XDoubleU;
+
+typedef struct {
+   uint8_t high[2];
+   uint8_t low[10];
+} __attribute__((packed)) CPUM68K_PDoubleU;
+
+typedef CPU_LDoubleU FPReg;
+#define PRIxFPH PRIx16
+#define PRIxFPL PRIx64
+
 typedef struct CPUM68KState {
     uint32_t dregs[8];
     uint32_t aregs[8];
@@ -82,8 +99,7 @@ typedef struct CPUM68KState {
     uint32_t cc_c; /* either 0/1, unused, or computed from cc_n and cc_v */
     uint32_t cc_z; /* == 0 or unused */
 
-    float64 fregs[8];
-    float64 fp_result;
+    FPReg fregs[8];
     uint32_t fpcr;
     uint32_t fpsr;
     float_status fp_status;
@@ -95,6 +111,13 @@ typedef struct CPUM68KState {
     uint64_t macc[4];
     uint32_t macsr;
     uint32_t mac_mask;
+
+    /* Temporary storage for FPU */
+
+    uint32_t fp0h;
+    uint64_t fp0l;
+    uint32_t fp1h;
+    uint64_t fp1l;
 
     /* MMU status.  */
     struct {
@@ -202,6 +225,13 @@ typedef enum {
 
 #define M68K_SSP    0
 #define M68K_USP    1
+
+#define FCCF_SHIFT 24
+#define FCCF_MASK  (0xff << FCCF_SHIFT)
+#define FCCF_A     (0x01 << FCCF_SHIFT) /* Not-A-Number */
+#define FCCF_I     (0x02 << FCCF_SHIFT) /* Infinity */
+#define FCCF_Z     (0x04 << FCCF_SHIFT) /* Zero */
+#define FCCF_N     (0x08 << FCCF_SHIFT) /* Negative */
 
 /* CACR fields are implementation defined, but some bits are common.  */
 #define M68K_CACR_EUSP  0x10

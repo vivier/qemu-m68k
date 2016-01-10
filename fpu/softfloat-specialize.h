@@ -111,10 +111,11 @@ float16 float16_default_nan(float_status *status)
 *----------------------------------------------------------------------------*/
 float32 float32_default_nan(float_status *status)
 {
-#if defined(TARGET_SPARC)
+#if defined(TARGET_SPARC) || defined(TARGET_M68K)
     return const_float32(0x7FFFFFFF);
 #elif defined(TARGET_PPC) || defined(TARGET_ARM) || defined(TARGET_ALPHA) || \
-      defined(TARGET_XTENSA) || defined(TARGET_S390X) || defined(TARGET_TRICORE)
+      defined(TARGET_XTENSA) || defined(TARGET_S390X) || \
+      defined(TARGET_TRICORE)
     return const_float32(0x7FC00000);
 #else
     if (status->snan_bit_is_one) {
@@ -134,10 +135,10 @@ float32 float32_default_nan(float_status *status)
 *----------------------------------------------------------------------------*/
 float64 float64_default_nan(float_status *status)
 {
-#if defined(TARGET_SPARC)
+#if defined(TARGET_SPARC) || defined(TARGET_M68K)
     return const_float64(LIT64(0x7FFFFFFFFFFFFFFF));
 #elif defined(TARGET_PPC) || defined(TARGET_ARM) || defined(TARGET_ALPHA) || \
-      defined(TARGET_S390X)
+      defined(TARGET_S390X) || defined(TARGET_M68K)
     return const_float64(LIT64(0x7FF8000000000000));
 #else
     if (status->snan_bit_is_one) {
@@ -158,7 +159,10 @@ float64 float64_default_nan(float_status *status)
 floatx80 floatx80_default_nan(float_status *status)
 {
     floatx80 r;
-
+#if defined(TARGET_M68K)
+    r.low = LIT64(0xFFFFFFFFFFFFFFFF);
+    r.high = 0x7FFF;
+#else
     if (status->snan_bit_is_one) {
         r.low = LIT64(0xBFFFFFFFFFFFFFFF);
         r.high = 0x7FFF;
@@ -166,6 +170,7 @@ floatx80 floatx80_default_nan(float_status *status)
         r.low = LIT64(0xC000000000000000);
         r.high = 0xFFFF;
     }
+#endif
     return r;
 }
 
@@ -173,8 +178,13 @@ floatx80 floatx80_default_nan(float_status *status)
 | The pattern for a default generated extended double-precision inf.
 *----------------------------------------------------------------------------*/
 
+#if defined(TARGET_M68K)
+#define floatx80_default_inf_high 0x7FFF
+#define floatx80_default_inf_low  LIT64( 0x0000000000000000 )
+#else
 #define floatx80_default_inf_high 0x7FFF
 #define floatx80_default_inf_low  LIT64( 0x8000000000000000 )
+#endif
 
 const floatx80 floatx80_default_inf
     = make_floatx80_init(floatx80_default_inf_high, floatx80_default_inf_low);
@@ -499,6 +509,26 @@ static int pickNaN(flag aIsQNaN, flag aIsSNaN, flag bIsQNaN, flag bIsSNaN,
         return 0;
     } else {
         return 1;
+    }
+}
+#elif defined(TARGET_M68K)
+static int pickNaN(flag aIsQNaN, flag aIsSNaN, flag bIsQNaN, flag bIsSNaN,
+                   flag aIsLargerSignificand)
+{
+    /* If either operand, but not both operands, of an operation is a
+     * nonsignaling NAN, then that NAN is returned as the result. If both
+     * operands are nonsignaling NANs, then the destination operand
+     * nonsignaling NAN is returned as the result.
+     */
+
+    if (aIsSNaN) {
+        return 0;
+    } else if (bIsSNaN) {
+        return 1;
+    } else if (bIsQNaN) {
+        return 1;
+    } else {
+        return 0;
     }
 }
 #else
@@ -1013,12 +1043,16 @@ int floatx80_is_signaling_nan(floatx80 a, float_status *status)
 floatx80 floatx80_maybe_silence_nan(floatx80 a, float_status *status)
 {
     if (floatx80_is_signaling_nan(a, status)) {
+#if defined(TARGET_M68K)
+        a.low |= LIT64( 0x4000000000000000 );
+#else
         if (status->snan_bit_is_one) {
             a = floatx80_default_nan(status);
         } else {
             a.low |= LIT64(0xC000000000000000);
             return a;
         }
+#endif
     }
     return a;
 }

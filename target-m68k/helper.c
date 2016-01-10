@@ -24,10 +24,10 @@
 #include "exec/gdbstub.h"
 #include "exec/helper-proto.h"
 #include "exec/cpu_ldst.h"
+#include <math.h>
 
 #define SIGNBIT (1u << 31)
 
-/* Sort alphabetically, except for "any". */
 static gint m68k_cpu_list_compare(gconstpointer a, gconstpointer b)
 {
     ObjectClass *class_a = (ObjectClass *)a;
@@ -73,10 +73,11 @@ void m68k_cpu_list(FILE *f, fprintf_function cpu_fprintf)
     g_slist_free(list);
 }
 
-static int fpu_gdb_get_reg(CPUM68KState *env, uint8_t *mem_buf, int n)
+static int cf_fpu_gdb_get_reg(CPUM68KState *env, uint8_t *mem_buf, int n)
 {
     if (n < 8) {
-        stfq_p(mem_buf, env->fregs[n]);
+        float_status s;
+        stfq_p(mem_buf, floatx80_to_float64(env->fregs[n].d, &s));
         return 8;
     }
     if (n < 11) {
@@ -87,11 +88,42 @@ static int fpu_gdb_get_reg(CPUM68KState *env, uint8_t *mem_buf, int n)
     return 0;
 }
 
-static int fpu_gdb_set_reg(CPUM68KState *env, uint8_t *mem_buf, int n)
+static int cf_fpu_gdb_set_reg(CPUM68KState *env, uint8_t *mem_buf, int n)
 {
     if (n < 8) {
-        env->fregs[n] = ldfq_p(mem_buf);
+        float_status s;
+        env->fregs[n].d = float64_to_floatx80(ldfq_p(mem_buf), &s);
         return 8;
+    }
+    if (n < 11) {
+        /* FP control registers (not implemented)  */
+        return 4;
+    }
+    return 0;
+}
+
+static int m68k_fpu_gdb_get_reg(CPUM68KState *env, uint8_t *mem_buf, int n)
+{
+    if (n < 8) {
+        stw_be_p(mem_buf, env->fregs[n].l.upper);
+        memset(mem_buf + 2, 0, 2);
+        stq_be_p(mem_buf + 4, env->fregs[n].l.lower);
+        return 12;
+    }
+    if (n < 11) {
+        /* FP control registers (not implemented)  */
+        memset(mem_buf, 0, 4);
+        return 4;
+    }
+    return 0;
+}
+
+static int m68k_fpu_gdb_set_reg(CPUM68KState *env, uint8_t *mem_buf, int n)
+{
+    if (n < 8) {
+        env->fregs[n].l.upper = lduw_be_p(mem_buf);
+        env->fregs[n].l.lower = ldq_be_p(mem_buf + 4);
+        return 12;
     }
     if (n < 11) {
         /* FP control registers (not implemented)  */
@@ -126,8 +158,11 @@ void m68k_cpu_init_gdb(M68kCPU *cpu)
     CPUM68KState *env = &cpu->env;
 
     if (m68k_feature(env, M68K_FEATURE_CF_FPU)) {
-        gdb_register_coprocessor(cs, fpu_gdb_get_reg, fpu_gdb_set_reg,
+        gdb_register_coprocessor(cs, cf_fpu_gdb_get_reg, cf_fpu_gdb_set_reg,
                                  11, "cf-fp.xml", 18);
+    } else if ( m68k_feature (env, M68K_FEATURE_FPU)) {
+        gdb_register_coprocessor(cs, m68k_fpu_gdb_get_reg,
+                                 m68k_fpu_gdb_set_reg, 11, "m68k-fp.xml", 18);
     }
     /* TODO: Add [E]MAC registers.  */
 }
@@ -282,95 +317,6 @@ void HELPER(set_sr)(CPUM68KState *env, uint32_t val)
     env->sr = val & 0xffe0;
     cpu_m68k_set_ccr(env, val);
     m68k_switch_sp(env);
-}
-
-/* FPU helpers.  */
-uint32_t HELPER(f64_to_i32)(CPUM68KState *env, float64 val)
-{
-    return float64_to_int32(val, &env->fp_status);
-}
-
-float32 HELPER(f64_to_f32)(CPUM68KState *env, float64 val)
-{
-    return float64_to_float32(val, &env->fp_status);
-}
-
-float64 HELPER(i32_to_f64)(CPUM68KState *env, uint32_t val)
-{
-    return int32_to_float64(val, &env->fp_status);
-}
-
-float64 HELPER(f32_to_f64)(CPUM68KState *env, float32 val)
-{
-    return float32_to_float64(val, &env->fp_status);
-}
-
-float64 HELPER(iround_f64)(CPUM68KState *env, float64 val)
-{
-    return float64_round_to_int(val, &env->fp_status);
-}
-
-float64 HELPER(itrunc_f64)(CPUM68KState *env, float64 val)
-{
-    return float64_trunc_to_int(val, &env->fp_status);
-}
-
-float64 HELPER(sqrt_f64)(CPUM68KState *env, float64 val)
-{
-    return float64_sqrt(val, &env->fp_status);
-}
-
-float64 HELPER(abs_f64)(float64 val)
-{
-    return float64_abs(val);
-}
-
-float64 HELPER(chs_f64)(float64 val)
-{
-    return float64_chs(val);
-}
-
-float64 HELPER(add_f64)(CPUM68KState *env, float64 a, float64 b)
-{
-    return float64_add(a, b, &env->fp_status);
-}
-
-float64 HELPER(sub_f64)(CPUM68KState *env, float64 a, float64 b)
-{
-    return float64_sub(a, b, &env->fp_status);
-}
-
-float64 HELPER(mul_f64)(CPUM68KState *env, float64 a, float64 b)
-{
-    return float64_mul(a, b, &env->fp_status);
-}
-
-float64 HELPER(div_f64)(CPUM68KState *env, float64 a, float64 b)
-{
-    return float64_div(a, b, &env->fp_status);
-}
-
-float64 HELPER(sub_cmp_f64)(CPUM68KState *env, float64 a, float64 b)
-{
-    /* ??? This may incorrectly raise exceptions.  */
-    /* ??? Should flush denormals to zero.  */
-    float64 res;
-    res = float64_sub(a, b, &env->fp_status);
-    if (float64_is_quiet_nan(res, &env->fp_status)) {
-        /* +/-inf compares equal against itself, but sub returns nan.  */
-        if (!float64_is_quiet_nan(a, &env->fp_status)
-            && !float64_is_quiet_nan(b, &env->fp_status)) {
-            res = float64_zero;
-            if (float64_lt_quiet(a, res, &env->fp_status))
-                res = float64_chs(res);
-        }
-    }
-    return res;
-}
-
-uint32_t HELPER(compare_f64)(CPUM68KState *env, float64 val)
-{
-    return float64_compare_quiet(val, float64_zero, &env->fp_status);
 }
 
 /* MAC unit.  */
@@ -581,6 +527,14 @@ void HELPER(mac_set_flags)(CPUM68KState *env, uint32_t acc)
     }                                                                      \
 } while (0)
 
+void HELPER(flush_flags)(CPUM68KState *env, uint32_t cc_op)
+{
+    uint32_t res, src1, src2;
+
+    COMPUTE_CCR(cc_op, env->cc_x, env->cc_n, env->cc_z, env->cc_v, env->cc_c);
+    env->cc_op = CC_OP_FLAGS;
+}
+
 uint32_t cpu_m68k_get_ccr(CPUM68KState *env)
 {
     uint32_t x, c, n, z, v;
@@ -619,14 +573,6 @@ void cpu_m68k_set_ccr(CPUM68KState *env, uint32_t ccr)
 void HELPER(set_ccr)(CPUM68KState *env, uint32_t ccr)
 {
     cpu_m68k_set_ccr(env, ccr);
-}
-
-void HELPER(flush_flags)(CPUM68KState *env, uint32_t cc_op)
-{
-    uint32_t res, src1, src2;
-
-    COMPUTE_CCR(cc_op, env->cc_x, env->cc_n, env->cc_z, env->cc_v, env->cc_c);
-    env->cc_op = CC_OP_FLAGS;
 }
 
 uint32_t HELPER(get_macf)(CPUM68KState *env, uint64_t val)
