@@ -923,6 +923,14 @@ static void gen_op_load_fpr_FP1(int freg)
                    offsetof(CPUM68KState, fregs[freg].l.lower));
 }
 
+static void gen_op_store_fpr_FP1(int freg)
+{
+    tcg_gen_st16_i32(QREG_FP1H, cpu_env,
+                     offsetof(CPUM68KState, fregs[freg].l.upper));
+    tcg_gen_st_i64(QREG_FP1L, cpu_env,
+                   offsetof(CPUM68KState, fregs[freg].l.lower));
+}
+
 static void gen_extend_FP0(int opsize)
 {
     switch (opsize) {
@@ -4555,16 +4563,26 @@ static void gen_op_fmovem(CPUM68KState *env, DisasContext *s,
 DISAS_INSN(fpu)
 {
     uint16_t ext;
+    uint8_t rom_offset;
     int opmode;
     int opsize;
 
     ext = read_im16(env, s);
     opmode = ext & 0x7f;
     switch ((ext >> 13) & 7) {
-    case 0: case 2:
+    case 0:
         break;
     case 1:
         goto undef;
+    case 2:
+        if (insn == 0xf200 && (ext & 0xfc00) == 0x5c00) {
+            /* fmovecr */
+            rom_offset = ext & 0x7f;
+            gen_helper_const_FP0(cpu_env, tcg_const_i32(rom_offset));
+            gen_op_store_fpr_FP0(REG(ext, 7));
+            return;
+        }
+        break;
     case 3: /* fmove out */
         gen_op_load_fpr_FP0(REG(ext, 7));
         opsize = ext_opsize(ext, 10);
@@ -4607,21 +4625,79 @@ DISAS_INSN(fpu)
     case 1: /* fint */
         gen_helper_iround_FP0(cpu_env);
         break;
+    case 2: /* fsinh */
+        gen_helper_sinh_FP0(cpu_env);
+        break;
     case 3: /* fintrz */
         gen_helper_itrunc_FP0(cpu_env);
         break;
     case 4: case 0x41: case 0x45: /* fsqrt */
         gen_helper_sqrt_FP0(cpu_env);
         break;
+    case 6:                          /* flognp1 */
+        gen_helper_lognp1_FP0(cpu_env);
+        break;
+    case 0x09:                       /* ftanh */
+        gen_helper_tanh_FP0(cpu_env);
+        break;
+    case 0x0a:                       /* fatan */
+        gen_helper_atan_FP0(cpu_env);
+        break;
+    case 0x0c:                       /* fasin */
+        gen_helper_asin_FP0(cpu_env);
+        break;
+    case 0x0d:                       /* fatanh */
+        gen_helper_atanh_FP0(cpu_env);
+        break;
+    case 0x0e:                       /* fsin */
+        gen_helper_sin_FP0(cpu_env);
+        break;
+    case 0x0f:                       /* ftan */
+        gen_helper_tan_FP0(cpu_env);
+        break;
+    case 0x10:                       /* fetox */
+        gen_helper_exp_FP0(cpu_env);
+        break;
+    case 0x11:                       /* ftwotox */
+        gen_helper_exp2_FP0(cpu_env);
+        break;
+    case 0x12:                       /* ftentox */
+        gen_helper_exp10_FP0(cpu_env);
+        break;
+    case 0x14:                       /* flogn */
+        gen_helper_ln_FP0(cpu_env);
+        break;
+    case 0x15:                       /* flog10 */
+        gen_helper_log10_FP0(cpu_env);
+        break;
     case 0x18: case 0x58: case 0x5c: /* fabs */
         gen_helper_abs_FP0(cpu_env);
+        break;
+    case 0x19:
+        gen_helper_cosh_FP0(cpu_env);
         break;
     case 0x1a: case 0x5a: case 0x5e: /* fneg */
         gen_helper_chs_FP0(cpu_env);
         break;
+    case 0x1c:                       /* facos */
+        gen_helper_acos_FP0(cpu_env);
+        break;
+    case 0x1d:                       /* fcos */
+        gen_helper_cos_FP0(cpu_env);
+        break;
+    case 0x1e:                       /* fgetexp */
+        gen_helper_getexp_FP0(cpu_env);
+        break;
+    case 0x1f:                       /* fgetman */
+        gen_helper_getman_FP0(cpu_env);
+        break;
     case 0x20: case 0x60: case 0x64: /* fdiv */
         gen_op_load_fpr_FP1(REG(ext, 7));
         gen_helper_div_FP0_FP1(cpu_env);
+        break;
+    case 0x21:                       /* fmod */
+        gen_op_load_fpr_FP1(REG(ext, 7));
+        gen_helper_mod_FP0_FP1(cpu_env);
         break;
     case 0x22: case 0x62: case 0x66: /* fadd */
         gen_op_load_fpr_FP1(REG(ext, 7));
@@ -4631,9 +4707,28 @@ DISAS_INSN(fpu)
         gen_op_load_fpr_FP1(REG(ext, 7));
         gen_helper_mul_FP0_FP1(cpu_env);
         break;
+    case 0x24:                      /* fsgldiv */
+        gen_op_load_fpr_FP1(REG(ext, 7));
+        gen_helper_div_FP0_FP1(cpu_env);
+        break;
+    case 0x26:                       /* fscale */
+        gen_op_load_fpr_FP1(REG(ext, 7));
+        gen_helper_scale_FP0_FP1(cpu_env);
+        break;
+    case 0x27:                      /* fsglmul */
+        gen_op_load_fpr_FP1(REG(ext, 7));
+        gen_helper_mul_FP0_FP1(cpu_env);
+        break;
     case 0x28: case 0x68: case 0x6c: /* fsub */
         gen_op_load_fpr_FP1(REG(ext, 7));
         gen_helper_sub_FP0_FP1(cpu_env);
+        break;
+    case 0x30: case 0x31: case 0x32:
+    case 0x33: case 0x34: case 0x35:
+    case 0x36: case 0x37:
+        gen_helper_sincos_FP0_FP1(cpu_env);
+        gen_op_store_fpr_FP0(REG(ext, 7)); /* sin */
+        gen_op_store_fpr_FP1(REG(ext, 0)); /* cos */
         break;
     case 0x38: /* fcmp */
         gen_op_load_fpr_FP1(REG(ext, 7));
