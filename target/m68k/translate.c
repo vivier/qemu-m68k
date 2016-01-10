@@ -4639,6 +4639,9 @@ DISAS_INSN(fpu)
     case 1: /* fint */
         gen_helper_firound(cpu_env, cpu_dest, cpu_src);
         break;
+    case 2: /* fsinh */
+        gen_helper_fsinh(cpu_env, cpu_dest, cpu_src);
+        break;
     case 3: /* fintrz */
         gen_helper_fitrunc(cpu_env, cpu_dest, cpu_src);
         break;
@@ -4651,6 +4654,45 @@ DISAS_INSN(fpu)
     case 0x45: /* fdsqrt */
         gen_helper_fdsqrt(cpu_env, cpu_dest, cpu_src);
         break;
+    case 0x06: /* flognp1 */
+        gen_helper_flognp1(cpu_env, cpu_dest, cpu_src);
+        break;
+    case 0x09: /* ftanh */
+        gen_helper_ftanh(cpu_env, cpu_dest, cpu_src);
+        break;
+    case 0x0a: /* fatan */
+        gen_helper_fatan(cpu_env, cpu_dest, cpu_src);
+        break;
+    case 0x0c: /* fasin */
+        gen_helper_fasin(cpu_env, cpu_dest, cpu_src);
+        break;
+    case 0x0d: /* fatanh */
+        gen_helper_fatanh(cpu_env, cpu_dest, cpu_src);
+        break;
+    case 0x0e: /* fsin */
+        gen_helper_fsin(cpu_env, cpu_dest, cpu_src);
+        break;
+    case 0x0f: /* ftan */
+        gen_helper_ftan(cpu_env, cpu_dest, cpu_src);
+        break;
+    case 0x10: /* fetox */
+        gen_helper_fexp(cpu_env, cpu_dest, cpu_src);
+        break;
+    case 0x11: /* ftwotox */
+        gen_helper_fexp2(cpu_env, cpu_dest, cpu_src);
+        break;
+    case 0x12: /* ftentox */
+        gen_helper_fexp10(cpu_env, cpu_dest, cpu_src);
+        break;
+    case 0x14: /* flogn */
+        gen_helper_fln(cpu_env, cpu_dest, cpu_src);
+        break;
+    case 0x15: /* flog10 */
+        gen_helper_flog10(cpu_env, cpu_dest, cpu_src);
+        break;
+    case 0x16: /* flog2 */
+        gen_helper_flog2(cpu_env, cpu_dest, cpu_src);
+        break;
     case 0x18: /* fabs */
         gen_helper_fabs(cpu_env, cpu_dest, cpu_src);
         break;
@@ -4660,6 +4702,9 @@ DISAS_INSN(fpu)
     case 0x5c: /* fdabs */
         gen_helper_fdabs(cpu_env, cpu_dest, cpu_src);
         break;
+    case 0x19: /* fcosh */
+        gen_helper_fcosh(cpu_env, cpu_dest, cpu_src);
+        break;
     case 0x1a: /* fneg */
         gen_helper_fneg(cpu_env, cpu_dest, cpu_src);
         break;
@@ -4668,6 +4713,12 @@ DISAS_INSN(fpu)
         break;
     case 0x5e: /* fdneg */
         gen_helper_fdneg(cpu_env, cpu_dest, cpu_src);
+        break;
+    case 0x1c: /* facos */
+        gen_helper_facos(cpu_env, cpu_dest, cpu_src);
+        break;
+    case 0x1d: /* fcos */
+        gen_helper_fcos(cpu_env, cpu_dest, cpu_src);
         break;
     case 0x20: /* fdiv */
         gen_helper_fdiv(cpu_env, cpu_dest, cpu_src, cpu_dest);
@@ -4710,6 +4761,14 @@ DISAS_INSN(fpu)
         break;
     case 0x6c: /* fdsub */
         gen_helper_fdsub(cpu_env, cpu_dest, cpu_src, cpu_dest);
+        break;
+    case 0x30: case 0x31: case 0x32:
+    case 0x33: case 0x34: case 0x35:
+    case 0x36: case 0x37: {
+            TCGv_ptr cpu_dest2 = gen_fp_ptr(REG(ext, 0));
+            gen_helper_fsincos(cpu_env, cpu_dest, cpu_dest2, cpu_src);
+            tcg_temp_free_ptr(cpu_dest2);
+        }
         break;
     case 0x38: /* fcmp */
         gen_helper_fcmp(cpu_env, cpu_src, cpu_dest);
@@ -5624,18 +5683,6 @@ void gen_intermediate_code(CPUState *cs, TranslationBlock *tb)
     tb->icount = num_insns;
 }
 
-static double floatx80_to_double(CPUM68KState *env, uint16_t high, uint64_t low)
-{
-    floatx80 a = { .high = high, .low = low };
-    union {
-        float64 f64;
-        double d;
-    } u;
-
-    u.f64 = floatx80_to_float64(a, &env->fp_status);
-    return u.d;
-}
-
 void m68k_cpu_dump_state(CPUState *cs, FILE *f, fprintf_function cpu_fprintf,
                          int flags)
 {
@@ -5645,11 +5692,10 @@ void m68k_cpu_dump_state(CPUState *cs, FILE *f, fprintf_function cpu_fprintf,
     uint16_t sr;
     for (i = 0; i < 8; i++) {
         cpu_fprintf(f, "D%d = %08x   A%d = %08x   "
-                    "F%d = %04x %016"PRIx64"  (%12g)\n",
+                    "F%d = %04x %016"PRIx64"  (%12Lg)\n",
                     i, env->dregs[i], i, env->aregs[i],
                     i, env->fregs[i].l.upper, env->fregs[i].l.lower,
-                    floatx80_to_double(env, env->fregs[i].l.upper,
-                                       env->fregs[i].l.lower));
+                    floatx80_to_ldouble(env->fregs[i].d));
     }
     cpu_fprintf (f, "PC = %08x   ", env->pc);
     sr = env->sr | cpu_m68k_get_ccr(env);

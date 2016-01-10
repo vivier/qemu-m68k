@@ -23,6 +23,7 @@
 #include "exec/helper-proto.h"
 #include "exec/exec-all.h"
 #include "exec/cpu_ldst.h"
+#include <math.h>
 
 /* Undefined offsets may be different on various FPU.
  * On 68040 they return 0.0 (floatx80_zero)
@@ -507,4 +508,240 @@ uint32_t HELPER(fmovemd_ld_postinc)(CPUM68KState *env, uint32_t addr,
                                     uint32_t mask)
 {
     return fmovem_postinc(env, addr, mask, cpu_ld_float64_ra);
+}
+
+long double floatx80_to_ldouble(floatx80 val)
+{
+    long double mantissa;
+    int32_t exp;
+    uint8_t sign;
+
+    if (floatx80_is_infinity(val)) {
+        if (floatx80_is_neg(val)) {
+            return -__builtin_infl();
+        }
+        return __builtin_infl();
+    }
+    if (floatx80_is_any_nan(val)) {
+        char low[20];
+        sprintf(low, "0x%016"PRIx64, val.low);
+        return nanl(low);
+    }
+
+    exp = (val.high & 0x7fff) - (0x3ffe + 64);
+    sign = val.high >> 15;
+    mantissa = (long double)val.low;
+    if (sign) {
+        mantissa = -mantissa;
+    }
+
+    return ldexpl(mantissa, exp);
+}
+
+static floatx80 ldouble_to_floatx80(long double val, float_status *status)
+{
+    floatx80 res;
+    long double mantissa;
+    int exp;
+
+    if (isinf(val)) {
+        res = floatx80_infinity;
+        if (isinf(val) < 0) {
+            res = floatx80_chs(res);
+        }
+        return res;
+    }
+    if (isnan(val)) {
+        res.high = floatx80_default_nan(NULL).high;
+        res.low = *(uint64_t *)&val; /* FIXME */
+        return res;
+    }
+
+    mantissa = frexpl(val, &exp);
+    res.high = exp + 0x3ffe;
+    if (mantissa < 0) {
+        res = floatx80_chs(res);
+        mantissa = -mantissa;
+    }
+    res.low = (uint64_t)ldexpl(mantissa, 64);
+
+    return floatx80_round(res, status);
+}
+
+void HELPER(fsinh)(CPUM68KState *env, FPReg *res, FPReg *val)
+{
+    long double d;
+
+    d = sinhl(floatx80_to_ldouble(val->d));
+    res->d = ldouble_to_floatx80(d, &env->fp_status);
+}
+
+void HELPER(flognp1)(CPUM68KState *env, FPReg *res, FPReg *val)
+{
+    long double d;
+
+    d = log1pl(floatx80_to_ldouble(val->d) + 1.0);
+
+    res->d = ldouble_to_floatx80(d, &env->fp_status);
+}
+
+void HELPER(fln)(CPUM68KState *env, FPReg *res, FPReg *val)
+{
+    long double d;
+
+    d = logl(floatx80_to_ldouble(val->d));
+
+    res->d = ldouble_to_floatx80(d, &env->fp_status);
+}
+
+void HELPER(flog10)(CPUM68KState *env, FPReg *res, FPReg *val)
+{
+    long double d;
+
+    d = log10l(floatx80_to_ldouble(val->d));
+
+    res->d = ldouble_to_floatx80(d, &env->fp_status);
+}
+
+void HELPER(flog2)(CPUM68KState *env, FPReg *res, FPReg *val)
+{
+    long double d;
+
+    d = log2l(floatx80_to_ldouble(val->d));
+
+    res->d = ldouble_to_floatx80(d, &env->fp_status);
+}
+
+void HELPER(fatan)(CPUM68KState *env, FPReg *res, FPReg *val)
+{
+    long double d;
+
+    d = atanl(floatx80_to_ldouble(val->d));
+    res->d = ldouble_to_floatx80(d, &env->fp_status);
+}
+
+void HELPER(fasin)(CPUM68KState *env, FPReg *res, FPReg *val)
+{
+    long double d;
+
+    d = floatx80_to_ldouble(val->d);
+    if (d < -1.0 || d > 1.0) {
+        res->d = floatx80_default_nan(NULL);
+        return;
+    }
+
+    res->d = ldouble_to_floatx80(asinl(d), &env->fp_status);
+}
+
+void HELPER(fatanh)(CPUM68KState *env, FPReg *res, FPReg *val)
+{
+    long double d;
+
+    d = floatx80_to_ldouble(val->d);
+    if (d < -1.0 || d > 1.0) {
+        res->d = floatx80_default_nan(NULL);
+        return;
+    }
+
+    d = atanhl(d);
+    res->d = ldouble_to_floatx80(d, &env->fp_status);
+}
+
+void HELPER(fsin)(CPUM68KState *env, FPReg *res, FPReg *val)
+{
+    long double d;
+
+    d = sinl(floatx80_to_ldouble(val->d));
+    res->d = ldouble_to_floatx80(d, &env->fp_status);
+}
+
+void HELPER(ftanh)(CPUM68KState *env, FPReg *res, FPReg *val)
+{
+    long double d;
+
+    d = tanhl(floatx80_to_ldouble(val->d));
+
+    res->d = ldouble_to_floatx80(d, &env->fp_status);
+}
+
+void HELPER(ftan)(CPUM68KState *env, FPReg *res, FPReg *val)
+{
+    long double d;
+
+    d = tanl(floatx80_to_ldouble(val->d));
+
+    res->d = ldouble_to_floatx80(d, &env->fp_status);
+}
+
+void HELPER(fexp)(CPUM68KState *env, FPReg *res, FPReg *val)
+{
+    long double d;
+
+    d = expl(floatx80_to_ldouble(val->d));
+
+    res->d = ldouble_to_floatx80(d, &env->fp_status);
+}
+
+void HELPER(fexp2)(CPUM68KState *env, FPReg *res, FPReg *val)
+{
+    long double d;
+
+    d = exp2l(floatx80_to_ldouble(val->d));
+
+    res->d = ldouble_to_floatx80(d, &env->fp_status);
+}
+
+void HELPER(fexp10)(CPUM68KState *env, FPReg *res, FPReg *val)
+{
+    long double d;
+
+    d = exp10l(floatx80_to_ldouble(val->d));
+
+    res->d = ldouble_to_floatx80(d, &env->fp_status);
+}
+
+void HELPER(fcosh)(CPUM68KState *env, FPReg *res, FPReg *val)
+{
+    long double d;
+
+    d = coshl(floatx80_to_ldouble(val->d));
+
+    res->d = ldouble_to_floatx80(d, &env->fp_status);
+}
+
+void HELPER(facos)(CPUM68KState *env, FPReg *res, FPReg *val)
+{
+    long double d;
+
+    d = floatx80_to_ldouble(val->d);
+    if (d < -1.0 || d > 1.0) {
+        res->d = floatx80_default_nan(NULL);
+        return;
+    }
+
+    d = acosl(d);
+    res->d = ldouble_to_floatx80(d, &env->fp_status);
+}
+
+void HELPER(fcos)(CPUM68KState *env, FPReg *res, FPReg *val)
+{
+    long double d;
+
+    d = cosl(floatx80_to_ldouble(val->d));
+
+    res->d = ldouble_to_floatx80(d, &env->fp_status);
+}
+
+void HELPER(fsincos)(CPUM68KState *env, FPReg *res0, FPReg *res1, FPReg *val)
+{
+    long double dsin, dcos;
+
+    sincosl(floatx80_to_ldouble(val->d), &dsin, &dcos);
+
+    /* If res0 and res1 specify the same floating-point data register,
+     * the sine result is stored in the register, and the cosine
+     * result is discarded.
+     */
+    res1->d = ldouble_to_floatx80(dcos, &env->fp_status);
+    res0->d = ldouble_to_floatx80(dsin, &env->fp_status);
 }
