@@ -257,7 +257,7 @@ static void set_cc_op(DisasContext *s, CCOp op)
 }
 
 /* Update the CPU env CC_OP state.  */
-static void update_cc_op(DisasContext *s)
+static inline void update_cc_op(DisasContext *s)
 {
     if (!s->cc_op_synced) {
         s->cc_op_synced = 1;
@@ -1650,6 +1650,7 @@ static void gen_push(DisasContext *s, TCGv val)
     tcg_gen_subi_i32(tmp, QREG_SP, 4);
     gen_store(s, OS_LONG, tmp, val);
     tcg_gen_mov_i32(QREG_SP, tmp);
+    tcg_temp_free(tmp);
 }
 
 static TCGv mreg(int reg)
@@ -2139,10 +2140,13 @@ DISAS_INSN(lea)
 DISAS_INSN(clr)
 {
     int opsize;
+    TCGv zero;
+
+    zero = tcg_const_i32(0);
 
     opsize = insn_opsize(insn);
-    DEST_EA(env, insn, opsize, tcg_const_i32(0), NULL);
-    gen_logic_cc(s, tcg_const_i32(0), opsize);
+    DEST_EA(env, insn, opsize, zero, NULL);
+    gen_logic_cc(s, zero, opsize);
 }
 
 static TCGv gen_get_ccr(DisasContext *s)
@@ -2556,11 +2560,12 @@ DISAS_INSN(branch)
 
 DISAS_INSN(moveq)
 {
-    uint32_t val;
+    TCGv val;
 
-    val = (int8_t)insn;
-    tcg_gen_movi_i32(DREG(insn, 9), val);
-    gen_logic_cc(s, tcg_const_i32(val), OS_LONG);
+    val = tcg_const_i32((int8_t)insn);
+    tcg_gen_mov_i32(DREG(insn, 9), val);
+    gen_logic_cc(s, val, OS_LONG);
+    tcg_temp_free(val);
 }
 
 DISAS_INSN(mvzs)
