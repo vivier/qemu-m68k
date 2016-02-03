@@ -5222,6 +5222,12 @@ register_opcode (disas_proc proc, uint16_t opcode, uint16_t mask)
    Later insn override earlier ones.  */
 void register_m68k_insns (CPUM68KState *env)
 {
+    /* Build the opcode table only once to avoid
+       multithreading issues. */
+    if (opcode_table[0] != NULL) {
+        return;
+    }
+
     /* use BASE() for instruction available
      * for CF_ISA_A and M68000.
      */
