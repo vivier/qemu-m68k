@@ -116,6 +116,7 @@ int __clone2(int (*fn)(void *), void *child_stack_base,
 #define	VFAT_IOCTL_READDIR_BOTH		_IOR('r', 1, struct linux_dirent [2])
 #define	VFAT_IOCTL_READDIR_SHORT	_IOR('r', 2, struct linux_dirent [2])
 
+#define SOL_NETLINK 270
 
 #undef _syscall0
 #undef _syscall1
@@ -2187,6 +2188,21 @@ set_timeout:
             return -TARGET_EFAULT;
 	ret = get_errno(setsockopt(sockfd, SOL_SOCKET, optname, &val, sizeof(val)));
         break;
+    case SOL_NETLINK:
+        if (optname != NETLINK_RX_RING && optname != NETLINK_TX_RING &&
+            optlen >= sizeof(uint32_t) &&
+            get_user_u32(val, optval_addr)) {
+            return -TARGET_EFAULT;
+        }
+        switch (optname) {
+        case NETLINK_PKTINFO:
+            ret = get_errno(setsockopt(sockfd, SOL_NETLINK, optname,
+                                       &val, sizeof(val)));
+            break;
+        default:
+            goto unimplemented;
+        }
+        break;
     default:
     unimplemented:
         gemu_log("Unsupported setsockopt level=%d optname=%d\n", level, optname);
@@ -2371,6 +2387,36 @@ static abi_long do_getsockopt(int sockfd, int level, int optname,
         default:
             ret = -TARGET_ENOPROTOOPT;
             break;
+        }
+        break;
+    case SOL_NETLINK:
+        if (get_user_u32(len, optlen)) {
+            return -TARGET_EFAULT;
+        }
+        if (len < 0) {
+            return -TARGET_EINVAL;
+        }
+
+        switch (optname) {
+        case NETLINK_LIST_MEMBERSHIPS: {
+                uint32_t *groups;
+                int i;
+
+                groups = lock_user(VERIFY_WRITE, optval_addr, optlen, 0);
+                lv = len;
+                ret = get_errno(getsockopt(sockfd, SOL_NETLINK,
+                                NETLINK_LIST_MEMBERSHIPS, groups, &lv));
+                for (i = 0; i < (lv / sizeof(uint32_t)); i++) {
+                    groups[i] = tswap32(groups[i]);
+                }
+                unlock_user(groups, optval_addr, lv);
+                if (put_user_u32(lv, optlen)) {
+                    return -TARGET_EFAULT;
+                }
+            }
+            break;
+        default:
+            goto unimplemented;
         }
         break;
     default:
