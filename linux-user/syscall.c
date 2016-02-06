@@ -107,6 +107,7 @@ int __clone2(int (*fn)(void *), void *child_stack_base,
 #include <linux/if_bridge.h>
 #endif
 #include <linux/audit.h>
+#include <linux/if_packet.h>
 #include "linux_loop.h"
 #include "uname.h"
 
@@ -2937,6 +2938,23 @@ set_timeout:
         case NETLINK_PKTINFO:
             ret = get_errno(setsockopt(sockfd, SOL_NETLINK, optname,
                                        &val, sizeof(val)));
+            break;
+        default:
+            goto unimplemented;
+        }
+        break;
+    case SOL_PACKET:
+        switch (optname) {
+        case PACKET_AUXDATA: {
+                if (optlen < sizeof(val)) {
+                    return -TARGET_EINVAL;
+                }
+                if (get_user_u32(val, optval_addr)) {
+                    return -TARGET_EFAULT;
+                }
+                ret = get_errno(setsockopt(sockfd, SOL_PACKET, PACKET_AUXDATA,
+                                           &val, sizeof(val)));
+            }
             break;
         default:
             goto unimplemented;
