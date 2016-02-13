@@ -162,7 +162,7 @@ static inline void exclusive_idle(void)
 
 /* Start an exclusive operation.
    Must only be called from outside cpu_arm_exec.   */
-static inline void start_exclusive(void)
+void start_exclusive(void)
 {
     CPUState *other_cpu;
 
@@ -183,7 +183,7 @@ static inline void start_exclusive(void)
 }
 
 /* Finish an exclusive operation.  */
-static inline void __attribute__((unused)) end_exclusive(void)
+void end_exclusive(void)
 {
     pending_cpus = 0;
     pthread_cond_broadcast(&exclusive_resume);
