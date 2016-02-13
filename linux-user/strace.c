@@ -970,27 +970,30 @@ print_clone(const struct syscallname *name,
     abi_long arg3, abi_long arg4, abi_long arg5)
 {
     print_syscall_prologue(name);
-#if defined(TARGET_M68K)
+#if defined(TARGET_MICROBLAZE)
     print_flags(clone_flags, arg0, 0);
-    print_raw_param("newsp=0x" TARGET_ABI_FMT_lx, arg1, 1);
-#elif defined(TARGET_SH4) || defined(TARGET_ALPHA)
+    print_raw_param("child_stack=0x" TARGET_ABI_FMT_lx, arg1, 0);
+    print_raw_param("parent_tidptr=0x" TARGET_ABI_FMT_lx, arg3, 0);
+    print_raw_param("tls=0x" TARGET_ABI_FMT_lx, arg5, 0);
+    print_raw_param("child_tidptr=0x" TARGET_ABI_FMT_lx, arg4, 1);
+#elif defined(TARGET_CLONE_BACKWARDS)
     print_flags(clone_flags, arg0, 0);
     print_raw_param("child_stack=0x" TARGET_ABI_FMT_lx, arg1, 0);
     print_raw_param("parent_tidptr=0x" TARGET_ABI_FMT_lx, arg2, 0);
-    print_raw_param("child_tidptr=0x" TARGET_ABI_FMT_lx, arg3, 0);
-    print_raw_param("tls=0x" TARGET_ABI_FMT_lx, arg4, 1);
-#elif defined(TARGET_CRIS)
-    print_raw_param("child_stack=0x" TARGET_ABI_FMT_lx, arg0, 0);
-    print_flags(clone_flags, arg1, 0);
-    print_raw_param("parent_tidptr=0x" TARGET_ABI_FMT_lx, arg2, 0);
     print_raw_param("tls=0x" TARGET_ABI_FMT_lx, arg3, 0);
     print_raw_param("child_tidptr=0x" TARGET_ABI_FMT_lx, arg4, 1);
+#elif defined(TARGET_CLONE_BACKWARDS2)
+    print_flags(clone_flags, arg1, 0);
+    print_raw_param("child_stack=0x" TARGET_ABI_FMT_lx, arg0, 0);
+    print_raw_param("parent_tidptr=0x" TARGET_ABI_FMT_lx, arg2, 0);
+    print_raw_param("tls=0x" TARGET_ABI_FMT_lx, arg4, 0);
+    print_raw_param("child_tidptr=0x" TARGET_ABI_FMT_lx, arg3, 1);
 #else
     print_flags(clone_flags, arg0, 0);
     print_raw_param("child_stack=0x" TARGET_ABI_FMT_lx, arg1, 0);
     print_raw_param("parent_tidptr=0x" TARGET_ABI_FMT_lx, arg2, 0);
-    print_raw_param("tls=0x" TARGET_ABI_FMT_lx, arg3, 0);
-    print_raw_param("child_tidptr=0x" TARGET_ABI_FMT_lx, arg4, 1);
+    print_raw_param("tls=0x" TARGET_ABI_FMT_lx, arg4, 0);
+    print_raw_param("child_tidptr=0x" TARGET_ABI_FMT_lx, arg3, 1);
 #endif
     print_syscall_epilogue(name);
 }
