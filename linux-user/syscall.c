@@ -7129,6 +7129,7 @@ static int do_futex(target_ulong uaddr, int op, int val, target_ulong timeout,
 {
     struct timespec ts, *pts;
     int base_op;
+    int result;
 
     /* ??? We assume FUTEX_* constants are the same on both host
        and target.  */
@@ -7152,20 +7153,26 @@ static int do_futex(target_ulong uaddr, int op, int val, target_ulong timeout,
         return get_errno(safe_futex(g2h(uaddr), op, val, NULL, NULL, 0));
     case FUTEX_FD:
         return get_errno(safe_futex(g2h(uaddr), op, val, NULL, NULL, 0));
+    /* For FUTEX_REQUEUE, FUTEX_CMP_REQUEUE, and FUTEX_WAKE_OP, the
+       TIMEOUT parameter is interpreted as a uint32_t by the kernel.
+       But the prototype takes a `struct timespec *'; insert casts
+       to satisfy the compiler.  We do not need to tswap TIMEOUT
+       since it's not compared to guest memory.  */
     case FUTEX_REQUEUE:
-    case FUTEX_CMP_REQUEUE:
-    case FUTEX_WAKE_OP:
-        /* For FUTEX_REQUEUE, FUTEX_CMP_REQUEUE, and FUTEX_WAKE_OP, the
-           TIMEOUT parameter is interpreted as a uint32_t by the kernel.
-           But the prototype takes a `struct timespec *'; insert casts
-           to satisfy the compiler.  We do not need to tswap TIMEOUT
-           since it's not compared to guest memory.  */
         pts = (struct timespec *)(uintptr_t) timeout;
         return get_errno(safe_futex(g2h(uaddr), op, val, pts,
-                                    g2h(uaddr2),
-                                    (base_op == FUTEX_CMP_REQUEUE
-                                     ? tswap32(val3)
-                                     : val3)));
+                                   g2h(uaddr2), val3));
+    case FUTEX_CMP_REQUEUE:
+        pts = (struct timespec *)(uintptr_t) timeout;
+        return get_errno(safe_futex(g2h(uaddr), op, val, pts,
+                                   g2h(uaddr2), tswap32(val3)));
+    case FUTEX_WAKE_OP:
+        start_exclusive();
+        pts = (struct timespec *)(uintptr_t) timeout;
+        result = get_errno(safe_futex(g2h(uaddr), op, val, pts,
+                                   g2h(uaddr2), val3));
+        end_exclusive();
+        return result;
     default:
         return -TARGET_ENOSYS;
     }
