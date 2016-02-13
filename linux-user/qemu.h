@@ -259,6 +259,8 @@ void mmap_fork_end(int child);
 
 /* main.c */
 extern unsigned long guest_stack_size;
+void start_exclusive(void);
+void end_exclusive(void);
 
 /* user access */
 
