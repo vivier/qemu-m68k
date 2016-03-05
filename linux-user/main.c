@@ -4174,7 +4174,7 @@ static const struct qemu_argument arg_table[] = {
      "pagesize",   "set the host page size to 'pagesize'"},
     {"singlestep", "QEMU_SINGLESTEP",  false, handle_arg_singlestep,
      "",           "run in singlestep mode"},
-    {"strace",     "QEMU_STRACE",      true, handle_arg_strace,
+    {"strace",     "QEMU_STRACE",      false, handle_arg_strace,
      "",           "log system calls"},
     {"strace_logfile", "QEMU_STRACE_FILENAME", true, handle_arg_strace_logfile,
      "",           "log system calls to 'logfile' (default stderr)"},
