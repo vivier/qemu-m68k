@@ -3308,10 +3308,11 @@ static inline void shift_im(DisasContext *s, uint16_t insn, int opsize)
                 /* adjust V: (1,0) -> (0,-1) */
                 tcg_gen_subi_i32(QREG_CC_V, QREG_CC_V, 1);
             } else {
+                TCGv t1 = tcg_const_i32(bits - 1);
                 TCGv t0 = tcg_temp_new();
 
                 tcg_gen_shri_i32(QREG_CC_V, reg, bits - 1 - count);
-                tcg_gen_sar_i32(t0, reg, t0);
+                tcg_gen_sar_i32(t0, reg, t1);
                 tcg_gen_not_i32(t0, t0);
 
                 tcg_gen_setcond_i32(TCG_COND_EQ, QREG_CC_V, QREG_CC_V, zero);
@@ -3319,6 +3320,7 @@ static inline void shift_im(DisasContext *s, uint16_t insn, int opsize)
                 tcg_gen_or_i32(QREG_CC_V, QREG_CC_V, t0); /* V is !V here */
 
                 tcg_temp_free(t0);
+                tcg_temp_free(t1);
 
                 /* adjust V: (1,0) -> (0,-1) */
                 tcg_gen_subi_i32(QREG_CC_V, QREG_CC_V, 1);
