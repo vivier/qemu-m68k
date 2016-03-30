@@ -4588,7 +4588,7 @@ static void restore_user_regs(CPUPPCState *env,
 
     /* If doing signal return, restore the previous little-endian mode.  */
     if (sig)
-        env->msr = (env->msr & ~MSR_LE) | (msr & MSR_LE);
+        env->msr = (env->msr & ~(1ull << MSR_LE)) | (msr & (1ull << MSR_LE));
 
     /* Restore Altivec registers if necessary.  */
     if (env->insns_flags & PPC_ALTIVEC) {
@@ -4703,7 +4703,7 @@ static void setup_frame(int sig, struct target_sigaction *ka,
 #endif
 
     /* Signal handlers are entered in big-endian mode.  */
-    env->msr &= ~MSR_LE;
+    env->msr &= ~(1ull << MSR_LE);
 
     unlock_user_struct(frame, frame_addr, 1);
     return;
@@ -4798,7 +4798,7 @@ static void setup_rt_frame(int sig, struct target_sigaction *ka,
 #endif
 
     /* Signal handlers are entered in big-endian mode.  */
-    env->msr &= ~MSR_LE;
+    env->msr &= ~(1ull << MSR_LE);
 
     unlock_user_struct(rt_sf, rt_sf_addr, 1);
     return;
