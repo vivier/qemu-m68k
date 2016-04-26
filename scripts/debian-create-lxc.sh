@@ -9,6 +9,9 @@
 #   (on debian, using --debian and update-binfmts --import)
 #
 
+STD_CONFIGURE_PARAMS="--static --disable-gcrypt \
+                      --disable-nettle --disable-libiscsi"
+
 QEMU_PATH=$(dirname $(dirname $(readlink -f $0)))
 
 TARGET_LIST="i386 m68k alpha sparc mips ppc raspberrypi"
@@ -23,8 +26,8 @@ check_target() {
         INCLUDE="openssh-server"
         ;;
     m68k)
-        MIRROR=http://archive.debian.org/debian
-        SUITE=etch-m68k
+        MIRROR=ftp://ftp.debian-ports.org/debian
+        SUITE=unstable
         DEB_SIGN=55BE302B
         CONFIGURE_PARAMS=--m68k-default-cpu=m68040
         QEMU_TARGET=m68k
@@ -119,7 +122,7 @@ create_qemu() {
         echo "cd ${QEMU_PATH} && \
         mkdir -p build/${QEMU_TARGET} && \
         cd build/${QEMU_TARGET} && \
-        ../../configure --static ${CONFIGURE_PARAMS} \
+        ../../configure ${STD_CONFIGURE_PARAMS} ${CONFIGURE_PARAMS} \
                      --target-list=${QEMU_TARGET}-linux-user && \
         make" | sudo -i -u ${SUDO_USER}
         if ! ${CHECK_BIN}
@@ -162,12 +165,6 @@ echo "QEMU_PATH     : ${QEMU_PATH}"
 echo "MIRROR        : ${MIRROR}"
 echo "SUITE         : ${SUITE}"
 echo "INCLUDE       : ${INCLUDE}"
-
-if [ "$USER" != "root" ]
-then
-        echo "You need to be root to run this command" 2>&1
-        exit 1
-fi
 
 create_qemu
 create_root
