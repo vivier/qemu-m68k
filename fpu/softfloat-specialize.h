@@ -111,11 +111,11 @@ float16 float16_default_nan(float_status *status)
 *----------------------------------------------------------------------------*/
 float32 float32_default_nan(float_status *status)
 {
-#if defined(TARGET_SPARC)
+#if defined(TARGET_SPARC) || defined(TARGET_M68K)
     return const_float32(0x7FFFFFFF);
 #elif defined(TARGET_PPC) || defined(TARGET_ARM) || defined(TARGET_ALPHA) || \
       defined(TARGET_XTENSA) || defined(TARGET_S390X) || \
-      defined(TARGET_TRICORE) || defined(TARGET_M68K)
+      defined(TARGET_TRICORE)
     return const_float32(0x7FC00000);
 #else
     if (status->snan_bit_is_one) {
@@ -135,7 +135,7 @@ float32 float32_default_nan(float_status *status)
 *----------------------------------------------------------------------------*/
 float64 float64_default_nan(float_status *status)
 {
-#if defined(TARGET_SPARC)
+#if defined(TARGET_SPARC) || defined(TARGET_M68K)
     return const_float64(LIT64(0x7FFFFFFFFFFFFFFF));
 #elif defined(TARGET_PPC) || defined(TARGET_ARM) || defined(TARGET_ALPHA) || \
       defined(TARGET_S390X) || defined(TARGET_M68K)
@@ -160,7 +160,7 @@ floatx80 floatx80_default_nan(float_status *status)
 {
     floatx80 r;
 #if defined(TARGET_M68K)
-    r.low = LIT64(0x4000000000000000);
+    r.low = LIT64(0xFFFFFFFFFFFFFFFF);
     r.high = 0x7FFF;
 #else
     if (status->snan_bit_is_one) {
