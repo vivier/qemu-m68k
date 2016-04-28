@@ -110,11 +110,11 @@ const float16 float16_default_nan = const_float16(0xFE00);
 /*----------------------------------------------------------------------------
 | The pattern for a default generated single-precision NaN.
 *----------------------------------------------------------------------------*/
-#if defined(TARGET_SPARC)
+#if defined(TARGET_SPARC) || defined(TARGET_M68K)
 const float32 float32_default_nan = const_float32(0x7FFFFFFF);
 #elif defined(TARGET_PPC) || defined(TARGET_ARM) || defined(TARGET_ALPHA) || \
       defined(TARGET_XTENSA) || defined(TARGET_S390X) || \
-      defined(TARGET_TRICORE) || defined(TARGET_M68K)
+      defined(TARGET_TRICORE)
 const float32 float32_default_nan = const_float32(0x7FC00000);
 #elif SNAN_BIT_IS_ONE
 const float32 float32_default_nan = const_float32(0x7FBFFFFF);
@@ -125,10 +125,10 @@ const float32 float32_default_nan = const_float32(0xFFC00000);
 /*----------------------------------------------------------------------------
 | The pattern for a default generated double-precision NaN.
 *----------------------------------------------------------------------------*/
-#if defined(TARGET_SPARC)
+#if defined(TARGET_SPARC) || defined(TARGET_M68K)
 const float64 float64_default_nan = const_float64(LIT64( 0x7FFFFFFFFFFFFFFF ));
 #elif defined(TARGET_PPC) || defined(TARGET_ARM) || defined(TARGET_ALPHA) || \
-      defined(TARGET_S390X) || defined(TARGET_M68K)
+      defined(TARGET_S390X)
 const float64 float64_default_nan = const_float64(LIT64( 0x7FF8000000000000 ));
 #elif SNAN_BIT_IS_ONE
 const float64 float64_default_nan = const_float64(LIT64(0x7FF7FFFFFFFFFFFF));
@@ -141,7 +141,7 @@ const float64 float64_default_nan = const_float64(LIT64( 0xFFF8000000000000 ));
 *----------------------------------------------------------------------------*/
 #if defined(TARGET_M68K)
 #define floatx80_default_nan_high 0x7FFF
-#define floatx80_default_nan_low  LIT64( 0x4000000000000000 )
+#define floatx80_default_nan_low  LIT64( 0xFFFFFFFFFFFFFFFF )
 #elif SNAN_BIT_IS_ONE
 #define floatx80_default_nan_high 0x7FFF
 #define floatx80_default_nan_low  LIT64(0xBFFFFFFFFFFFFFFF)
