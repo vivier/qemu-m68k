@@ -1560,6 +1560,7 @@ DISAS_INSN(dbcc)
     base = s->pc;
     offset = (int16_t)read_im16(env, s);
     l1 = gen_new_label();
+    update_cc_op(s);
     gen_jmpcc(s, (insn >> 8) & 0xf, l1);
 
     tmp = tcg_temp_new();
@@ -4828,11 +4829,10 @@ DISAS_INSN(fbcc)
     }
 
     l1 = gen_new_label();
-    gen_fjmpcc(s, insn & 0x3f, l1);
     update_cc_op(s);
+    gen_fjmpcc(s, insn & 0x3f, l1);
     gen_jmp_tb(s, 0, s->pc);
     gen_set_label(l1);
-    update_cc_op(s);
     gen_jmp_tb(s, 1, addr + offset);
 }
 
