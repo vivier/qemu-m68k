@@ -5561,7 +5561,7 @@ void m68k_cpu_dump_state(CPUState *cs, FILE *f, fprintf_function cpu_fprintf,
       }
     cpu_fprintf (f, "PC = %08x   ", env->pc);
     sr = env->sr | cpu_m68k_get_ccr(env);
-    cpu_fprintf (f, "SR = %04x %c%c%c%c%c ", sr, (sr & CCF_X) ? 'X' : '-',
+    cpu_fprintf (f, "SR = %04x %c%c%c%c%c\n", sr, (sr & CCF_X) ? 'X' : '-',
                  (sr & CCF_N) ? 'N' : '-', (sr & CCF_Z) ? 'Z' : '-',
                  (sr & CCF_V) ? 'V' : '-', (sr & CCF_C) ? 'C' : '-');
 }
