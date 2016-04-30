@@ -1713,12 +1713,26 @@ DISAS_INSN(divl)
 
     /* on overflow, operands and flags are unaffected */
 
-    tcg_gen_movcond_i32(TCG_COND_EQ, DREG(ext, 0),
-                        QREG_CC_V, QREG_CC_C /* zero */ ,
-                        rem, DREG(ext, 0));
-    tcg_gen_movcond_i32(TCG_COND_EQ, DREG(ext, 12),
-                        QREG_CC_V, QREG_CC_C /* zero */ ,
-                        quot, DREG(ext, 12));
+    if (m68k_feature(s->env, M68K_FEATURE_CF_ISA_A)) {
+        if (REG(ext, 0) == REG(ext, 12)) {
+            /* div */
+            tcg_gen_movcond_i32(TCG_COND_EQ, DREG(ext, 12),
+                                QREG_CC_V, QREG_CC_C /* zero */ ,
+                                quot, DREG(ext, 12));
+        } else {
+            /* rem */
+            tcg_gen_movcond_i32(TCG_COND_EQ, DREG(ext, 0),
+                                QREG_CC_V, QREG_CC_C /* zero */ ,
+                                rem, DREG(ext, 0));
+        }
+    } else {
+        tcg_gen_movcond_i32(TCG_COND_EQ, DREG(ext, 0),
+                            QREG_CC_V, QREG_CC_C /* zero */ ,
+                            rem, DREG(ext, 0));
+        tcg_gen_movcond_i32(TCG_COND_EQ, DREG(ext, 12),
+                            QREG_CC_V, QREG_CC_C /* zero */ ,
+                            quot, DREG(ext, 12));
+    }
     tcg_gen_movcond_i32(TCG_COND_EQ, QREG_CC_Z,
                         QREG_CC_V, QREG_CC_C /* zero */ ,
                         quot, QREG_CC_Z);
