@@ -4241,16 +4241,14 @@ DISAS_INSN(strldsr)
 
 DISAS_INSN(move_from_sr)
 {
-    TCGv reg;
     TCGv sr;
 
-    if (IS_USER(s)) {
+    if (IS_USER(s) && !m68k_feature(env, M68K_FEATURE_M68000)) {
         gen_exception(s, s->pc - 2, EXCP_PRIVILEGE);
         return;
     }
     sr = gen_get_sr(s);
-    reg = DREG(insn, 0);
-    gen_partset_reg(OS_WORD, reg, sr);
+    DEST_EA(env, insn, OS_WORD, sr, NULL);
 }
 
 DISAS_INSN(move_to_sr)
@@ -5289,7 +5287,8 @@ void register_m68k_insns (CPUM68KState *env)
     INSN(negx,      4080, fff8, CF_ISA_A);
     INSN(negx,      4000, ff00, M68000);
     INSN(undef,     40c0, ffc0, M68000);
-    BASE(move_from_sr, 40c0, fff8);
+    INSN(move_from_sr, 40c0, fff8, CF_ISA_A);
+    INSN(move_from_sr, 40c0, ffc0, M68000);
     BASE(lea,       41c0, f1c0);
     BASE(clr,       4200, ff00);
     BASE(undef,     42c0, ffc0);
