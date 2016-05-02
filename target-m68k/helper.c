@@ -725,11 +725,3 @@ void HELPER(set_mac_extu)(CPUM68KState *env, uint32_t val, uint32_t acc)
     res |= (uint64_t)(val & 0xffff0000) << 16;
     env->macc[acc + 1] = res;
 }
-
-void m68k_cpu_exec_enter(CPUState *cs)
-{
-}
-
-void m68k_cpu_exec_exit(CPUState *cs)
-{
-}
