@@ -1402,6 +1402,7 @@ static void gen_jmpcc(DisasContext *s, int cond, TCGLabel *l1)
   DisasCompare c;
 
   gen_cc_cond(&c, s, cond);
+  update_cc_op(s);
   tcg_gen_brcond_i32(c.tcond, c.v1, c.v2, l1);
   free_cond(&c);
 }
@@ -1512,7 +1513,6 @@ DISAS_INSN(dbcc)
     base = s->pc;
     offset = (int16_t)read_im16(env, s);
     l1 = gen_new_label();
-    update_cc_op(s);
     gen_jmpcc(s, (insn >> 8) & 0xf, l1);
 
     tmp = tcg_temp_new();
@@ -2935,7 +2935,6 @@ DISAS_INSN(branch)
         /* bsr */
         gen_push(s, tcg_const_i32(s->pc));
     }
-    update_cc_op(s);
     if (op > 1) {
         /* Bcc */
         l1 = gen_new_label();
@@ -2945,6 +2944,7 @@ DISAS_INSN(branch)
         gen_jmp_tb(s, 0, s->pc);
     } else {
         /* Unconditional branch.  */
+        update_cc_op(s);
         gen_jmp_tb(s, 0, base + offset);
     }
 }
