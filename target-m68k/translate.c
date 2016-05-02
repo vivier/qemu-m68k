@@ -1560,7 +1560,6 @@ DISAS_INSN(dbcc)
     base = s->pc;
     offset = (int16_t)read_im16(env, s);
     l1 = gen_new_label();
-    update_cc_op(s);
     gen_jmpcc(s, (insn >> 8) & 0xf, l1);
 
     tmp = tcg_temp_new();
@@ -2918,6 +2917,7 @@ DISAS_INSN(branch)
         gen_jmp_tb(s, 0, s->pc);
     } else {
         /* Unconditional branch.  */
+        update_cc_op(s);
         gen_jmp_tb(s, 0, base + offset);
     }
 }
