@@ -27,11 +27,6 @@
 
 #define SIGNBIT (1u << 31)
 
-typedef struct M68kCPUListState {
-    fprintf_function cpu_fprintf;
-    FILE *file;
-} M68kCPUListState;
-
 static gint m68k_cpu_list_compare(gconstpointer a, gconstpointer b)
 {
     ObjectClass *class_a = (ObjectClass *)a;
