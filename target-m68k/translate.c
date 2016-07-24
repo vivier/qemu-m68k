@@ -1263,6 +1263,7 @@ static void gen_cc_cond(DisasCompare *c, DisasContext *s, int cond)
         c->v1 = c->v2;
         tcond = TCG_COND_NEVER;
         goto done;
+    case 14: /* GT (!(Z || (N ^ V))) */
     case 15: /* LE (Z || (N ^ V)) */
         /* Logic operations clear V, which simplifies LE to (Z || N),
            and since Z and N are co-located, this becomes a normal
