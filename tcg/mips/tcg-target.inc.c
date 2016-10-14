@@ -1637,6 +1637,9 @@ static inline void tcg_out_op(TCGContext *s, TCGOpcode opc,
     case INDEX_op_deposit_i32:
         tcg_out_opc_bf(s, OPC_INS, a0, a2, args[3] + args[4] - 1, args[3]);
         break;
+    case INDEX_op_extract_i32:
+        tcg_out_opc_bf(s, OPC_EXT, a0, a1, a2 + args[3] - 1, a2);
+        break;
 
     case INDEX_op_brcond_i32:
         tcg_out_brcond(s, a2, a0, a1, arg_label(args[3]));
@@ -1736,6 +1739,7 @@ static const TCGTargetOpDef mips_op_defs[] = {
     { INDEX_op_ext16s_i32, { "r", "rZ" } },
 
     { INDEX_op_deposit_i32, { "r", "0", "rZ" } },
+    { INDEX_op_extract_i32, { "r", "r" } },
 
     { INDEX_op_brcond_i32, { "rZ", "rZ" } },
 #if use_mips32r6_instructions
