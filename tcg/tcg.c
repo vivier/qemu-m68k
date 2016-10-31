@@ -329,7 +329,11 @@ void tcg_context_init(TCGContext *s)
     GHashTable *helper_table;
 
     memset(s, 0, sizeof(*s));
-    s->nb_globals = 0;
+
+    /* Reserve global 0 so that, when foxing these integrals
+       as pointers, NULL is unused.  */
+    s->nb_globals = 1;
+    s->nb_temps = 1;
 
     /* Count total number of arguments and allocate the corresponding
        space */
