@@ -449,13 +449,6 @@ void tcg_func_start(TCGContext *s)
     s->be = tcg_malloc(sizeof(TCGBackendData));
 }
 
-static inline int temp_idx(TCGContext *s, TCGTemp *ts)
-{
-    ptrdiff_t n = ts - s->temps;
-    tcg_debug_assert(n >= 0 && n < s->nb_temps);
-    return n;
-}
-
 static inline TCGTemp *tcg_temp_alloc(TCGContext *s)
 {
     int n = s->nb_temps++;
@@ -470,8 +463,8 @@ static inline TCGTemp *tcg_global_alloc(TCGContext *s)
     return tcg_temp_alloc(s);
 }
 
-static int tcg_global_reg_new_internal(TCGContext *s, TCGType type,
-                                       TCGReg reg, const char *name)
+static TCGTemp *tcg_global_reg_new_internal(TCGContext *s, TCGType type,
+                                            TCGReg reg, const char *name)
 {
     TCGTemp *ts;
 
@@ -487,44 +480,42 @@ static int tcg_global_reg_new_internal(TCGContext *s, TCGType type,
     ts->name = name;
     tcg_regset_set_reg(s->reserved_regs, reg);
 
-    return temp_idx(s, ts);
+    return ts;
 }
 
 void tcg_set_frame(TCGContext *s, TCGReg reg, intptr_t start, intptr_t size)
 {
-    int idx;
     s->frame_start = start;
     s->frame_end = start + size;
-    idx = tcg_global_reg_new_internal(s, TCG_TYPE_PTR, reg, "_frame");
-    s->frame_temp = &s->temps[idx];
+    s->frame_temp = tcg_global_reg_new_internal(s, TCG_TYPE_PTR, reg, "_frame");
 }
 
 TCGv_i32 tcg_global_reg_new_i32(TCGReg reg, const char *name)
 {
     TCGContext *s = &tcg_ctx;
-    int idx;
+    TCGTemp *t;
 
     if (tcg_regset_test_reg(s->reserved_regs, reg)) {
         tcg_abort();
     }
-    idx = tcg_global_reg_new_internal(s, TCG_TYPE_I32, reg, name);
-    return MAKE_TCGV_I32(idx);
+    t = tcg_global_reg_new_internal(s, TCG_TYPE_I32, reg, name);
+    return (TCGv_i32)t;
 }
 
 TCGv_i64 tcg_global_reg_new_i64(TCGReg reg, const char *name)
 {
     TCGContext *s = &tcg_ctx;
-    int idx;
+    TCGTemp *t;
 
     if (tcg_regset_test_reg(s->reserved_regs, reg)) {
         tcg_abort();
     }
-    idx = tcg_global_reg_new_internal(s, TCG_TYPE_I64, reg, name);
-    return MAKE_TCGV_I64(idx);
+    t = tcg_global_reg_new_internal(s, TCG_TYPE_I64, reg, name);
+    return (TCGv_i64)t;
 }
 
-int tcg_global_mem_new_internal(TCGType type, TCGv_ptr base,
-                                intptr_t offset, const char *name)
+TCGTemp *tcg_global_mem_new_internal(TCGType type, TCGv_ptr base,
+                                     intptr_t offset, const char *name)
 {
     TCGContext *s = &tcg_ctx;
     TCGTemp *base_ts = &s->temps[GET_TCGV_PTR(base)];
@@ -576,10 +567,10 @@ int tcg_global_mem_new_internal(TCGType type, TCGv_ptr base,
         ts->mem_offset = offset;
         ts->name = name;
     }
-    return temp_idx(s, ts);
+    return ts;
 }
 
-static int tcg_temp_new_internal(TCGType type, int temp_local)
+TCGTemp *tcg_temp_new_internal(TCGType type, bool temp_local)
 {
     TCGContext *s = &tcg_ctx;
     TCGTemp *ts;
@@ -616,36 +607,18 @@ static int tcg_temp_new_internal(TCGType type, int temp_local)
             ts->temp_allocated = 1;
             ts->temp_local = temp_local;
         }
-        idx = temp_idx(s, ts);
     }
 
 #if defined(CONFIG_DEBUG_TCG)
     s->temps_in_use++;
 #endif
-    return idx;
+    return ts;
 }
 
-TCGv_i32 tcg_temp_new_internal_i32(int temp_local)
-{
-    int idx;
-
-    idx = tcg_temp_new_internal(TCG_TYPE_I32, temp_local);
-    return MAKE_TCGV_I32(idx);
-}
-
-TCGv_i64 tcg_temp_new_internal_i64(int temp_local)
-{
-    int idx;
-
-    idx = tcg_temp_new_internal(TCG_TYPE_I64, temp_local);
-    return MAKE_TCGV_I64(idx);
-}
-
-static void tcg_temp_free_internal(int idx)
+void tcg_temp_free_internal(TCGTemp *ts)
 {
     TCGContext *s = &tcg_ctx;
-    TCGTemp *ts;
-    int k;
+    int k, idx = temp_idx(ts);
 
 #if defined(CONFIG_DEBUG_TCG)
     s->temps_in_use--;
@@ -655,22 +628,11 @@ static void tcg_temp_free_internal(int idx)
 #endif
 
     tcg_debug_assert(idx >= s->nb_globals && idx < s->nb_temps);
-    ts = &s->temps[idx];
     tcg_debug_assert(ts->temp_allocated != 0);
     ts->temp_allocated = 0;
 
     k = ts->base_type + (ts->temp_local ? TCG_TYPE_COUNT : 0);
     set_bit(idx, s->free_temps[k].l);
-}
-
-void tcg_temp_free_i32(TCGv_i32 arg)
-{
-    tcg_temp_free_internal(GET_TCGV_I32(arg));
-}
-
-void tcg_temp_free_i64(TCGv_i64 arg)
-{
-    tcg_temp_free_internal(GET_TCGV_I64(arg));
 }
 
 TCGv_i32 tcg_const_i32(int32_t val)
@@ -942,7 +904,7 @@ static void tcg_reg_alloc_start(TCGContext *s)
 static char *tcg_get_arg_str_ptr(TCGContext *s, char *buf, int buf_size,
                                  TCGTemp *ts)
 {
-    int idx = temp_idx(s, ts);
+    int idx = temp_idx(ts);
 
     if (idx < s->nb_globals) {
         pstrcpy(buf, buf_size, ts->name);
@@ -1674,7 +1636,7 @@ static bool liveness_pass_2(TCGContext *s, uint8_t *temp_state)
             TCGTemp *dts = tcg_temp_alloc(s);
             dts->type = its->type;
             dts->base_type = its->base_type;
-            dir_temps[i] = temp_idx(s, dts);
+            dir_temps[i] = temp_idx(dts);
         }
     }
 
@@ -1728,7 +1690,7 @@ static bool liveness_pass_2(TCGContext *s, uint8_t *temp_state)
                     TCGArg *largs = &s->gen_opparam_buf[lop->args];
 
                     largs[0] = dir;
-                    largs[1] = temp_idx(s, its->mem_base);
+                    largs[1] = temp_idx(its->mem_base);
                     largs[2] = its->mem_offset;
 
                     /* Loaded, but synced with memory.  */
@@ -1800,7 +1762,7 @@ static bool liveness_pass_2(TCGContext *s, uint8_t *temp_state)
                 TCGArg *sargs = &s->gen_opparam_buf[sop->args];
 
                 sargs[0] = dir;
-                sargs[1] = temp_idx(s, its->mem_base);
+                sargs[1] = temp_idx(its->mem_base);
                 sargs[2] = its->mem_offset;
 
                 temp_state[arg] = TS_MEM;
@@ -1921,7 +1883,7 @@ static void temp_free_or_dead(TCGContext *s, TCGTemp *ts, int free_or_dead)
     }
     ts->val_type = (free_or_dead < 0
                     || ts->temp_local
-                    || temp_idx(s, ts) < s->nb_globals
+                    || temp_idx(ts) < s->nb_globals
                     ? TEMP_VAL_MEM : TEMP_VAL_DEAD);
 }
 
@@ -1943,7 +1905,7 @@ static void temp_sync(TCGContext *s, TCGTemp *ts,
     }
     if (!ts->mem_coherent) {
         if (!ts->mem_allocated) {
-            temp_allocate_frame(s, temp_idx(s, ts));
+            temp_allocate_frame(s, temp_idx(ts));
         }
         switch (ts->val_type) {
         case TEMP_VAL_CONST:
