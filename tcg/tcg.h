@@ -410,6 +410,12 @@ typedef struct TCGTemp {
     struct TCGTemp *mem_base;
     intptr_t mem_offset;
     const char *name;
+
+    /* Pass-specific information that can be stored for a temporary.
+       One word worth of integer data, and one pointer to data
+       allocated separately.  */
+    uintptr_t state;
+    void *state_ptr;
 } TCGTemp;
 
 typedef struct TCGv_i32_d {
@@ -694,6 +700,16 @@ static inline uintptr_t temp_idx(TCGTemp *ts)
     ptrdiff_t n = ts - tcg_ctx.temps;
     tcg_debug_assert(n >= 0 && n < tcg_ctx.nb_temps);
     return n;
+}
+
+static inline size_t arg_index(TCGArg a)
+{
+    return a;
+}
+
+static inline TCGTemp *arg_temp(TCGArg a)
+{
+    return &tcg_ctx.temps[a];
 }
 
 static inline TCGv_i32 QEMU_ARTIFICIAL MAKE_TCGV_I32(uintptr_t i)
