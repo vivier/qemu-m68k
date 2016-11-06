@@ -22,8 +22,8 @@
 #include "cpu.h"
 #include "exec/exec-all.h"
 #include "exec/gdbstub.h"
-
 #include "exec/helper-proto.h"
+#include "exec/cpu_ldst.h"
 
 #define SIGNBIT (1u << 31)
 
@@ -755,4 +755,185 @@ void HELPER(set_mac_extu)(CPUM68KState *env, uint32_t val, uint32_t acc)
     res = (uint32_t)env->macc[acc + 1];
     res |= (uint64_t)(val & 0xffff0000) << 16;
     env->macc[acc + 1] = res;
+}
+
+struct bf_data {
+    uint64_t mask;
+    uint32_t addr;
+    int bofs;
+    int blen;
+    int len;
+};
+
+static inline struct bf_data bf_prep(uint32_t addr, int32_t ofs, uint32_t len)
+{
+    uint64_t mask;
+    int bofs;
+
+    /* Bound length; map 0 to 32.  */
+    len = ((len - 1) & 31) + 1;
+    mask = -1ull << (64 - len);
+
+    /* Note that ofs is signed.  */
+    addr += ofs / 8;
+    bofs = ofs % 8;
+    if (bofs < 0) {
+        bofs += 8;
+        addr -= 1;
+    }
+
+    return (struct bf_data){
+        .mask = mask,
+        .addr = addr,
+        .bofs = bofs,
+        .blen = (bofs + len - 1) / 8,
+        .len = len,
+    };
+}
+
+static inline uint64_t bf_load(CPUM68KState *env, struct bf_data *d,
+                               uintptr_t ra)
+{
+    uint32_t addr = d->addr;
+    uint64_t data;
+
+    /* Be careful not to read bytes across page boundaries unless
+       absolutely necessary.  */
+    switch (d->blen) {
+    case 0:
+        d->bofs += 56;
+        data = cpu_ldub_data_ra(env, addr, ra);
+        break;
+
+    case 1:
+        d->bofs += 16;
+        data = cpu_lduw_data_ra(env, addr, ra);
+        break;
+
+    case 2:
+        if ((addr & 3) <= 1) {
+            d->bofs += (addr & 3) * 8;
+            addr -= (addr & 3);
+            d->addr = addr;
+        }
+        /* fallthru */
+
+    case 3:
+        data = cpu_ldl_data_ra(env, addr, ra);
+        break;
+
+    case 4:
+        if ((addr & 7) <= 3) {
+            d->bofs += (addr & 7) * 8;
+            addr -= (addr & 7);
+            d->addr = addr;
+        }
+        data = cpu_ldq_data_ra(env, addr, ra);
+        break;
+
+    default:
+        g_assert_not_reached();
+    }
+
+    return data;
+}
+
+static inline void bf_store(CPUM68KState *env, struct bf_data *d,
+                            uint64_t data, uintptr_t ra)
+{
+    uint32_t addr = d->addr;
+
+    switch (d->blen) {
+    case 0:
+        cpu_stb_data_ra(env, addr, data, ra);
+        break;
+    case 1:
+        cpu_stw_data_ra(env, addr, data, ra);
+        break;
+    case 2:
+    case 3:
+        cpu_stl_data_ra(env, addr, data, ra);
+        break;
+    case 4:
+        cpu_stq_data_ra(env, addr, data, ra);
+        break;
+    default:
+        g_assert_not_reached();
+    }
+}
+
+uint32_t HELPER(bfexts_mem)(CPUM68KState *env, uint32_t addr,
+                            int32_t ofs, uint32_t len)
+{
+    uintptr_t ra = GETPC();
+    struct bf_data d = bf_prep(addr, ofs, len);
+    uint64_t data = bf_load(env, &d, ra);
+
+    return (int64_t)(data << d.bofs) >> (64 - len);
+}
+
+uint64_t HELPER(bfextu_mem)(CPUM68KState *env, uint32_t addr,
+                            int32_t ofs, uint32_t len)
+{
+    uintptr_t ra = GETPC();
+    struct bf_data d = bf_prep(addr, ofs, len);
+    uint64_t data = bf_load(env, &d, ra);
+
+    /* Put CC_N at the top of the high word; put the zero-extended value
+       at the bottom of the low word.  */
+    data <<= d.bofs;
+    data &= d.mask;
+    data |= data >> (64 - d.len);
+    return data;
+}
+
+uint32_t HELPER(bfins_mem)(CPUM68KState *env, uint32_t addr, uint32_t val,
+                           int32_t ofs, uint32_t len)
+{
+    uintptr_t ra = GETPC();
+    struct bf_data d = bf_prep(addr, ofs, len);
+    uint64_t data = bf_load(env, &d, ra);
+
+    data = (data & ~(d.mask >> d.bofs)) | (((uint64_t)val << 32) >> d.bofs);
+
+    bf_store(env, &d, data, ra);
+
+    /* The field at the top of the word is also CC_N for CC_OP_LOGIC.  */
+    return val;
+}
+
+uint32_t HELPER(bfchg_mem)(CPUM68KState *env, uint32_t addr,
+                           int32_t ofs, uint32_t len)
+{
+    uintptr_t ra = GETPC();
+    struct bf_data d = bf_prep(addr, ofs, len);
+    uint64_t data = bf_load(env, &d, ra);
+
+    bf_store(env, &d, data ^ (d.mask >> d.bofs), ra);
+
+    return (data << d.bofs) >> 32;
+}
+
+uint32_t HELPER(bfclr_mem)(CPUM68KState *env, uint32_t addr,
+                           int32_t ofs, uint32_t len)
+{
+    uintptr_t ra = GETPC();
+    struct bf_data d = bf_prep(addr, ofs, len);
+    uint64_t data = bf_load(env, &d, ra);
+
+    bf_store(env, &d, data &~ (d.mask >> d.bofs), ra);
+
+    return (data << d.bofs) >> 32;
+}
+
+uint32_t HELPER(bfset_mem)(CPUM68KState *env, uint32_t addr,
+                           int32_t ofs, uint32_t len)
+{
+    uintptr_t ra = GETPC();
+    struct bf_data d = bf_prep(addr, ofs, len);
+    uint64_t data = bf_load(env, &d, ra);
+
+    bf_store(env, &d, data | (d.mask >> d.bofs), ra);
+
+    return (data << d.bofs) >> 32;
 }
