@@ -112,6 +112,8 @@ typedef uint64_t TCGRegSet;
 #define TCG_TARGET_HAS_nand_i64         0
 #define TCG_TARGET_HAS_nor_i64          0
 #define TCG_TARGET_HAS_deposit_i64      0
+#define TCG_TARGET_HAS_extract_i64      0
+#define TCG_TARGET_HAS_sextract_i64     0
 #define TCG_TARGET_HAS_movcond_i64      0
 #define TCG_TARGET_HAS_add2_i64         0
 #define TCG_TARGET_HAS_sub2_i64         0
@@ -129,6 +131,12 @@ typedef uint64_t TCGRegSet;
 #endif
 #ifndef TCG_TARGET_deposit_i64_valid
 #define TCG_TARGET_deposit_i64_valid(ofs, len) 1
+#endif
+#ifndef TCG_TARGET_extract_i32_valid
+#define TCG_TARGET_extract_i32_valid(ofs, len) 1
+#endif
+#ifndef TCG_TARGET_extract_i64_valid
+#define TCG_TARGET_extract_i64_valid(ofs, len) 1
 #endif
 
 /* Only one of DIV or DIV2 should be defined.  */
@@ -376,41 +384,62 @@ static inline unsigned get_alignment_bits(TCGMemOp memop)
 
 typedef tcg_target_ulong TCGArg;
 
-/* Define type and accessor macros for TCG variables.
+typedef enum TCGTempVal {
+    TEMP_VAL_DEAD,
+    TEMP_VAL_REG,
+    TEMP_VAL_MEM,
+    TEMP_VAL_CONST,
+} TCGTempVal;
 
-   TCG variables are the inputs and outputs of TCG ops, as described
-   in tcg/README. Target CPU front-end code uses these types to deal
-   with TCG variables as it emits TCG code via the tcg_gen_* functions.
-   They come in several flavours:
-    * TCGv_i32 : 32 bit integer type
-    * TCGv_i64 : 64 bit integer type
-    * TCGv_ptr : a host pointer type
-    * TCGv : an integer type the same size as target_ulong
-             (an alias for either TCGv_i32 or TCGv_i64)
-   The compiler's type checking will complain if you mix them
-   up and pass the wrong sized TCGv to a function.
+typedef struct TCGTemp {
+    TCGReg reg:8;
+    TCGTempVal val_type:8;
+    TCGType base_type:8;
+    TCGType type:8;
+    unsigned int fixed_reg:1;
+    unsigned int indirect_reg:1;
+    unsigned int indirect_base:1;
+    unsigned int mem_coherent:1;
+    unsigned int mem_allocated:1;
+    /* If true, the temp is saved across both basic blocks and
+       translation blocks.  */
+    unsigned int temp_global:1;
+    /* If true, the temp is saved across basic blocks but dead
+       at the end of translation blocks.  If false, the temp is
+       dead at the end of basic blocks.  */
+    unsigned int temp_local:1;
+    unsigned int temp_allocated:1;
 
-   Users of tcg_gen_* don't need to know about any of the internal
-   details of these, and should treat them as opaque types.
-   You won't be able to look inside them in a debugger either.
+    tcg_target_long val;
+    struct TCGTemp *mem_base;
+    intptr_t mem_offset;
+    const char *name;
 
-   Internal implementation details follow:
+    /* Pass-specific information that can be stored for a temporary.
+       One word worth of integer data, and one pointer to data
+       allocated separately.  */
+    uintptr_t state;
+    void *state_ptr;
+} TCGTemp;
 
-   Note that there is no definition of the structs TCGv_i32_d etc anywhere.
-   This is deliberate, because the values we store in variables of type
-   TCGv_i32 are not really pointers-to-structures. They're just small
-   integers, but keeping them in pointer types like this means that the
-   compiler will complain if you accidentally pass a TCGv_i32 to a
-   function which takes a TCGv_i64, and so on. Only the internals of
-   TCG need to care about the actual contents of the types, and they always
-   box and unbox via the MAKE_TCGV_* and GET_TCGV_* functions.
-   Converting to and from intptr_t rather than int reduces the number
-   of sign-extension instructions that get implied on 64-bit hosts.  */
+typedef struct TCGv_i32_d {
+    TCGTemp impl;
+} *TCGv_i32;
 
-typedef struct TCGv_i32_d *TCGv_i32;
-typedef struct TCGv_i64_d *TCGv_i64;
-typedef struct TCGv_ptr_d *TCGv_ptr;
+typedef struct TCGv_i64_d {
+#if TCG_TARGET_REG_BITS == 32
+    struct TCGv_i32_d lo, hi;
+#else
+    TCGTemp impl;
+#endif
+} *TCGv_i64;
+
+typedef struct TCGv_ptr_d {
+    TCGTemp impl;
+} *TCGv_ptr;
+
 typedef TCGv_ptr TCGv_env;
+
 #if TARGET_LONG_BITS == 32
 #define TCGv TCGv_i32
 #elif TARGET_LONG_BITS == 64
@@ -419,53 +448,23 @@ typedef TCGv_ptr TCGv_env;
 #error Unhandled TARGET_LONG_BITS value
 #endif
 
-static inline TCGv_i32 QEMU_ARTIFICIAL MAKE_TCGV_I32(intptr_t i)
-{
-    return (TCGv_i32)i;
-}
-
-static inline TCGv_i64 QEMU_ARTIFICIAL MAKE_TCGV_I64(intptr_t i)
-{
-    return (TCGv_i64)i;
-}
-
-static inline TCGv_ptr QEMU_ARTIFICIAL MAKE_TCGV_PTR(intptr_t i)
-{
-    return (TCGv_ptr)i;
-}
-
-static inline intptr_t QEMU_ARTIFICIAL GET_TCGV_I32(TCGv_i32 t)
-{
-    return (intptr_t)t;
-}
-
-static inline intptr_t QEMU_ARTIFICIAL GET_TCGV_I64(TCGv_i64 t)
-{
-    return (intptr_t)t;
-}
-
-static inline intptr_t QEMU_ARTIFICIAL GET_TCGV_PTR(TCGv_ptr t)
-{
-    return (intptr_t)t;
-}
-
 #if TCG_TARGET_REG_BITS == 32
-#define TCGV_LOW(t) MAKE_TCGV_I32(GET_TCGV_I64(t))
-#define TCGV_HIGH(t) MAKE_TCGV_I32(GET_TCGV_I64(t) + 1)
+#define TCGV_LOW(t)  (&(t)->lo)
+#define TCGV_HIGH(t) (&(t)->hi)
 #endif
 
-#define TCGV_EQUAL_I32(a, b) (GET_TCGV_I32(a) == GET_TCGV_I32(b))
-#define TCGV_EQUAL_I64(a, b) (GET_TCGV_I64(a) == GET_TCGV_I64(b))
-#define TCGV_EQUAL_PTR(a, b) (GET_TCGV_PTR(a) == GET_TCGV_PTR(b))
+#define TCGV_EQUAL_I32(a, b)  ((a) == (b))
+#define TCGV_EQUAL_I64(a, b)  ((a) == (b))
+#define TCGV_EQUAL_PTR(a, b)  ((a) == (b))
 
 /* Dummy definition to avoid compiler warnings.  */
-#define TCGV_UNUSED_I32(x) x = MAKE_TCGV_I32(-1)
-#define TCGV_UNUSED_I64(x) x = MAKE_TCGV_I64(-1)
-#define TCGV_UNUSED_PTR(x) x = MAKE_TCGV_PTR(-1)
+#define TCGV_UNUSED_I32(x)    ((x) = NULL)
+#define TCGV_UNUSED_I64(x)    ((x) = NULL)
+#define TCGV_UNUSED_PTR(x)    ((x) = NULL)
 
-#define TCGV_IS_UNUSED_I32(x) (GET_TCGV_I32(x) == -1)
-#define TCGV_IS_UNUSED_I64(x) (GET_TCGV_I64(x) == -1)
-#define TCGV_IS_UNUSED_PTR(x) (GET_TCGV_PTR(x) == -1)
+#define TCGV_IS_UNUSED_I32(x) ((x) == NULL)
+#define TCGV_IS_UNUSED_I64(x) ((x) == NULL)
+#define TCGV_IS_UNUSED_PTR(x) ((x) == NULL)
 
 /* call flags */
 /* Helper does not read globals (either directly or through an exception). It
@@ -566,34 +565,6 @@ static inline TCGCond tcg_high_cond(TCGCond c)
         return c;
     }
 }
-
-typedef enum TCGTempVal {
-    TEMP_VAL_DEAD,
-    TEMP_VAL_REG,
-    TEMP_VAL_MEM,
-    TEMP_VAL_CONST,
-} TCGTempVal;
-
-typedef struct TCGTemp {
-    TCGReg reg:8;
-    TCGTempVal val_type:8;
-    TCGType base_type:8;
-    TCGType type:8;
-    unsigned int fixed_reg:1;
-    unsigned int indirect_reg:1;
-    unsigned int indirect_base:1;
-    unsigned int mem_coherent:1;
-    unsigned int mem_allocated:1;
-    unsigned int temp_local:1; /* If true, the temp is saved across
-                                  basic blocks. Otherwise, it is not
-                                  preserved across basic blocks. */
-    unsigned int temp_allocated:1; /* never used for code gen */
-
-    tcg_target_long val;
-    struct TCGTemp *mem_base;
-    intptr_t mem_offset;
-    const char *name;
-} TCGTemp;
 
 typedef struct TCGContext TCGContext;
 
@@ -728,6 +699,53 @@ struct TCGContext {
 extern TCGContext tcg_ctx;
 extern bool parallel_cpus;
 
+static inline uintptr_t temp_idx(TCGTemp *ts)
+{
+    ptrdiff_t n = ts - tcg_ctx.temps;
+    tcg_debug_assert(n >= 0 && n < tcg_ctx.nb_temps);
+    return n;
+}
+
+static inline size_t arg_index(TCGArg a)
+{
+    return a;
+}
+
+static inline TCGTemp *arg_temp(TCGArg a)
+{
+    return &tcg_ctx.temps[a];
+}
+
+static inline TCGv_i32 QEMU_ARTIFICIAL MAKE_TCGV_I32(uintptr_t i)
+{
+    return (TCGv_i32)&tcg_ctx.temps[i];
+}
+
+static inline TCGv_i64 QEMU_ARTIFICIAL MAKE_TCGV_I64(uintptr_t i)
+{
+    return (TCGv_i64)&tcg_ctx.temps[i];
+}
+
+static inline TCGv_ptr QEMU_ARTIFICIAL MAKE_TCGV_PTR(uintptr_t i)
+{
+    return (TCGv_ptr)&tcg_ctx.temps[i];
+}
+
+static inline uintptr_t QEMU_ARTIFICIAL GET_TCGV_I32(TCGv_i32 t)
+{
+    return temp_idx((TCGTemp *)t);
+}
+
+static inline uintptr_t QEMU_ARTIFICIAL GET_TCGV_I64(TCGv_i64 t)
+{
+    return temp_idx((TCGTemp *)t);
+}
+
+static inline uintptr_t QEMU_ARTIFICIAL GET_TCGV_PTR(TCGv_ptr t)
+{
+    return temp_idx((TCGTemp *)t);
+}
+
 static inline void tcg_set_insn_param(int op_idx, int arg, TCGArg v)
 {
     int op_argi = tcg_ctx.gen_op_buf[op_idx].args;
@@ -780,49 +798,59 @@ int tcg_gen_code(TCGContext *s, TranslationBlock *tb);
 
 void tcg_set_frame(TCGContext *s, TCGReg reg, intptr_t start, intptr_t size);
 
-int tcg_global_mem_new_internal(TCGType, TCGv_ptr, intptr_t, const char *);
+TCGTemp *tcg_global_mem_new_internal(TCGType, TCGv_ptr, intptr_t, const char *);
+TCGTemp *tcg_temp_new_internal(TCGType type, bool temp_local);
+void tcg_temp_free_internal(TCGTemp *ts);
 
 TCGv_i32 tcg_global_reg_new_i32(TCGReg reg, const char *name);
 TCGv_i64 tcg_global_reg_new_i64(TCGReg reg, const char *name);
 
-TCGv_i32 tcg_temp_new_internal_i32(int temp_local);
-TCGv_i64 tcg_temp_new_internal_i64(int temp_local);
-
-void tcg_temp_free_i32(TCGv_i32 arg);
-void tcg_temp_free_i64(TCGv_i64 arg);
-
 static inline TCGv_i32 tcg_global_mem_new_i32(TCGv_ptr reg, intptr_t offset,
                                               const char *name)
 {
-    int idx = tcg_global_mem_new_internal(TCG_TYPE_I32, reg, offset, name);
-    return MAKE_TCGV_I32(idx);
+    TCGTemp *t = tcg_global_mem_new_internal(TCG_TYPE_I32, reg, offset, name);
+    return (TCGv_i32)t;
 }
 
 static inline TCGv_i32 tcg_temp_new_i32(void)
 {
-    return tcg_temp_new_internal_i32(0);
+    TCGTemp *t = tcg_temp_new_internal(TCG_TYPE_I32, false);
+    return (TCGv_i32)t;
 }
 
 static inline TCGv_i32 tcg_temp_local_new_i32(void)
 {
-    return tcg_temp_new_internal_i32(1);
+    TCGTemp *t = tcg_temp_new_internal(TCG_TYPE_I32, true);
+    return (TCGv_i32)t;
 }
 
 static inline TCGv_i64 tcg_global_mem_new_i64(TCGv_ptr reg, intptr_t offset,
                                               const char *name)
 {
-    int idx = tcg_global_mem_new_internal(TCG_TYPE_I64, reg, offset, name);
-    return MAKE_TCGV_I64(idx);
+    TCGTemp *t = tcg_global_mem_new_internal(TCG_TYPE_I64, reg, offset, name);
+    return (TCGv_i64)t;
 }
 
 static inline TCGv_i64 tcg_temp_new_i64(void)
 {
-    return tcg_temp_new_internal_i64(0);
+    TCGTemp *t = tcg_temp_new_internal(TCG_TYPE_I64, false);
+    return (TCGv_i64)t;
 }
 
 static inline TCGv_i64 tcg_temp_local_new_i64(void)
 {
-    return tcg_temp_new_internal_i64(1);
+    TCGTemp *t = tcg_temp_new_internal(TCG_TYPE_I64, true);
+    return (TCGv_i64)t;
+}
+
+static inline void tcg_temp_free_i32(TCGv_i32 arg)
+{
+    tcg_temp_free_internal((TCGTemp *)arg);
+}
+
+static inline void tcg_temp_free_i64(TCGv_i64 arg)
+{
+    tcg_temp_free_internal((TCGTemp *)arg);
 }
 
 #if defined(CONFIG_DEBUG_TCG)
