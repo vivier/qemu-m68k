@@ -1,4 +1,5 @@
-DEFF64(FP_RESULT, fp_result)
+DEFF96(FP0, fp0)
+DEFF96(FP1, fp1)
 DEFO32(PC, pc)
 DEFO32(SR, sr)
 DEFO32(CC_OP, cc_op)
