@@ -135,6 +135,70 @@ static void restore_rounding_mode(CPUM68KState *env)
     }
 }
 
+static uint32_t set_fpsr_exception(CPUM68KState *env, uint32_t fpsr)
+{
+    uint32_t ae = 0;
+    int flags;
+
+    flags = get_float_exception_flags(&env->fp_status);
+    if (flags == 0) {
+        return fpsr;
+    }
+    set_float_exception_flags(0, &env->fp_status);
+
+    if (flags & float_flag_invalid) {
+        ae |= FPSR_AE_IOP;
+    }
+    if (flags & float_flag_divbyzero) {
+        ae |= FPSR_AE_DZ;
+    }
+    if (flags & float_flag_overflow) {
+        ae |= FPSR_AE_OVFL;
+    }
+    if (flags & float_flag_underflow) {
+        ae |= FPSR_AE_UNFL;
+    }
+    if (flags & float_flag_inexact) {
+        ae |= FPSR_AE_INEX;
+    }
+
+    return (fpsr & ~FPSR_AE_MASK) | ae;
+}
+
+static void fpu_exception(CPUM68KState *env, uint32_t exception)
+{
+    CPUState *cs = env_cpu(env);
+
+    env->fpsr = (env->fpsr & ~FPSR_ES_MASK) | exception;
+    if (env->fpcr & exception) {
+        switch (exception) {
+        case FPSR_ES_BSUN:
+            cs->exception_index = EXCP_FP_BSUN;
+            break;
+        case FPSR_ES_SNAN:
+            cs->exception_index = EXCP_FP_SNAN;
+            break;
+        case FPSR_ES_OPERR:
+            cs->exception_index = EXCP_FP_OPERR;
+            break;
+        case FPSR_ES_OVFL:
+            cs->exception_index = EXCP_FP_OVFL;
+            break;
+        case FPSR_ES_UNFL:
+            cs->exception_index = EXCP_FP_UNFL;
+            break;
+        case FPSR_ES_DZ:
+            cs->exception_index = EXCP_FP_DZ;
+            break;
+        case FPSR_ES_INEX:
+        case FPSR_ES_INEX2:
+            cs->exception_index = EXCP_FP_INEX;
+            break;
+        }
+        cpu_loop_exit_restore(cs, GETPC());
+    }
+}
+
 void cpu_m68k_set_fpcr(CPUM68KState *env, uint32_t val)
 {
     env->fpcr = val & 0xffff;
@@ -363,10 +427,17 @@ static int float_comp_to_cc(int float_compare)
 
 void HELPER(fcmp)(CPUM68KState *env, FPReg *val0, FPReg *val1)
 {
-    int float_compare;
+    int flags, float_compare;
+    uint32_t fpsr;
 
     float_compare = floatx80_compare(val1->d, val0->d, &env->fp_status);
-    env->fpsr = (env->fpsr & ~FPSR_CC_MASK) | float_comp_to_cc(float_compare);
+    fpsr = (env->fpsr & ~FPSR_CC_MASK) | float_comp_to_cc(float_compare);
+
+    flags = get_float_exception_flags(&env->fp_status);
+    if (flags & float_flag_invalid) {
+        fpu_exception(env, FPSR_ES_OPERR);
+    }
+    env->fpsr = set_fpsr_exception(env, fpsr);
 }
 
 void HELPER(ftst)(CPUM68KState *env, FPReg *val)
@@ -384,7 +455,48 @@ void HELPER(ftst)(CPUM68KState *env, FPReg *val)
     } else if (floatx80_is_zero(val->d)) {
         cc |= FPSR_CC_Z;
     }
-    env->fpsr = (env->fpsr & ~FPSR_CC_MASK) | cc;
+
+    env->fpsr = set_fpsr_exception(env, (env->fpsr & ~FPSR_CC_MASK) | cc);
+}
+
+void cpu_m68k_set_fpsr(CPUM68KState *env, uint32_t val)
+{
+    int flags = get_float_exception_flags(&env->fp_status);
+
+    env->fpsr = val;
+
+    if (env->fpsr & FPSR_AE_IOP) {
+        flags |= float_flag_invalid;
+    } else {
+        flags &= ~float_flag_invalid;
+    }
+    if (env->fpsr & FPSR_AE_DZ) {
+        flags |= float_flag_divbyzero;
+    } else {
+        flags &= ~float_flag_divbyzero;
+    }
+    if (env->fpsr & FPSR_AE_OVFL) {
+        flags |= float_flag_overflow;
+    } else {
+        flags &= ~float_flag_overflow;
+    }
+    if (env->fpsr & FPSR_AE_UNFL) {
+        flags |= float_flag_underflow;
+    } else {
+        flags &= ~float_flag_underflow;
+    }
+    if (env->fpsr & FPSR_AE_INEX) {
+        flags |= float_flag_inexact;
+    } else {
+        flags &= ~float_flag_inexact;
+    }
+
+    set_float_exception_flags(flags, &env->fp_status);
+}
+
+void HELPER(update_fpstatus)(CPUM68KState *env, uint32_t val)
+{
+    cpu_m68k_set_fpsr(env, val);
 }
 
 void HELPER(fconst)(CPUM68KState *env, FPReg *val, uint32_t offset)

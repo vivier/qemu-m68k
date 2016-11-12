@@ -184,6 +184,7 @@ uint32_t cpu_m68k_get_ccr(CPUM68KState *env);
 void cpu_m68k_set_ccr(CPUM68KState *env, uint32_t);
 void cpu_m68k_set_sr(CPUM68KState *env, uint32_t);
 void cpu_m68k_set_fpcr(CPUM68KState *env, uint32_t val);
+void cpu_m68k_set_fpsr(CPUM68KState *env, uint32_t val);
 
 
 /*
@@ -411,6 +412,25 @@ typedef enum {
 #define FPSR_CC_I     0x02000000 /* Infinity */
 #define FPSR_CC_Z     0x04000000 /* Zero */
 #define FPSR_CC_N     0x08000000 /* Negative */
+
+/* Exception Status */
+#define FPSR_ES_MASK  0x0000ff00
+#define FPSR_ES_BSUN  0x00008000 /* Branch Set on Unordered */
+#define FPSR_ES_SNAN  0x00004000 /* Signaling Not-A-Number */
+#define FPSR_ES_OPERR 0x00002000 /* Operand Error */
+#define FPSR_ES_OVFL  0x00001000 /* Overflow */
+#define FPSR_ES_UNFL  0x00000800 /* Underflow */
+#define FPSR_ES_DZ    0x00000400 /* Divide by Zero */
+#define FPSR_ES_INEX2 0x00000200 /* Inexact operation */
+#define FPSR_ES_INEX  0x00000100 /* Inexact decimal input */
+
+/* Accrued Exception */
+#define FPSR_AE_MASK  0x000000ff
+#define FPSR_AE_IOP   0x00000080 /* Invalid Operation */
+#define FPSR_AE_OVFL  0x00000040 /* Overflow */
+#define FPSR_AE_UNFL  0x00000020 /* Underflow */
+#define FPSR_AE_DZ    0x00000010 /* Divide by Zero */
+#define FPSR_AE_INEX  0x00000008 /* Inexact */
 
 /* Quotient */
 
