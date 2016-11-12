@@ -30,6 +30,7 @@ DEF_HELPER_1(div_FP0_FP1, void, env)
 DEF_HELPER_1(cmp_FP0_FP1, void, env)
 DEF_HELPER_2(set_fpcr, void, env, i32)
 DEF_HELPER_1(tst_FP0, void, env)
+DEF_HELPER_1(update_fpstatus, void, env)
 
 DEF_HELPER_3(mac_move, void, env, i32, i32)
 DEF_HELPER_3(macmulf, i64, env, i32, i32)

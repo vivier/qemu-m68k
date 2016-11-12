@@ -4388,6 +4388,7 @@ static void gen_load_fcr(DisasContext *s, TCGv addr, int reg)
     switch (reg) {
     case 0: /* FPSR */
         tcg_gen_qemu_ld32u(QEMU_FPSR, addr, index);
+        gen_helper_update_fpstatus(cpu_env);
         break;
     case 1: /* FPIAR */
         break;
@@ -4431,6 +4432,7 @@ static void gen_op_fmove_fcr(CPUM68KState *env, DisasContext *s,
         case 2: /* FPSR */
             SRC_EA(env, val, OS_LONG, 0, NULL);
             tcg_gen_mov_i32(QEMU_FPSR, val);
+            gen_helper_update_fpstatus(cpu_env);
             break;
         case 4: /* FPCR */
             SRC_EA(env, val, OS_LONG, 0, NULL);
@@ -5481,6 +5483,21 @@ void m68k_cpu_dump_state(CPUState *cs, FILE *f, fprintf_function cpu_fprintf,
                 (env->fpsr & FPSR_CC_I) ? 'I' : '-',
                 (env->fpsr & FPSR_CC_Z) ? 'Z' : '-',
                 (env->fpsr & FPSR_CC_N) ? 'N' : '-');
+    cpu_fprintf(f, "%c%c%c%c%c%c%c%c ",
+                (env->fpsr & FPSR_ES_BSUN) ? 'B' : '-',
+                (env->fpsr & FPSR_ES_SNAN) ? 'A' : '-',
+                (env->fpsr & FPSR_ES_OPERR) ? 'O' : '-',
+                (env->fpsr & FPSR_ES_OVFL) ? 'V' : '-',
+                (env->fpsr & FPSR_ES_UNFL) ? 'U' : '-',
+                (env->fpsr & FPSR_ES_DZ) ? 'Z' : '-',
+                (env->fpsr & FPSR_ES_INEX2) ? '2' : '-',
+                (env->fpcr & FPSR_ES_INEX) ? 'I' : '-');
+    cpu_fprintf(f, "%c%c%c%c%c",
+                (env->fpsr & FPSR_AE_IOP) ? 'O' : '-',
+                (env->fpsr & FPSR_AE_OVFL) ? 'V' : '-',
+                (env->fpsr & FPSR_AE_UNFL) ? 'U' : '-',
+                (env->fpsr & FPSR_AE_DZ) ? 'Z' : '-',
+                (env->fpcr & FPSR_ES_INEX) ? 'I' : '-');
     cpu_fprintf(f, "\n                                "
                    "FPCR =     %04x ", env->fpcr);
     switch (env->fpcr & FPCR_PREC_MASK) {
@@ -5508,6 +5525,16 @@ void m68k_cpu_dump_state(CPUState *cs, FILE *f, fprintf_function cpu_fprintf,
         cpu_fprintf(f, "RP ");
         break;
     }
+    /* FPCR exception mask uses the same bitmask as FPSR */
+    cpu_fprintf(f, "%c%c%c%c%c%c%c%c\n",
+                (env->fpcr & FPSR_ES_BSUN) ? 'B' : '-',
+                (env->fpcr & FPSR_ES_SNAN) ? 'A' : '-',
+                (env->fpcr & FPSR_ES_OPERR) ? 'O' : '-',
+                (env->fpcr & FPSR_ES_OVFL) ? 'V' : '-',
+                (env->fpcr & FPSR_ES_UNFL) ? 'U' : '-',
+                (env->fpcr & FPSR_ES_DZ) ? 'Z' : '-',
+                (env->fpcr & FPSR_ES_INEX2) ? '2' : '-',
+                (env->fpcr & FPSR_ES_INEX) ? 'I' : '-');
 }
 
 void restore_state_to_opc(CPUM68KState *env, TranslationBlock *tb,
