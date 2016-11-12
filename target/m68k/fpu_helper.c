@@ -132,11 +132,75 @@ void HELPER(iround_FP0)(CPUM68KState *env)
     floatx80_to_FP0(env, res);
 }
 
+static void m68k_restore_precision_mode(CPUM68KState *env)
+{
+    switch (env->fpcr & FPCR_PREC_MASK) {
+    case FPCR_PREC_X: /* extended */
+        set_floatx80_rounding_precision(80, &env->fp_status);
+        break;
+    case FPCR_PREC_S: /* single */
+        set_floatx80_rounding_precision(32, &env->fp_status);
+        break;
+    case FPCR_PREC_D: /* double */
+        set_floatx80_rounding_precision(64, &env->fp_status);
+        break;
+    case FPCR_PREC_U: /* undefined */
+    default:
+        break;
+    }
+}
+
+static void cf_restore_precision_mode(CPUM68KState *env)
+{
+    if (env->fpcr & FPCR_PREC_S) { /* single */
+        set_floatx80_rounding_precision(32, &env->fp_status);
+    } else { /* double */
+        set_floatx80_rounding_precision(64, &env->fp_status);
+    }
+}
+
+static void restore_rounding_mode(CPUM68KState *env)
+{
+    switch (env->fpcr & FPCR_RND_MASK) {
+    case FPCR_RND_N: /* round to nearest */
+        set_float_rounding_mode(float_round_nearest_even, &env->fp_status);
+        break;
+    case FPCR_RND_Z: /* round to zero */
+        set_float_rounding_mode(float_round_to_zero, &env->fp_status);
+        break;
+    case FPCR_RND_M: /* round toward minus infinity */
+        set_float_rounding_mode(float_round_down, &env->fp_status);
+        break;
+    case FPCR_RND_P: /* round toward positive infinity */
+        set_float_rounding_mode(float_round_up, &env->fp_status);
+        break;
+    }
+}
+
+void cpu_m68k_set_fpcr(CPUM68KState *env, uint32_t val)
+{
+    env->fpcr = val & 0xffff;
+
+    if (m68k_feature(env, M68K_FEATURE_CF_FPU)) {
+        cf_restore_precision_mode(env);
+    } else {
+        m68k_restore_precision_mode(env);
+    }
+    restore_rounding_mode(env);
+}
+
+void HELPER(set_fpcr)(CPUM68KState *env, uint32_t val)
+{
+    cpu_m68k_set_fpcr(env, val);
+}
+
 void HELPER(itrunc_FP0)(CPUM68KState *env)
 {
     floatx80 res;
 
+    set_float_rounding_mode(float_round_to_zero, &env->fp_status);
     res = floatx80_round_to_int(FP0_to_floatx80(env), &env->fp_status);
+    restore_rounding_mode(env);
 
     floatx80_to_FP0(env, res);
 }
@@ -208,29 +272,47 @@ void HELPER(div_FP0_FP1)(CPUM68KState *env)
     floatx80_to_FP0(env, res);
 }
 
+static int float_comp_to_cc(int float_compare)
+{
+    switch (float_compare) {
+    case float_relation_equal:
+        return FPSR_CC_Z;
+    case float_relation_less:
+        return FPSR_CC_N;
+    case float_relation_unordered:
+        return FPSR_CC_A;
+    case float_relation_greater:
+        return 0;
+    default:
+        g_assert_not_reached();
+    }
+}
+
 void HELPER(cmp_FP0_FP1)(CPUM68KState *env)
 {
     floatx80 fp0 = FP0_to_floatx80(env);
     floatx80 fp1 = FP1_to_floatx80(env);
-    floatx80 res;
+    int float_compare;
 
-    res = floatx80_sub(fp0, fp1, &env->fp_status);
-    if (floatx80_is_quiet_nan(res, &env->fp_status)) {
-        /* +/-inf compares equal against itself, but sub returns nan.  */
-        if (!floatx80_is_quiet_nan(fp0, &env->fp_status)
-            && !floatx80_is_quiet_nan(fp1, &env->fp_status)) {
-            res = floatx80_zero;
-            if (floatx80_lt_quiet(fp0, res, &env->fp_status)) {
-                res = floatx80_chs(res);
-            }
-        }
-    }
-
-    floatx80_to_FP0(env, res);
+    float_compare = floatx80_compare(fp1, fp0, &env->fp_status);
+    env->fpsr = (env->fpsr & ~FPSR_CC_MASK) | float_comp_to_cc(float_compare);
 }
 
-uint32_t HELPER(compare_FP0)(CPUM68KState *env)
+void HELPER(tst_FP0)(CPUM68KState *env)
 {
-    floatx80 fp0 = FP0_to_floatx80(env);
-    return floatx80_compare_quiet(fp0, floatx80_zero, &env->fp_status);
+    uint32_t fpsr = 0;
+    floatx80 val = FP0_to_floatx80(env);
+
+    if (floatx80_is_neg(val)) {
+        fpsr |= FPSR_CC_N;
+    }
+
+    if (floatx80_is_any_nan(val)) {
+        fpsr |= FPSR_CC_A;
+    } else if (floatx80_is_infinity(val)) {
+        fpsr |= FPSR_CC_I;
+    } else if (floatx80_is_zero(val)) {
+        fpsr |= FPSR_CC_Z;
+    }
+    env->fpsr = (env->fpsr & ~FPSR_CC_MASK) | fpsr;
 }
