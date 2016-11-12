@@ -4867,7 +4867,7 @@ static void gen_store_fcr(DisasContext *s, TCGv val, int reg)
     case M68K_FPIAR:
         break;
     case M68K_FPSR:
-        tcg_gen_st_i32(val, cpu_env, offsetof(CPUM68KState, fpsr));
+        gen_helper_update_fpstatus(cpu_env, val);
         break;
     case M68K_FPCR:
         gen_helper_set_fpcr(cpu_env, val);
@@ -6294,8 +6294,22 @@ void m68k_cpu_dump_state(CPUState *cs, FILE *f, int flags)
                  (env->fpsr & FPSR_CC_I) ? 'I' : '-',
                  (env->fpsr & FPSR_CC_Z) ? 'Z' : '-',
                  (env->fpsr & FPSR_CC_N) ? 'N' : '-');
-    qemu_fprintf(f, "\n                                "
-                 "FPCR =     %04x ", env->fpcr);
+    qemu_fprintf(f, "%c%c%c%c%c%c%c%c ",
+                 (env->fpsr & FPSR_ES_BSUN) ? 'B' : '-',
+                 (env->fpsr & FPSR_ES_SNAN) ? 'A' : '-',
+                 (env->fpsr & FPSR_ES_OPERR) ? 'O' : '-',
+                 (env->fpsr & FPSR_ES_OVFL) ? 'V' : '-',
+                 (env->fpsr & FPSR_ES_UNFL) ? 'U' : '-',
+                 (env->fpsr & FPSR_ES_DZ) ? 'Z' : '-',
+                 (env->fpsr & FPSR_ES_INEX2) ? '2' : '-',
+                 (env->fpcr & FPSR_ES_INEX) ? 'I' : '-');
+    qemu_fprintf(f, "%c%c%c%c%c  ",
+                 (env->fpsr & FPSR_AE_IOP) ? 'O' : '-',
+                 (env->fpsr & FPSR_AE_OVFL) ? 'V' : '-',
+                 (env->fpsr & FPSR_AE_UNFL) ? 'U' : '-',
+                 (env->fpsr & FPSR_AE_DZ) ? 'Z' : '-',
+                 (env->fpcr & FPSR_ES_INEX) ? 'I' : '-');
+    qemu_fprintf(f, "FPCR = %04x ", env->fpcr);
     switch (env->fpcr & FPCR_PREC_MASK) {
     case FPCR_PREC_X:
         qemu_fprintf(f, "X ");
@@ -6321,7 +6335,16 @@ void m68k_cpu_dump_state(CPUState *cs, FILE *f, int flags)
         qemu_fprintf(f, "RP ");
         break;
     }
-    qemu_fprintf(f, "\n");
+    /* FPCR exception mask uses the same bitmask as FPSR */
+    qemu_fprintf(f, "%c%c%c%c%c%c%c%c\n",
+                 (env->fpcr & FPSR_ES_BSUN) ? 'B' : '-',
+                 (env->fpcr & FPSR_ES_SNAN) ? 'A' : '-',
+                 (env->fpcr & FPSR_ES_OPERR) ? 'O' : '-',
+                 (env->fpcr & FPSR_ES_OVFL) ? 'V' : '-',
+                 (env->fpcr & FPSR_ES_UNFL) ? 'U' : '-',
+                 (env->fpcr & FPSR_ES_DZ) ? 'Z' : '-',
+                 (env->fpcr & FPSR_ES_INEX2) ? '2' : '-',
+                 (env->fpcr & FPSR_ES_INEX) ? 'I' : '-');
 #ifdef CONFIG_SOFTMMU
     qemu_fprintf(f, "%sA7(MSP) = %08x %sA7(USP) = %08x %sA7(ISP) = %08x\n",
                  env->current_sp == M68K_SSP ? "->" : "  ", env->sp[M68K_SSP],

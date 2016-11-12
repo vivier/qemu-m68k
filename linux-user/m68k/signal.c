@@ -226,11 +226,12 @@ static inline void target_rt_restore_fpu_state(CPUM68KState *env,
 {
     int i;
     target_fpregset_t *fpregs = &uc->tuc_mcontext.fpregs;
-    uint32_t fpcr;
+    uint32_t fpcr, fpsr;
 
     __get_user(fpcr, &fpregs->f_fpcntl[0]);
     cpu_m68k_set_fpcr(env, fpcr);
-    __get_user(env->fpsr, &fpregs->f_fpcntl[1]);
+    __get_user(fpsr, &fpregs->f_fpcntl[1]);
+    cpu_m68k_set_fpsr(env, fpsr);
     /* fpiar is not emulated */
 
     for (i = 0; i < 8; i++) {
