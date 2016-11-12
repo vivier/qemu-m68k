@@ -52,6 +52,8 @@ static char cpu_reg_names[2 * 8 * 3 + 5 * 4];
 static TCGv cpu_dregs[8];
 static TCGv cpu_aregs[8];
 static TCGv_i64 cpu_macc[4];
+static TCGv QEMU_FPSR;
+static TCGv QEMU_FPCR;
 
 #define REG(insn, pos)  (((insn) >> (pos)) & 7)
 #define DREG(insn, pos) cpu_dregs[REG(insn, pos)]
@@ -117,6 +119,11 @@ void m68k_tcg_init(void)
         p += 5;
     }
 
+    QEMU_FPSR = tcg_global_mem_new(cpu_env, offsetof(CPUM68KState, fpsr),
+                                   "FPSR");
+    QEMU_FPCR = tcg_global_mem_new(cpu_env, offsetof(CPUM68KState, fpcr),
+                                   "FPCR");
+
     NULL_QREG = tcg_global_mem_new(cpu_env, -4, "NULL");
     store_dummy = tcg_global_mem_new(cpu_env, -8, "NULL");
 }
@@ -130,7 +137,6 @@ typedef struct DisasContext {
     CCOp cc_op; /* Current CC operation */
     int cc_op_synced;
     int user;
-    uint32_t fpcr;
     struct TranslationBlock *tb;
     int singlestep_enabled;
     TCGv_i64 mactmp;
@@ -4358,12 +4364,49 @@ DISAS_INSN(trap)
     gen_exception(s, s->pc - 2, EXCP_TRAP0 + (insn & 0xf));
 }
 
+static void gen_store_fcr(DisasContext *s, TCGv addr, int reg)
+{
+    int index = IS_USER(s);
+
+    switch (reg) {
+    case 0: /* FPSR */
+        tcg_gen_qemu_st32(QEMU_FPSR, addr, index);
+        break;
+    case 1: /* FPIAR */
+        break;
+    case 2: /* FPCR */
+        tcg_gen_qemu_st32(QEMU_FPCR, addr, index);
+        break;
+    }
+}
+
+static void gen_load_fcr(DisasContext *s, TCGv addr, int reg)
+{
+    int index = IS_USER(s);
+    TCGv val;
+
+    switch (reg) {
+    case 0: /* FPSR */
+        tcg_gen_qemu_ld32u(QEMU_FPSR, addr, index);
+        break;
+    case 1: /* FPIAR */
+        break;
+    case 2: /* FPCR */
+        val = tcg_temp_new();
+        tcg_gen_qemu_ld32u(val, addr, index);
+        gen_helper_set_fpcr(cpu_env, val);
+        tcg_temp_free(val);
+        break;
+    }
+}
+
 static void gen_op_fmove_fcr(CPUM68KState *env, DisasContext *s,
                              uint32_t insn, uint32_t ext)
 {
     int mask = (ext >> 10) & 7;
     int is_write = (ext >> 13) & 1;
-    TCGv tmp;
+    int i;
+    TCGv addr, tmp;
 
     tmp = gen_lea(env, s, insn, OS_LONG);
     if (IS_NULL_QREG(tmp)) {
@@ -4372,31 +4415,70 @@ static void gen_op_fmove_fcr(CPUM68KState *env, DisasContext *s,
         if (is_write) {
             switch (mask) {
             case 1: /* FPIAR */
+                break;
             case 2: /* FPSR */
-            default:
-                cpu_abort(NULL, "Unimplemented: fmove from control %d", mask);
+                DEST_EA(env, insn, OS_LONG, QEMU_FPSR, NULL);
                 break;
             case 4: /* FPCR */
-                val = tcg_const_i32(0);
-                DEST_EA(env, insn, OS_LONG, val, NULL);
-                tcg_temp_free(val);
+                DEST_EA(env, insn, OS_LONG, QEMU_FPCR, NULL);
                 break;
             }
             return;
         }
         switch (mask) {
         case 1: /* FPIAR */
+            break;
         case 2: /* FPSR */
-        default:
-            cpu_abort(NULL, "Unimplemented: fmove to control %d",
-                      mask);
+            SRC_EA(env, val, OS_LONG, 0, NULL);
+            tcg_gen_mov_i32(QEMU_FPSR, val);
             break;
         case 4: /* FPCR */
-            /* Not implemented.  Ignore writes.  */
+            SRC_EA(env, val, OS_LONG, 0, NULL);
+            gen_helper_set_fpcr(cpu_env, val);
             break;
         }
         return;
     }
+
+    addr = tcg_temp_new();
+    tcg_gen_mov_i32(addr, tmp);
+
+    /* mask:
+     *
+     * 0b100 Floating-Point Control Register
+     * 0b010 Floating-Point Status Register
+     * 0b001 Floating-Point Instruction Address Register
+     *
+     */
+
+    if (is_write && (insn & 070) == 040) {
+        for (i = 2; i >= 0; i--, mask >>= 1) {
+            if (mask & 1) {
+                gen_store_fcr(s, addr, i);
+                if (mask != 1) {
+                    tcg_gen_subi_i32(addr, addr, opsize_bytes(OS_LONG));
+                }
+            }
+       }
+       tcg_gen_mov_i32(AREG(insn, 0), addr);
+    } else {
+        for (i = 0; i < 3; i++, mask >>= 1) {
+            if (mask & 1) {
+                if (is_write) {
+                    gen_store_fcr(s, addr, i);
+                } else {
+                    gen_load_fcr(s, addr, i);
+                }
+                if (mask != 1 || (insn & 070) == 030) {
+                    tcg_gen_addi_i32(addr, addr, opsize_bytes(OS_LONG));
+                }
+            }
+        }
+        if ((insn & 070) == 030) {
+            tcg_gen_mov_i32(AREG(insn, 0), addr);
+        }
+    }
+    tcg_temp_free_i32(addr);
 }
 
 /* ??? FP exceptions are not implemented.  Most exceptions are deferred until
@@ -4406,8 +4488,6 @@ DISAS_INSN(fpu)
     uint16_t ext;
     int opmode;
     TCGv tmp32;
-    int round;
-    int set_dest;
     int opsize;
 
     ext = read_im16(env, s);
@@ -4424,6 +4504,7 @@ DISAS_INSN(fpu)
             gen_addr_fault(s);
             return;
         }
+        gen_helper_tst_FP0(cpu_env);
         return;
     case 4: /* fmove to control register.  */
     case 5: /* fmove from control register.  */
@@ -4471,18 +4552,14 @@ DISAS_INSN(fpu)
         opsize = OS_EXTENDED;
         gen_op_load_fpr_FP0(REG(ext, 10));
     }
-    round = 1;
-    set_dest = 1;
     switch (opmode) {
     case 0: case 0x40: case 0x44: /* fmove */
         break;
     case 1: /* fint */
         gen_helper_iround_FP0(cpu_env);
-        round = 0;
         break;
     case 3: /* fintrz */
         gen_helper_itrunc_FP0(cpu_env);
-        round = 0;
         break;
     case 4: case 0x41: case 0x45: /* fsqrt */
         gen_helper_sqrt_FP0(cpu_env);
@@ -4512,34 +4589,15 @@ DISAS_INSN(fpu)
     case 0x38: /* fcmp */
         gen_op_load_fpr_FP1(REG(ext, 7));
         gen_helper_cmp_FP0_FP1(cpu_env);
-        set_dest = 0;
-        round = 0;
-        break;
+        return;
     case 0x3a: /* ftst */
-        set_dest = 0;
-        round = 0;
-        break;
+        gen_helper_tst_FP0(cpu_env);
+        return;
     default:
         goto undef;
     }
-    if (round) {
-        if (opmode & 0x40) {
-            if ((opmode & 0x4) != 0)
-                round = 0;
-        } else if ((s->fpcr & M68K_FPCR_PREC) == 0) {
-            round = 0;
-        }
-    }
-    if (round) {
-        gen_helper_redf32_FP0(cpu_env);
-        gen_helper_extf32_FP0(cpu_env);
-    } else {
-        gen_helper_redf64_FP0(cpu_env);
-        gen_helper_extf64_FP0(cpu_env);
-    }
-    if (set_dest) {
-        gen_op_store_fpr_FP0(REG(ext, 7));
-    }
+    gen_op_store_fpr_FP0(REG(ext, 7));
+    gen_helper_tst_FP0(cpu_env);
     return;
 undef:
     /* FIXME: Is this right for offset addressing modes?  */
@@ -4551,8 +4609,8 @@ DISAS_INSN(fbcc)
 {
     uint32_t offset;
     uint32_t addr;
-    TCGv flag;
     TCGLabel *l1;
+    TCGv tmp;
 
     addr = s->pc;
     offset = cpu_ldsw_code(env, s->pc);
@@ -4563,57 +4621,117 @@ DISAS_INSN(fbcc)
 
     l1 = gen_new_label();
     /* TODO: Raise BSUN exception.  */
-    flag = tcg_temp_new();
-    gen_helper_compare_FP0(flag, cpu_env);
     /* Jump to l1 if condition is true.  */
-    switch (insn & 0xf) {
+    switch (insn & 0x3f)  {
     case 0:  /* False */
+    case 16: /* Signaling False */
         break;
-    case 1: /* eq (=0) */
-        tcg_gen_brcond_i32(TCG_COND_EQ, flag, tcg_const_i32(0), l1);
+    case 1:  /* EQual Z */
+    case 17: /* Signaling EQual Z */
+        tmp = tcg_temp_new();
+        tcg_gen_andi_i32(tmp, QREG_FPSR, FPSR_CC_Z);
+        tcg_gen_brcondi_i32(TCG_COND_NE, tmp, 0, l1);
         break;
-    case 2: /* ogt (=1) */
-        tcg_gen_brcond_i32(TCG_COND_EQ, flag, tcg_const_i32(1), l1);
+    case 2:  /* Ordered Greater Than !(A || Z || N) */
+    case 18: /* Greater Than !(A || Z || N) */
+        tmp = tcg_temp_new();
+        tcg_gen_andi_i32(tmp, QREG_FPSR,
+                         FPSR_CC_A | FPSR_CC_Z | FPSR_CC_N);
+        tcg_gen_brcondi_i32(TCG_COND_EQ, tmp, 0, l1);
         break;
-    case 3: /* oge (=0 or =1) */
-        tcg_gen_brcond_i32(TCG_COND_LEU, flag, tcg_const_i32(1), l1);
+    case 3:  /* Ordered Greater than or Equal Z || !(A || N) */
+    case 19: /* Greater than or Equal Z || !(A || N) */
+        assert(FPSR_CC_A == (FPSR_CC_N >> 3));
+        tmp = tcg_temp_new();
+        tcg_gen_shli_i32(tmp, QREG_FPSR, 3);
+        tcg_gen_or_i32(tmp, tmp, QREG_FPSR);
+        tcg_gen_xori_i32(tmp, tmp, FPSR_CC_N);
+        tcg_gen_andi_i32(tmp, tmp, FPSR_CC_N | FPSR_CC_Z);
+        tcg_gen_brcondi_i32(TCG_COND_NE, tmp, 0, l1);
         break;
-    case 4: /* olt (=-1) */
-        tcg_gen_brcond_i32(TCG_COND_LT, flag, tcg_const_i32(0), l1);
+    case 4:  /* Ordered Less Than !(!N || A || Z); */
+    case 20: /* Less Than !(!N || A || Z); */
+        tmp = tcg_temp_new();
+        tcg_gen_xori_i32(tmp, QREG_FPSR, FPSR_CC_N);
+        tcg_gen_andi_i32(tmp, tmp, FPSR_CC_N | FPSR_CC_A | FPSR_CC_Z);
+        tcg_gen_brcondi_i32(TCG_COND_EQ, tmp, 0, l1);
         break;
-    case 5: /* ole (=-1 or =0) */
-        tcg_gen_brcond_i32(TCG_COND_LE, flag, tcg_const_i32(0), l1);
+    case 5:  /* Ordered Less than or Equal Z || (N && !A) */
+    case 21: /* Less than or Equal Z || (N && !A) */
+        assert(FPSR_CC_A == (FPSR_CC_N >> 3));
+        tmp = tcg_temp_new();
+        tcg_gen_xori_i32(tmp, QREG_FPSR, FPSR_CC_A);
+        tcg_gen_shli_i32(tmp, tmp, 3);
+        tcg_gen_ori_i32(tmp, tmp, FPSR_CC_Z);
+        tcg_gen_and_i32(tmp, tmp, QREG_FPSR);
+        tcg_gen_brcondi_i32(TCG_COND_NE, tmp, 0, l1);
         break;
-    case 6: /* ogl (=-1 or =1) */
-        tcg_gen_andi_i32(flag, flag, 1);
-        tcg_gen_brcond_i32(TCG_COND_NE, flag, tcg_const_i32(0), l1);
+    case 6:  /* Ordered Greater or Less than !(A || Z) */
+    case 22: /* Greater or Less than !(A || Z) */
+        tmp = tcg_temp_new();
+        tcg_gen_andi_i32(tmp, QREG_FPSR, FPSR_CC_A | FPSR_CC_Z);
+        tcg_gen_brcondi_i32(TCG_COND_EQ, tmp, 0, l1);
         break;
-    case 7: /* or (=2) */
-        tcg_gen_brcond_i32(TCG_COND_EQ, flag, tcg_const_i32(2), l1);
+    case 7:  /* Ordered !A */
+    case 23: /* Greater, Less or Equal !A */
+        tmp = tcg_temp_new();
+        tcg_gen_andi_i32(tmp, QREG_FPSR, FPSR_CC_A);
+        tcg_gen_brcondi_i32(TCG_COND_EQ, tmp, 0, l1);
         break;
-    case 8: /* un (<2) */
-        tcg_gen_brcond_i32(TCG_COND_LT, flag, tcg_const_i32(2), l1);
+    case 8:  /* Unordered A */
+    case 24: /* Not Greater, Less or Equal A */
+        tmp = tcg_temp_new();
+        tcg_gen_andi_i32(tmp, QREG_FPSR, FPSR_CC_A);
+        tcg_gen_brcondi_i32(TCG_COND_NE, tmp, 0, l1);
         break;
-    case 9: /* ueq (=0 or =2) */
-        tcg_gen_andi_i32(flag, flag, 1);
-        tcg_gen_brcond_i32(TCG_COND_EQ, flag, tcg_const_i32(0), l1);
+    case 9:  /* Unordered or Equal A || Z */
+    case 25: /* Not Greater or Less then A || Z */
+        tmp = tcg_temp_new();
+        tcg_gen_andi_i32(tmp, QREG_FPSR, FPSR_CC_A | FPSR_CC_Z);
+        tcg_gen_brcondi_i32(TCG_COND_NE, tmp, 0, l1);
         break;
-    case 10: /* ugt (>0) */
-        tcg_gen_brcond_i32(TCG_COND_GT, flag, tcg_const_i32(0), l1);
+    case 10: /* Unordered or Greater Than A || !(N || Z)) */
+    case 26: /* Not Less or Equal A || !(N || Z)) */
+        assert(FPSR_CC_Z == (FPSR_CC_N >> 1));
+        tmp = tcg_temp_new();
+        tcg_gen_shli_i32(tmp, QREG_FPSR, 1);
+        tcg_gen_or_i32(tmp, tmp, QREG_FPSR);
+        tcg_gen_xori_i32(tmp, tmp, FPSR_CC_N);
+        tcg_gen_andi_i32(tmp, tmp, FPSR_CC_N | FPSR_CC_A);
+        tcg_gen_brcondi_i32(TCG_COND_NE, tmp, 0, l1);
         break;
-    case 11: /* uge (>=0) */
-        tcg_gen_brcond_i32(TCG_COND_GE, flag, tcg_const_i32(0), l1);
+    case 11: /* Unordered or Greater or Equal A || Z || !N */
+    case 27: /* Not Less Than A || Z || !N */
+        tmp = tcg_temp_new();
+        tcg_gen_andi_i32(tmp, QREG_FPSR, FPSR_CC_A | FPSR_CC_Z | FPSR_CC_N);
+        tcg_gen_xori_i32(tmp, tmp, FPSR_CC_N);
+        tcg_gen_brcondi_i32(TCG_COND_NE, tmp, 0, l1);
         break;
-    case 12: /* ult (=-1 or =2) */
-        tcg_gen_brcond_i32(TCG_COND_GEU, flag, tcg_const_i32(2), l1);
+    case 12: /* Unordered or Less Than A || (N && !Z) */
+    case 28: /* Not Greater than or Equal A || (N && !Z) */
+        assert(FPSR_CC_Z == (FPSR_CC_N >> 1));
+        tmp = tcg_temp_new();
+        tcg_gen_xori_i32(tmp, QREG_FPSR, FPSR_CC_Z);
+        tcg_gen_shli_i32(tmp, tmp, 1);
+        tcg_gen_ori_i32(tmp, tmp, FPSR_CC_A);
+        tcg_gen_and_i32(tmp, tmp, QREG_FPSR);
+        tcg_gen_andi_i32(tmp, tmp, FPSR_CC_A | FPSR_CC_N);
+        tcg_gen_brcondi_i32(TCG_COND_NE, tmp, 0, l1);
         break;
-    case 13: /* ule (!=1) */
-        tcg_gen_brcond_i32(TCG_COND_NE, flag, tcg_const_i32(1), l1);
+    case 13: /* Unordered or Less or Equal A || Z || N */
+    case 29: /* Not Greater Than A || Z || N */
+        tmp = tcg_temp_new();
+        tcg_gen_andi_i32(tmp, QREG_FPSR, FPSR_CC_A | FPSR_CC_Z | FPSR_CC_N);
+        tcg_gen_brcondi_i32(TCG_COND_NE, tmp, 0, l1);
         break;
-    case 14: /* ne (!=0) */
-        tcg_gen_brcond_i32(TCG_COND_NE, flag, tcg_const_i32(0), l1);
+    case 14: /* Not Equal !Z */
+    case 30: /* Signaling Not Equal !Z */
+        tmp = tcg_temp_new();
+        tcg_gen_andi_i32(tmp, QREG_FPSR, FPSR_CC_Z);
+        tcg_gen_brcondi_i32(TCG_COND_EQ, tmp, 0, l1);
         break;
-    case 15: /* t */
+    case 15: /* True */
+    case 31: /* Signaling True */
         tcg_gen_br(l1);
         break;
     }
@@ -5240,7 +5358,6 @@ void gen_intermediate_code(CPUM68KState *env, TranslationBlock *tb)
     dc->cc_op = CC_OP_DYNAMIC;
     dc->cc_op_synced = 1;
     dc->singlestep_enabled = cs->singlestep_enabled;
-    dc->fpcr = env->fpcr;
     dc->user = (env->sr & SR_S) == 0;
     dc->done_mac = 0;
     dc->writeback_mask = 0;
@@ -5359,6 +5476,38 @@ void m68k_cpu_dump_state(CPUState *cs, FILE *f, fprintf_function cpu_fprintf,
     cpu_fprintf(f, "SR = %04x %c%c%c%c%c ", sr, (sr & CCF_X) ? 'X' : '-',
                 (sr & CCF_N) ? 'N' : '-', (sr & CCF_Z) ? 'Z' : '-',
                 (sr & CCF_V) ? 'V' : '-', (sr & CCF_C) ? 'C' : '-');
+    cpu_fprintf(f, "FPSR = %08x %c%c%c%c ", env->fpsr,
+                (env->fpsr & FPSR_CC_A) ? 'A' : '-',
+                (env->fpsr & FPSR_CC_I) ? 'I' : '-',
+                (env->fpsr & FPSR_CC_Z) ? 'Z' : '-',
+                (env->fpsr & FPSR_CC_N) ? 'N' : '-');
+    cpu_fprintf(f, "\n                                "
+                   "FPCR =     %04x ", env->fpcr);
+    switch (env->fpcr & FPCR_PREC_MASK) {
+    case FPCR_PREC_X:
+        cpu_fprintf(f, "X ");
+        break;
+    case FPCR_PREC_S:
+        cpu_fprintf(f, "S ");
+        break;
+    case FPCR_PREC_D:
+        cpu_fprintf(f, "D ");
+        break;
+    }
+    switch (env->fpcr & FPCR_RND_MASK) {
+    case FPCR_RND_N:
+        cpu_fprintf(f, "RN ");
+        break;
+    case FPCR_RND_Z:
+        cpu_fprintf(f, "RZ ");
+        break;
+    case FPCR_RND_M:
+        cpu_fprintf(f, "RM ");
+        break;
+    case FPCR_RND_P:
+        cpu_fprintf(f, "RP ");
+        break;
+    }
 }
 
 void restore_state_to_opc(CPUM68KState *env, TranslationBlock *tb,

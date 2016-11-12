@@ -66,7 +66,7 @@ static void m68k_cpu_reset(CPUState *s)
     env->fp0l = nan.low;
     env->fp1h = nan.high;
     env->fp1l = nan.low;
-    env->fpcr = 0;
+    cpu_m68k_set_fpcr(env, 0);
     env->fpsr = 0;
 
     cpu_m68k_set_ccr(env, 0);
