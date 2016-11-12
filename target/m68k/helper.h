@@ -83,6 +83,7 @@ DEF_HELPER_4(frem, void, env, fp, fp, fp)
 DEF_HELPER_3(fgetexp, void, env, fp, fp)
 DEF_HELPER_3(fgetman, void, env, fp, fp)
 DEF_HELPER_4(fscale, void, env, fp, fp, fp)
+DEF_HELPER_FLAGS_2(update_fpstatus, TCG_CALL_NO_RWG, void, env, i32)
 
 DEF_HELPER_3(mac_move, void, env, i32, i32)
 DEF_HELPER_3(macmulf, i64, env, i32, i32)
