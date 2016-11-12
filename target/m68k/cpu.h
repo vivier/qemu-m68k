@@ -57,6 +57,15 @@
 #define EXCP_TRAP15         47   /* User trap #15.  */
 #define EXCP_UNSUPPORTED    61
 #define EXCP_ICE            13
+#define EXCP_FP_BSUN        48 /* Branch Set on Unordered */
+#define EXCP_FP_INEX        49 /* Inexact result */
+#define EXCP_FP_DZ          50 /* Divide by Zero */
+#define EXCP_FP_UNFL        51 /* Underflow */
+#define EXCP_FP_OPERR       52 /* Operand Error */
+#define EXCP_FP_OVFL        53 /* Overflow */
+#define EXCP_FP_SNAN        54 /* Signaling Not-A-Number */
+#define EXCP_FP_UNIMP       55 /* Unimplemented Data type */
+
 
 #define EXCP_RTE            0x100
 #define EXCP_HALT_INSN      0x101
@@ -221,6 +230,25 @@ typedef enum {
 #define FPSR_CC_I     0x02000000 /* Infinity */
 #define FPSR_CC_Z     0x04000000 /* Zero */
 #define FPSR_CC_N     0x08000000 /* Negative */
+
+/* Exception Status */
+#define FPSR_ES_MASK  0x0000ff00
+#define FPSR_ES_BSUN  0x00008000 /* Branch Set on Unordered */
+#define FPSR_ES_SNAN  0x00004000 /* Signaling Not-A-Number */
+#define FPSR_ES_OPERR 0x00002000 /* Operand Error */
+#define FPSR_ES_OVFL  0x00001000 /* Overflow */
+#define FPSR_ES_UNFL  0x00000800 /* Underflow */
+#define FPSR_ES_DZ    0x00000400 /* Divide by Zero */
+#define FPSR_ES_INEX2 0x00000200 /* Inexact operation */
+#define FPSR_ES_INEX  0x00000100 /* Inexact decimal input */
+
+/* Accrued Exception */
+#define FPSR_AE_MASK  0x000000ff
+#define FPSR_AE_IOP   0x00000080 /* Invalid Operation */
+#define FPSR_AE_OVFL  0x00000040 /* Overflow */
+#define FPSR_AE_UNFL  0x00000020 /* Underflow */
+#define FPSR_AE_DZ    0x00000010 /* Divide by Zero */
+#define FPSR_AE_INEX  0x00000008 /* Inexact */
 
 /* Quotient */
 
