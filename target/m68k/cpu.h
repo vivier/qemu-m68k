@@ -64,6 +64,8 @@
 #define NB_MMU_MODES 2
 #define TARGET_INSN_START_EXTRA_WORDS 1
 
+typedef CPU_LDoubleU FPReg;
+
 typedef struct CPUM68KState {
     uint32_t dregs[8];
     uint32_t aregs[8];
@@ -82,11 +84,15 @@ typedef struct CPUM68KState {
     uint32_t cc_c; /* either 0/1, unused, or computed from cc_n and cc_v */
     uint32_t cc_z; /* == 0 or unused */
 
-    float64 fregs[8];
-    float64 fp_result;
+    FPReg fregs[8];
     uint32_t fpcr;
     uint32_t fpsr;
     float_status fp_status;
+
+    uint32_t fp0h;
+    uint64_t fp0l;
+    uint32_t fp1h;
+    uint64_t fp1l;
 
     uint64_t mactmp;
     /* EMAC Hardware deals with 48-bit values composed of one 32-bit and
