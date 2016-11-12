@@ -5313,11 +5313,15 @@ void register_m68k_insns (CPUM68KState *env)
     INSN(bfop_reg, eec0, fff8, BITFIELD);   /* bfset */
     INSN(bfop_mem, e8c0, ffc0, BITFIELD);   /* bftst */
     INSN(bfop_reg, e8c0, fff8, BITFIELD);   /* bftst */
-    INSN(undef_fpu, f000, f000, CF_ISA_A);
+    BASE(undef_fpu, f000, f000);
     INSN(fpu,       f200, ffc0, CF_FPU);
     INSN(fbcc,      f280, ffc0, CF_FPU);
     INSN(frestore,  f340, ffc0, CF_FPU);
     INSN(fsave,     f340, ffc0, CF_FPU);
+    INSN(fpu,       f200, ffc0, FPU);
+    INSN(fbcc,      f280, ff80, FPU);
+    INSN(frestore,  f340, ffc0, FPU);
+    INSN(fsave,     f340, ffc0, FPU);
     INSN(intouch,   f340, ffc0, CF_ISA_A);
     INSN(cpushl,    f428, ff38, CF_ISA_A);
     INSN(wddata,    fb00, ff00, CF_ISA_A);
