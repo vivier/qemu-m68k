@@ -421,3 +421,9 @@ void HELPER(update_fpstatus)(CPUM68KState *env)
 
     set_float_exception_flags(flags, &env->fp_status);
 }
+
+void HELPER(fmovem)(CPUM68KState *env, uint32_t opsize,
+                    uint32_t mode, uint32_t mask)
+{
+    fprintf(stderr, "MISSING HELPER fmovem\n");
+}
