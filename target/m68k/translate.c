@@ -4483,13 +4483,79 @@ static void gen_op_fmove_fcr(CPUM68KState *env, DisasContext *s,
     tcg_temp_free_i32(addr);
 }
 
+static void gen_op_fmovem(CPUM68KState *env, DisasContext *s,
+                          uint32_t insn, uint32_t ext)
+{
+    int opsize;
+    uint16_t mask;
+    int i;
+    uint32_t mode;
+    int32_t incr;
+    TCGv addr, tmp;
+    int is_load;
+
+    if (m68k_feature(s->env, M68K_FEATURE_FPU)) {
+        opsize = OS_EXTENDED;
+    } else {
+        opsize = OS_DOUBLE;  /* FIXME */
+    }
+
+    mode = (ext >> 11) & 0x3;
+    if ((mode & 0x1) == 1) {
+        gen_helper_fmovem(cpu_env, tcg_const_i32(opsize),
+                          tcg_const_i32(mode), DREG(ext, 0));
+        return;
+    }
+
+    tmp = gen_lea(env, s, insn, opsize);
+    if (IS_NULL_QREG(tmp)) {
+        gen_addr_fault(s);
+        return;
+    }
+
+    addr = tcg_temp_new();
+    tcg_gen_mov_i32(addr, tmp);
+    is_load = ((ext & 0x2000) == 0);
+    incr = opsize_bytes(opsize);
+    mask = ext & 0x00FF;
+
+    if (!is_load && (mode & 2) == 0) {
+        for (i = 7; i >= 0; i--, mask <<= 1) {
+            if (mask & 0x80) {
+                gen_op_load_fpr_FP0(i);
+                gen_store_FP0(s, opsize, addr);
+                if ((mask & 0xff) != 0x80) {
+                    tcg_gen_subi_i32(addr, addr, incr);
+                }
+            }
+        }
+        tcg_gen_mov_i32(AREG(insn, 0), addr);
+    } else {
+        for (i = 0; i < 8; i++, mask <<= 1) {
+            if (mask & 0x80) {
+                if (is_load) {
+                    gen_load_FP0(s, opsize, addr);
+                    gen_op_store_fpr_FP0(i);
+                } else {
+                    gen_op_load_fpr_FP0(i);
+                    gen_store_FP0(s, opsize, addr);
+                }
+                tcg_gen_addi_i32(addr, addr, incr);
+            }
+        }
+        if ((insn & 070) == 030) {
+            tcg_gen_mov_i32(AREG(insn, 0), addr);
+        }
+    }
+    tcg_temp_free_i32(addr);
+}
+
 /* ??? FP exceptions are not implemented.  Most exceptions are deferred until
    immediately before the next FP instruction is executed.  */
 DISAS_INSN(fpu)
 {
     uint16_t ext;
     int opmode;
-    TCGv tmp32;
     int opsize;
 
     ext = read_im16(env, s);
@@ -4514,32 +4580,13 @@ DISAS_INSN(fpu)
         return;
     case 6: /* fmovem */
     case 7:
-        {
-            TCGv addr;
-            uint16_t mask;
-            int i;
-            if ((ext & 0x1f00) != 0x1000 || (ext & 0xff) == 0)
-                goto undef;
-            tmp32 = gen_lea(env, s, insn, OS_LONG);
-            if (IS_NULL_QREG(tmp32)) {
-                gen_addr_fault(s);
-                return;
-            }
-            addr = tcg_temp_new_i32();
-            tcg_gen_mov_i32(addr, tmp32);
-            mask = 0x80;
-            for (i = 0; i < 8; i++) {
-                if (ext & mask) {
-                    gen_op_load_fpr_FP0(REG(i, 0));
-                    gen_ldst_FP0(s, OS_DOUBLE, addr, (ext & (1 << 13)) ?
-                                                     EA_STORE : EA_LOADS);
-                    if (ext & (mask - 1))
-                        tcg_gen_addi_i32(addr, addr, 8);
-                }
-                mask >>= 1;
-            }
-            tcg_temp_free_i32(addr);
+        if ((ext & 0xf00) != 0 || (ext & 0xff) == 0) {
+            goto undef;
         }
+        if ((ext & 0x1000) == 0 && !m68k_feature(s->env, M68K_FEATURE_FPU)) {
+            goto undef;
+        }
+        gen_op_fmovem(env, s, insn, ext);
         return;
     }
     if (ext & (1 << 14)) {
