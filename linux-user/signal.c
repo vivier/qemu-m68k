@@ -5512,6 +5512,7 @@ static inline int target_rt_setup_ucontext(struct target_ucontext *uc,
                                            CPUM68KState *env)
 {
     target_greg_t *gregs = uc->tuc_mcontext.gregs;
+    uint32_t sr = cpu_m68k_get_ccr(env);
 
     __put_user(TARGET_MCONTEXT_VERSION, &uc->tuc_mcontext.version);
     __put_user(env->dregs[0], &gregs[0]);
@@ -5531,7 +5532,7 @@ static inline int target_rt_setup_ucontext(struct target_ucontext *uc,
     __put_user(env->aregs[6], &gregs[14]);
     __put_user(env->aregs[7], &gregs[15]);
     __put_user(env->pc, &gregs[16]);
-    __put_user(env->sr, &gregs[17]);
+    __put_user(sr, &gregs[17]);
 
     target_rt_save_fpu_state(uc, env);
 
@@ -5586,7 +5587,7 @@ static inline int target_rt_restore_ucontext(CPUM68KState *env,
     __get_user(env->aregs[7], &gregs[15]);
     __get_user(env->pc, &gregs[16]);
     __get_user(temp, &gregs[17]);
-    env->sr = (env->sr & 0xff00) | (temp & 0xff);
+    cpu_m68k_set_ccr(env, temp);
 
     target_rt_restore_fpu_state(env, uc);
 
