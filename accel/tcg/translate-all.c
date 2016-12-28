@@ -136,7 +136,11 @@ static void *l1_map[V_L1_MAX_SIZE];
 
 /* code generation context */
 TCGContext tcg_ctx;
+#ifdef CONFIG_USER_ONLY
+bool parallel_cpus = true;
+#else
 bool parallel_cpus;
+#endif
 
 /* translation block context */
 __thread int have_tb_lock;
