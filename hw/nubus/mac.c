@@ -1,5 +1,5 @@
+#include "qemu/osdep.h"
 #include "hw/sysbus.h"
-#include "exec/address-spaces.h"
 #include "hw/nubus/mac.h"
 
 static void mac_nubus_slot_write(void *opaque, hwaddr addr, uint64_t val,
