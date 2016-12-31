@@ -49,6 +49,8 @@ static char cpu_reg_names[2 * 8 * 3 + 5 * 4];
 static TCGv cpu_dregs[8];
 static TCGv cpu_aregs[8];
 static TCGv_i64 cpu_macc[4];
+static TCGv QEMU_DFC;
+static TCGv QEMU_SFC;
 
 #define REG(insn, pos)  (((insn) >> (pos)) & 7)
 #define DREG(insn, pos) cpu_dregs[REG(insn, pos)]
@@ -107,6 +109,10 @@ void m68k_tcg_init(void)
         p += 5;
     }
 
+    QEMU_DFC = tcg_global_mem_new(cpu_env, offsetof(CPUM68KState, dfc),
+                                  "DFC");
+    QEMU_SFC = tcg_global_mem_new(cpu_env, offsetof(CPUM68KState, sfc),
+                                  "SFC");
     NULL_QREG = tcg_global_mem_new(cpu_env, -4, "NULL");
     store_dummy = tcg_global_mem_new(cpu_env, -8, "NULL");
 }
@@ -5739,9 +5745,30 @@ void m68k_cpu_dump_state(CPUState *cs, FILE *f, fprintf_function cpu_fprintf,
     }
     cpu_fprintf (f, "PC = %08x   ", env->pc);
     sr = env->sr | cpu_m68k_get_ccr(env);
-    cpu_fprintf(f, "SR = %04x %c%c%c%c%c ", sr, (sr & CCF_X) ? 'X' : '-',
-                (sr & CCF_N) ? 'N' : '-', (sr & CCF_Z) ? 'Z' : '-',
-                (sr & CCF_V) ? 'V' : '-', (sr & CCF_C) ? 'C' : '-');
+    cpu_fprintf(f, "SR = %04x T:%x I:%x %c%c %c%c%c%c%c ",
+                sr, (sr & SR_T) >> SR_T_SHIFT, (sr & SR_I) >> SR_I_SHIFT,
+                (sr & SR_S) ? 'S' : 'U', (sr & SR_M) ? '%' : 'I',
+                (sr & CCF_X) ? 'X' : '-', (sr & CCF_N) ? 'N' : '-',
+                (sr & CCF_Z) ? 'Z' : '-', (sr & CCF_V) ? 'V' : '-',
+                (sr & CCF_C) ? 'C' : '-');
+#ifndef CONFIG_SOFTMMU
+    cpu_fprintf(f, "A7(MSP) = %08x  A7(USP) = %08x A7(ISP) = %08x\n",
+               env->sp[M68K_SSP], env->sp[M68K_USP], env->sp[M68K_ISP]);
+    cpu_fprintf(f, "Current stack ");
+    switch(env->current_sp) {
+    case M68K_SSP: cpu_fprintf(f, "MSP\n"); break;
+    case M68K_USP: cpu_fprintf(f, "USP\n"); break;
+    case M68K_ISP: cpu_fprintf(f, "ISP\n"); break;
+    }
+    cpu_fprintf(f, "VBR = 0x%08x\n", env->vbr);
+    cpu_fprintf(f, "SFC = %x TFC %x\n", env->sfc, env->dfc);
+    cpu_fprintf(f, "SSW %08x TCR %08x URP %08x SRP %08x\n",
+                env->mmu.ssw, env->mmu.tcr, env->mmu.urp, env->mmu.srp);
+    cpu_fprintf(f, "DTTR0/1: %08x/%08x ITTR0/1: %08x/%08x\n",
+                env->mmu.dttr0, env->mmu.dttr1, env->mmu.ittr0, env->mmu.ittr1);
+    cpu_fprintf(f, "MMUSR %08x, fault at %08x\n",
+                env->mmu.mmusr, env->mmu.ar);
+#endif
     cpu_fprintf(f, "FPSR = %08x %c%c%c%c ", env->fpsr,
                 (env->fpsr & FPSR_CC_A) ? 'A' : '-',
                 (env->fpsr & FPSR_CC_I) ? 'I' : '-',

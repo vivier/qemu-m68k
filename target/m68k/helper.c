@@ -267,7 +267,7 @@ void m68k_switch_sp(CPUM68KState *env)
 
 #if defined(CONFIG_USER_ONLY)
 
-int m68k_cpu_handle_mmu_fault(CPUState *cs, vaddr address, int rw,
+int m68k_cpu_handle_mmu_fault(CPUState *cs, vaddr address, int size, int rw,
                               int mmu_idx)
 {
     M68kCPU *cpu = M68K_CPU(cs);
@@ -279,23 +279,292 @@ int m68k_cpu_handle_mmu_fault(CPUState *cs, vaddr address, int rw,
 
 #else
 
-/* MMU */
+/* MMU: 68040 only */
 
-/* TODO: This will need fixing once the MMU is implemented.  */
-hwaddr m68k_cpu_get_phys_page_debug(CPUState *cs, vaddr addr)
+static int check_TTR(uint32_t ttr, hwaddr *physical, int *prot,
+                     target_ulong addr, int access_type)
 {
-    return addr;
+    uint32_t base, mask;
+
+    /* check if transparent translation is enabled */
+
+    if ((ttr & (1 << 15)) == 0) {
+        return 0;
+    }
+
+    /* check mode access */
+
+    if ((ttr & (1 << 14)) == 0) {
+        if (ttr & (1 << 13)) {
+            /* match only if supervisor */
+            if ((access_type & ACCESS_SUPER) == 0) {
+                return 0;
+            }
+        } else {
+            /* match only if user */
+            if ((access_type & ACCESS_SUPER) != 0) {
+                return 0;
+            }
+        }
+    }
+
+    /* check address matching */
+
+    base = ttr & 0xff000000;
+    mask = ((ttr << 8) & 0xff000000) ^ 0xff000000;
+
+    if ((addr & mask) != (base & mask)) {
+        return 0;
+    }
+
+    *physical = addr;
+    *prot = PAGE_READ | PAGE_EXEC;
+    if ((ttr & (1 << 2)) == 0) {
+        *prot |= PAGE_WRITE;
+    }
+
+    return 1;
 }
 
-int m68k_cpu_handle_mmu_fault(CPUState *cs, vaddr address, int rw,
+#define GET_ENTRY() \
+do { \
+    next = ldl_phys(cs->as, entry); \
+    if ((next & 2) == 0) { \
+        return -1; /* INVALID */ \
+    } \
+    if ((next & (1 << 3)) == 0) { \
+        stl_phys(cs->as, entry, next | (1 << 3)); \
+    } \
+    if (next & (1 << 2)) { \
+        /* WRITE PROTECTED */ \
+        if (access_type & ACCESS_PTEST) { \
+            env->mmu.mmusr |= M68K_MMU_WP_040; \
+        } \
+        *prot &= ~PAGE_WRITE; \
+        if (access_type & ACCESS_STORE) { \
+            return -1; \
+        } \
+    } \
+} while (0)
+
+static int get_physical_address(CPUM68KState *env, hwaddr *physical,
+                                int *prot, target_ulong address,
+                                int access_type, target_ulong *page_size)
+{
+    M68kCPU *cpu = m68k_env_get_cpu(env);
+    CPUState *cs = CPU(cpu);
+    uint32_t tia;
+    uint32_t tib;
+    uint32_t tic;
+    uint32_t page_offset;
+    uint32_t entry;
+    uint32_t next;
+
+    /* Transparent Translation (physical = logical) */
+
+    if (access_type & ACCESS_CODE) {
+        if (check_TTR(env->mmu.ittr0, physical, prot, address, access_type)) {
+            goto TTR_exit;
+        }
+        if (check_TTR(env->mmu.ittr1, physical, prot, address, access_type)) {
+            goto TTR_exit;
+        }
+    } else {
+        if (check_TTR(env->mmu.dttr0, physical, prot, address, access_type)) {
+            goto TTR_exit;
+        }
+        if (check_TTR(env->mmu.dttr1, physical, prot, address, access_type)) {
+TTR_exit:
+            if (access_type & ACCESS_PTEST) {
+                /* Transparent Translation Register bit */
+                env->mmu.mmusr = M68K_MMU_T_040 | M68K_MMU_R_040;
+            }
+            *page_size = TARGET_PAGE_SIZE;
+            return 0;
+        }
+    }
+
+    *prot = PAGE_READ | PAGE_WRITE;
+    if (access_type & ACCESS_CODE) {
+        *prot |= PAGE_EXEC;
+    }
+    if (access_type & ACCESS_SUPER) {
+        next = env->mmu.srp;
+    } else {
+        next = env->mmu.urp;
+    }
+
+    tia = (address >> 23) & 0x1fc;
+    entry = (next & ~0x1ff) | tia;
+    GET_ENTRY();
+
+    tib = (address >> 16) & 0x1fc;
+    entry = (next & ~0x1ff) | tib;
+    GET_ENTRY();
+
+    if (env->mmu.tcr & 0x4000) {
+        /* 8 kB page */
+        tic = (address >> 11) & 0x7c;
+        entry = (next & ~0x7f) | tic;
+    } else {
+        /* 4 kB page */
+        tic = (address >> 10) & 0xfc;
+        entry = (next & ~0xff) | tic;
+    }
+
+     next = ldl_phys(cs->as, entry);
+
+    if ((next & 3) == 0) {
+        return -1;
+    }
+    if ((next & 3) == 2) {
+        /* INDIRECT */
+        entry = next & ~3;
+        next = ldl_phys(cs->as, entry);
+    }
+    if (!(access_type & ACCESS_PTEST)) {
+        if (access_type & ACCESS_STORE) {
+            if (next & (1 << 2)) { /* WRITE PROTECTED */
+                if ((next & (1 << 3)) == 0) {
+                    stl_phys(cs->as, entry, next | (1 << 3));
+                }
+            } else if ((next & ((1 << 4) | (1 << 3))) != ((1 << 4) | (1 << 3))) {
+                    stl_phys(cs->as, entry, next | (1 << 4) | (1 << 3));
+            }
+        } else {
+            if ((next & (1 << 3)) == 0) {
+                stl_phys(cs->as, entry, next | (1 << 3));
+            }
+        }
+    } else {
+        env->mmu.mmusr |= next & M68K_MMU_SR_MASK_040;
+    }
+
+    if (env->mmu.tcr & 0x4000) {
+        *page_size = 8192;
+        page_offset = address & 0x1fff;
+        *physical = (next & ~0x1fff) + page_offset;
+    } else {
+        *page_size = 4096;
+        page_offset = address & 0x0fff;
+        *physical = (next & ~0x0fff) + page_offset;
+    }
+
+    if (access_type & ACCESS_PTEST) {
+        env->mmu.mmusr |= *physical & 0xfffff000;
+        env->mmu.mmusr |= M68K_MMU_R_040;
+    }
+
+    if (next & (1 << 2)) {
+        /* WRITE PROTECTED */
+        *prot &= ~PAGE_WRITE;
+        if (access_type & ACCESS_STORE) {
+            return -1;
+        }
+    }
+    if (next & (1 << 7)) {
+        /* SUPERVISOR */
+        if ((access_type & ACCESS_SUPER) == 0) {
+            return -1;
+        }
+    }
+
+    return 0;
+}
+
+hwaddr m68k_cpu_get_phys_page_debug(CPUState *cs, vaddr addr)
+{
+    M68kCPU *cpu = M68K_CPU(cs);
+    CPUM68KState *env = &cpu->env;
+    hwaddr phys_addr;
+    int prot;
+    int access_type;
+    target_ulong page_size;
+
+    if ((env->mmu.tcr & (1 << 15)) == 0) {
+        /* MMU disabled */
+        return addr;
+    }
+
+    access_type = ACCESS_INT;
+    if (env->sr & SR_S)
+        access_type |= ACCESS_SUPER;
+    if (get_physical_address(env, &phys_addr, &prot,
+                             addr, access_type, &page_size) != 0) {
+        return -1;
+    }
+    return phys_addr;
+}
+
+int m68k_cpu_handle_mmu_fault(CPUState *cs, vaddr address, int size, int rw,
                               int mmu_idx)
 {
+    M68kCPU *cpu = M68K_CPU(cs);
+    CPUM68KState *env = &cpu->env;
+    hwaddr physical;
     int prot;
+    int access_type;
+    int ret;
+    target_ulong page_size;
 
-    address &= TARGET_PAGE_MASK;
-    prot = PAGE_READ | PAGE_WRITE | PAGE_EXEC;
-    tlb_set_page(cs, address, address, prot, mmu_idx, TARGET_PAGE_SIZE);
-    return 0;
+    if ((env->mmu.tcr & (1 << 15)) == 0) {
+        /* MMU disabled */
+        tlb_set_page(cs, address & TARGET_PAGE_MASK,
+                     address & TARGET_PAGE_MASK,
+                     PAGE_READ | PAGE_WRITE | PAGE_EXEC,
+                     mmu_idx, TARGET_PAGE_SIZE);
+        return 0;
+    }
+
+    if (rw == 2) {
+        access_type = ACCESS_CODE;
+        rw = 0;
+    } else {
+        access_type = ACCESS_INT;
+        if (rw) {
+            access_type |= ACCESS_STORE;
+        }
+    }
+
+    if (mmu_idx != MMU_USER_IDX) {
+        access_type |= ACCESS_SUPER;
+    }
+
+    ret = get_physical_address(&cpu->env, &physical, &prot,
+                               address, access_type, &page_size);
+    if (ret == 0) {
+        tlb_set_page(cs, address & TARGET_PAGE_MASK,
+                     physical & TARGET_PAGE_MASK,
+                     prot, mmu_idx, page_size);
+        return 0;
+    }
+    /* page fault */
+    env->mmu.ssw = M68K_ATC_040;
+    switch (size) {
+    case 1:
+        env->mmu.ssw |= M68K_BA_SIZE_BYTE;
+        break;
+    case 2:
+        env->mmu.ssw |= M68K_BA_SIZE_WORD;
+        break;
+    case 4:
+        env->mmu.ssw |= M68K_BA_SIZE_LONG;
+        break;
+    }
+    if (access_type & ACCESS_SUPER) {
+        env->mmu.ssw |= M68K_TM_040_SUPER;
+    }
+    if (access_type & ACCESS_CODE) {
+        env->mmu.ssw |= M68K_TM_040_CODE;
+    } else {
+        env->mmu.ssw |= M68K_TM_040_DATA;
+    }
+    if (!(access_type & ACCESS_STORE)) {
+        env->mmu.ssw |= M68K_RW_040;
+    }
+    env->mmu.ar = address;
+    cs->exception_index = EXCP_ACCESS;
+    return 1;
 }
 
 /* Notify CPU of a pending interrupt.  Prioritization and vectoring should

@@ -36,6 +36,8 @@ static inline void do_interrupt_m68k_hardirq(CPUM68KState *env)
 
 #else
 
+extern void qemu_system_reset_request(void);
+
 /* Try to fill the TLB and return an exception if error. If retaddr is
    NULL, it means that the function was called in C code (i.e. not
    from generated code or from helper.c) */
@@ -44,7 +46,7 @@ void tlb_fill(CPUState *cs, target_ulong addr, int size,
 {
     int ret;
 
-    ret = m68k_cpu_handle_mmu_fault(cs, addr, access_type, mmu_idx);
+    ret = m68k_cpu_handle_mmu_fault(cs, addr, size, access_type, mmu_idx);
     if (unlikely(ret)) {
         if (retaddr) {
             /* now we have a real cpu fault */
@@ -57,15 +59,75 @@ void tlb_fill(CPUState *cs, target_ulong addr, int size,
 static void do_rte(CPUM68KState *env)
 {
     uint32_t sp;
-    uint32_t fmt;
+    uint16_t sr;
 
     sp = env->aregs[7];
-    fmt = cpu_ldl_kernel(env, sp);
-    env->pc = cpu_ldl_kernel(env, sp + 4);
-    sp |= (fmt >> 28) & 3;
-    env->aregs[7] = sp + 8;
+    if (m68k_feature(env, M68K_FEATURE_M68000)) {
+        uint16_t fmt;
+throwaway:
+        sr = cpu_lduw_kernel(env, sp);
+        sp += 2;
+        env->pc = cpu_ldl_kernel(env, sp);
+        sp += 4;
+        if (m68k_feature(env, M68K_FEATURE_QUAD_MULDIV)) {
+            /*  all except 68000 */
+            fmt = cpu_lduw_kernel(env, sp);
+            sp += 2;
+            switch (fmt >> 12) {
+            case 0:
+                break;
+            case 1:
+                env->aregs[7] = sp;
+                helper_set_sr(env, sr);
+                goto throwaway;
+            case 2:
+            case 3:
+                sp += 4;
+                break;
+            case 4:
+                sp += 8;
+                break;
+            case 7:
+                sp += 52;
+                break;
+            }
+        }
+    } else {
+        uint32_t fmt;
+        fmt = cpu_ldl_kernel(env, sp);
+        env->pc = cpu_ldl_kernel(env, sp + 4);
+        sp |= (fmt >> 28) & 3;
+        sr = fmt;
+        sp += 8;
+    }
+    env->aregs[7] = sp;
+    helper_set_sr(env, sr);
+}
 
-    helper_set_sr(env, fmt);
+static inline void do_stack_frame(CPUM68KState *env, uint32_t *sp,
+                                  uint16_t format, uint16_t sr,
+                                  uint32_t addr, uint32_t retaddr)
+{
+    CPUState *cs = CPU(m68k_env_get_cpu(env));
+    switch (format) {
+    case 4:
+        *sp -= 4;
+        cpu_stl_kernel(env, *sp, env->pc);
+        *sp -= 4;
+        cpu_stl_kernel(env, *sp, addr);
+        break;
+    case 3:
+    case 2:
+        *sp -= 4;
+        cpu_stl_kernel(env, *sp, addr);
+        break;
+    }
+    *sp -= 2;
+    cpu_stw_kernel(env, *sp, (format << 12) + (cs->exception_index << 2));
+    *sp -= 4;
+    cpu_stl_kernel(env, *sp, retaddr);
+    *sp -= 2;
+    cpu_stw_kernel(env, *sp, sr);
 }
 
 static void do_interrupt_all(CPUM68KState *env, int is_hw)
@@ -75,6 +137,7 @@ static void do_interrupt_all(CPUM68KState *env, int is_hw)
     uint32_t fmt;
     uint32_t retaddr;
     uint32_t vector;
+    uint16_t sr, oldsr;
 
     fmt = 0;
     retaddr = env->pc;
@@ -109,26 +172,177 @@ static void do_interrupt_all(CPUM68KState *env, int is_hw)
 
     vector = cs->exception_index << 2;
 
-    fmt |= 0x40000000;
-    fmt |= vector << 16;
-    fmt |= env->sr;
-    fmt |= cpu_m68k_get_ccr(env);
+    if (qemu_loglevel_mask(CPU_LOG_INT)) {
+        static int count = 0;
+        static const char *name;
+        name = "Unassigned";
+        switch(cs->exception_index) {
+        case 0: name = "Reset Interrupt SP"; break;
+        case 1: name = "Reset PC"; break;
+        case 2: name = "Access Fault"; break;
+        case 3: name = "Address Error"; break;
+        case 4: name = "Illegal Instruction"; break;
+        case 5: name = "Divide by Zero"; break;
+        case 6: name = "CHK/CHK2"; break;
+        case 7: name = "FTRAPcc, TRAPcc, TRAPV"; break;
+        case 8: name = "Privilege Violation"; break;
+        case 9: name = "Trace"; break;
+        case 10: name = "A-Line"; break;
+        case 11: name = "F-Line"; break;
+        case 13: name = "Copro Protocol Violation"; break; /* 68020/030 only */
+        case 14: name = "Format Error"; break;
+        case 15: name = "Unitialized Interruot"; break;
 
-    env->sr |= SR_S;
-    if (is_hw) {
-        env->sr = (env->sr & ~SR_I) | (env->pending_level << SR_I_SHIFT);
-        env->sr &= ~SR_M;
+        case 24: name = "Spurious Interrupt"; break;
+        case 25: name = "Level 1 Interrupt"; break;
+        case 26: name = "Level 2 Interrupt"; break;
+        case 27: name = "Level 3 Interrupt"; break;
+        case 28: name = "Level 4 Interrupt"; break;
+        case 29: name = "Level 5 Interrupt"; break;
+        case 30: name = "Level 6 Interrupt"; break;
+        case 31: name = "Level 7 Interrupt"; break;
+
+        case 32: name = "TRAP #0"; break;
+        case 33: name = "TRAP #1"; break;
+        case 34: name = "TRAP #2"; break;
+        case 35: name = "TRAP #3"; break;
+        case 36: name = "TRAP #4"; break;
+        case 37: name = "TRAP #5"; break;
+        case 38: name = "TRAP #6"; break;
+        case 39: name = "TRAP #7"; break;
+        case 40: name = "TRAP #8"; break;
+        case 41: name = "TRAP #9"; break;
+        case 42: name = "TRAP #10"; break;
+        case 43: name = "TRAP #11"; break;
+        case 44: name = "TRAP #12"; break;
+        case 45: name = "TRAP #13"; break;
+        case 46: name = "TRAP #14"; break;
+        case 47: name = "TRAP #15"; break;
+
+        case 48: name = "FP Branch/Set on unordered condition"; break;
+        case 49: name = "FP Inexact Result"; break;
+        case 50: name = "FP Divide by Zero"; break;
+        case 51: name = "FP Underflow"; break;
+        case 52: name = "FP Operand Error"; break;
+        case 53: name = "FP Overflow"; break;
+        case 54: name = "FP Signaling NAN"; break;
+        case 55: name = "FP Unimplemented Data Type"; break;
+
+        case 56: name = "MMU Configuration Error"; break; /* 68030/68851 only */
+        case 57: name = "MMU Illegal Operation"; break; /* 68851 only */
+        case 58: name = "MMU Access Level Violation"; break; /* 68851 only */
+
+        case 64 ... 255: name = "User Defined Vector"; break;
+        }
+        qemu_log("INT %6d: %s(%#x) pc=%08x sp=%08x sr=%04x\n",
+                 ++count, name, vector, env->pc, env->aregs[7], env->sr);
     }
-    m68k_switch_sp(env);
-    sp = env->aregs[7];
-    fmt |= (sp & 3) << 28;
 
-    /* ??? This could cause MMU faults.  */
-    sp &= ~3;
-    sp -= 4;
-    cpu_stl_kernel(env, sp, retaddr);
-    sp -= 4;
-    cpu_stl_kernel(env, sp, fmt);
+    /*
+     * MC68040UM/AD,  chapter 9.3.10
+     */
+
+    sr = env->sr | cpu_m68k_get_ccr(env);
+    /* "the processor first make an internal copy" */
+    oldsr = sr;
+    /* "set the mode to supervisor" */
+    sr |= SR_S;
+    /* "suppress tracing" */
+    sr &= ~SR_T;
+    /* "sets the processor interrupt mask" */
+    if (is_hw) {
+        sr |= (env->sr & ~SR_I) | (env->pending_level << SR_I_SHIFT);
+    }
+    helper_set_sr(env, sr);
+    sp = env->aregs[7];
+
+    if (m68k_feature(env, M68K_FEATURE_M68000)) {
+        sp &= ~1;
+        if (cs->exception_index == 2) {
+            static int mmu_fault = 0;
+            if (mmu_fault) {
+                cpu_abort(cs, "DOUBLE MMU FAULT\n");
+            }
+            /*
+             * horrible hack to reset macintosh Quadra 800.
+             * To reset, linux calls ROM entry point 0x4080000a
+             * as we have no ROM, this fails. We try to trap this here
+             */
+            if (env->mmu.ar == 0x4080000a &&
+                (env->mmu.ssw & M68K_TM_040_SUPER)) {
+                qemu_system_reset_request();
+                return;
+            }
+            mmu_fault = 1;
+            sp -= 4;
+            cpu_stl_kernel(env, sp, 0); /* push data 3 */
+            sp -= 4;
+            cpu_stl_kernel(env, sp, 0); /* push data 2 */
+            sp -= 4;
+            cpu_stl_kernel(env, sp, 0); /* push data 1 */
+            sp -= 4;
+            cpu_stl_kernel(env, sp, 0); /* write back 1 / push data 0 */
+            sp -= 4;
+            cpu_stl_kernel(env, sp, 0); /* write back 1 address */
+            sp -= 4;
+            cpu_stl_kernel(env, sp, 0); /* write back 2 data */
+            sp -= 4;
+            cpu_stl_kernel(env, sp, 0); /* write back 2 address */
+            sp -= 4;
+            cpu_stl_kernel(env, sp, 0); /* write back 3 data */
+            sp -= 4;
+            cpu_stl_kernel(env, sp, env->mmu.ar); /* write back 3 address */
+            sp -= 4;
+            cpu_stl_kernel(env, sp, env->mmu.ar); /* fault address */
+            sp -= 2;
+            cpu_stw_kernel(env, sp, 0); /* write back 1 status */
+            sp -= 2;
+            cpu_stw_kernel(env, sp, 0); /* write back 2 status */
+            sp -= 2;
+            cpu_stw_kernel(env, sp, 0); /* write back 3 status */
+            sp -= 2;
+            cpu_stw_kernel(env, sp, env->mmu.ssw); /* special status word */
+            sp -= 4;
+            cpu_stl_kernel(env, sp, env->mmu.ar); /* effective address */
+            do_stack_frame(env, &sp, 7, oldsr, 0, retaddr);
+            mmu_fault = 0;
+            if (qemu_loglevel_mask(CPU_LOG_INT)) {
+                qemu_log("            ssw:  %08x ea:   %08x sfc:  %d    dfc: %d\n",
+                         env->mmu.ssw, env->mmu.ar, env->sfc, env->dfc);
+            }
+        } else if (cs->exception_index == 3) {
+            do_stack_frame(env, &sp, 2, oldsr, 0, retaddr);
+        } else if (cs->exception_index == 4 ||
+                   cs->exception_index == 5 ||
+                   cs->exception_index == 6 ||
+                   cs->exception_index == 7 ||
+                   cs->exception_index == 9) {
+            /* FIXME: addr is not only env->pc */
+            do_stack_frame(env, &sp, 2, oldsr, env->pc, retaddr);
+        } else if (is_hw && oldsr & SR_M && cs->exception_index >= 24
+                         && cs->exception_index < 32) {
+            do_stack_frame(env, &sp, 0, oldsr, 0, retaddr);
+            oldsr = sr;
+            env->aregs[7] = sp;
+            helper_set_sr(env, sr &= ~SR_M);
+            sp = env->aregs[7] & ~1;
+            do_stack_frame(env, &sp, 1, oldsr, 0, retaddr);
+        } else {
+            do_stack_frame(env, &sp, 0, oldsr, 0, retaddr);
+        }
+    } else {
+        fmt |= 0x40000000;
+        fmt |= (sp & 3) << 28;
+        fmt |= vector << 16;
+        fmt |= oldsr;
+
+        sp &= ~3;
+        sp -= 4;
+        cpu_stl_kernel(env, sp, retaddr);
+        sp -= 4;
+        cpu_stl_kernel(env, sp, fmt);
+    }
+
     env->aregs[7] = sp;
     /* Jump to vector.  */
     env->pc = cpu_ldl_kernel(env, env->vbr + vector);
@@ -154,7 +368,8 @@ bool m68k_cpu_exec_interrupt(CPUState *cs, int interrupt_request)
     CPUM68KState *env = &cpu->env;
 
     if (interrupt_request & CPU_INTERRUPT_HARD
-        && ((env->sr & SR_I) >> SR_I_SHIFT) < env->pending_level) {
+        && (((env->sr & SR_I) >> SR_I_SHIFT) < env->pending_level
+            || env->pending_level == 7)) {
         /* Real hardware gets the interrupt vector via an IACK cycle
            at this point.  Current emulated hardware doesn't rely on
            this, so we provide/save the vector when the interrupt is
