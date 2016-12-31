@@ -1530,7 +1530,7 @@ DISAS_INSN(undef)
        but actually illegal for CPU32 or pre-68020.  */
     qemu_log_mask(LOG_UNIMP, "Illegal instruction: %04x @ %08x",
                   insn, s->insn_pc);
-    gen_exception(s, s->insn_pc, EXCP_UNSUPPORTED);
+    gen_exception(s, s->insn_pc, EXCP_ILLEGAL);
 }
 
 DISAS_INSN(mulw)
@@ -2719,7 +2719,7 @@ DISAS_INSN(mull)
 
     if (ext & 0x400) {
         if (!m68k_feature(s->env, M68K_FEATURE_QUAD_MULDIV)) {
-            gen_exception(s, s->insn_pc, EXCP_UNSUPPORTED);
+            gen_exception(s, s->insn_pc, EXCP_ILLEGAL);
             return;
         }
 
@@ -4264,7 +4264,7 @@ DISAS_INSN(strldsr)
     addr = s->pc - 2;
     ext = read_im16(env, s);
     if (ext != 0x46FC) {
-        gen_exception(s, addr, EXCP_UNSUPPORTED);
+        gen_exception(s, addr, EXCP_ILLEGAL);
         return;
     }
     ext = read_im16(env, s);
@@ -5232,7 +5232,7 @@ DISAS_INSN(mac)
         tcg_gen_mov_i32(rw, loadval);
         /* FIXME: Should address writeback happen with the masked or
            unmasked value?  */
-        switch ((insn >> 3) & 7) {
+        switch (extract32(insn, 3, 3)) {
         case 3: /* Post-increment.  */
             tcg_gen_addi_i32(AREG(insn, 0), addr, 4);
             break;
@@ -5457,7 +5457,6 @@ void register_m68k_insns (CPUM68KState *env)
     INSN(strldsr,   40e7, ffff, CF_ISA_APLUSC);
     INSN(negx,      4080, fff8, CF_ISA_A);
     INSN(negx,      4000, ff00, M68000);
-    INSN(undef,     40c0, ffc0, M68000);
     INSN(move_from_sr, 40c0, fff8, CF_ISA_A);
     INSN(move_from_sr, 40c0, ffc0, M68000);
     BASE(lea,       41c0, f1c0);
