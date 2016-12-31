@@ -2277,6 +2277,86 @@ DISAS_INSN(arith_im)
     tcg_temp_free(dest);
 }
 
+DISAS_INSN(moves)
+{
+    int opsize;
+    uint16_t ext;
+    TCGv reg;
+    TCGv taddr;
+    TCGv addr;
+    TCGv idx;
+    TCGv tmp;
+    TCGLabel *l1, *l2;
+    int sign;
+
+    if (IS_USER(s)) {
+        gen_exception(s, s->insn_pc, EXCP_PRIVILEGE);
+        return;
+    }
+
+    ext = read_im16(env, s);
+
+    opsize = insn_opsize(insn);
+
+    if (ext & 0x8000) {
+        /* address register */
+        reg = AREG(ext, 12);
+        sign = 1;
+    } else {
+        /* data register */
+        reg = DREG(ext, 12);
+        sign = 0;
+    }
+
+    taddr = gen_lea(env, s, insn, opsize);
+    if (IS_NULL_QREG(taddr)) {
+        gen_addr_fault(s);
+        return;
+    }
+    addr = tcg_temp_local_new ();
+    tcg_gen_mov_i32(addr, taddr);
+
+    idx = tcg_temp_new();
+    l1 = gen_new_label();
+    l2 = gen_new_label();
+    if (ext & 0x0800) {
+        /* from reg to ea */
+        tcg_gen_andi_i32(idx, QEMU_DFC, 4);
+        tcg_gen_brcondi_i32(TCG_COND_EQ, idx, 4, l1);
+        /* FIXME: manage data  = (s->env->dfc & 3) != 2 */
+        gen_store(s, opsize, addr, reg, MMU_USER_IDX);
+        tcg_gen_br(l2);
+        gen_set_label(l1);
+        gen_store(s, opsize, addr, reg, MMU_KERNEL_IDX);
+        gen_set_label(l2);
+    } else {
+        /* from ea to reg */
+        tcg_gen_andi_i32(idx, QEMU_SFC, 4);
+        tcg_gen_brcondi_i32(TCG_COND_EQ, idx, 4, l1);
+        /* FIXME: manage data  = (s->env->dfc & 3) != 2 */
+
+        tmp = gen_load(s, opsize, addr, sign, MMU_USER_IDX);
+        gen_partset_reg(opsize, reg, tmp);
+        tcg_gen_br(l2);
+        gen_set_label(l1);
+        tmp = gen_load(s, opsize, addr, sign, MMU_KERNEL_IDX);
+        gen_partset_reg(opsize, reg, tmp);
+        gen_set_label(l2);
+    }
+    switch (extract32(insn, 3, 3)) {
+    case 3: /* Indirect postincrement.  */
+        tcg_gen_addi_i32(AREG(insn, 0), addr,
+                         REG(insn, 0) == 7 && opsize == OS_BYTE
+                         ? 2
+                         : opsize_bytes(opsize));
+        break;
+    case 4: /* Indirect predecrememnt.  */
+        tcg_gen_mov_i32(AREG(insn, 0), addr);
+        break;
+    }
+    tcg_temp_free(addr);
+}
+
 DISAS_INSN(cas)
 {
     int opsize;
@@ -5589,6 +5669,7 @@ void register_m68k_insns (CPUM68KState *env)
     INSN(arith_im,  0680, fff8, CF_ISA_A);
     INSN(arith_im,  0c00, ff38, CF_ISA_A);
     INSN(arith_im,  0c00, ff00, M68000);
+    INSN(moves,     0e00, ff00, M68000);
     BASE(bitop_im,  0800, ffc0);
     BASE(bitop_im,  0840, ffc0);
     BASE(bitop_im,  0880, ffc0);
