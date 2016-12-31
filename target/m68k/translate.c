@@ -4441,6 +4441,94 @@ DISAS_INSN(cinv)
     /* Invalidate cache line.  Implement as no-op.  */
 }
 
+DISAS_INSN(move16)
+{
+    int use_areg;
+    int index = IS_USER(s);
+    int i;
+    TCGv tmp;
+
+    use_areg = (insn >> 5) & 1;
+
+    update_cc_op(s);
+    if (use_areg) {
+        TCGv src;
+        TCGv dst;
+        uint16_t ext;
+
+        ext = read_im16(env, s);
+        if ((ext & (1 << 15)) == 0) {
+            gen_exception(s, s->insn_pc, EXCP_ILLEGAL);
+        }
+
+        src = tcg_temp_new_i32();
+        tcg_gen_mov_i32(src, AREG(insn, 0));
+        dst = tcg_temp_new_i32();
+        tcg_gen_mov_i32(dst, AREG(ext, 12));
+
+        tmp = tcg_temp_new_i32();
+        for (i = 0; i < 4; i++) {
+            tcg_gen_qemu_ld32u(tmp, src, index);
+            tcg_gen_qemu_st32(tmp, dst, index);
+            tcg_gen_addi_i32(src, src, 4);
+            tcg_gen_addi_i32(dst, dst, 4);
+        }
+        tcg_gen_mov_i32(AREG(insn, 0), src);
+        tcg_gen_mov_i32(AREG(ext, 12), dst);
+    } else {
+        uint32_t addr;
+        TCGv reg;
+        int mode;
+        TCGv val;
+
+        reg = AREG(insn, 0);
+        addr = read_im16(env, s);
+        mode = (insn >> 3) & 3;
+
+        tmp = tcg_temp_new_i32();
+        switch (mode) {
+        case 0: /* MOVE16 (Ay)+, (xxx).L */
+            val = tcg_temp_new_i32();
+            tcg_gen_mov_i32(val, reg);
+            for (i = 0; i < 4; i++) {
+                tcg_gen_qemu_ld32u(tmp, val, index);
+                tcg_gen_qemu_st32(tmp, tcg_const_i32(addr + i * 4), index);
+                tcg_gen_addi_i32(val, val, 4);
+            }
+            tcg_gen_mov_i32(reg, val);
+            break;
+        case 1: /* MOVE16 (xxx).L, (Ay)+ */
+            val = tcg_temp_new_i32();
+            tcg_gen_mov_i32(val, reg);
+            for (i = 0; i < 4; i++) {
+                tcg_gen_qemu_ld32u(tmp, tcg_const_i32(addr + i * 4), index);
+                tcg_gen_qemu_st32(tmp, val, index);
+                tcg_gen_addi_i32(val, val, 4);
+            }
+            tcg_gen_mov_i32(reg, val);
+            break;
+        case 2: /* MOVE16 (Ay), (xxx).L */
+            val = tcg_temp_new_i32();
+            tcg_gen_mov_i32(val, reg);
+            for (i = 0; i < 4; i++) {
+                tcg_gen_qemu_ld32u(tmp, val, index);
+                tcg_gen_qemu_st32(tmp, tcg_const_i32(addr + i * 4), index);
+                tcg_gen_addi_i32(val, val, 4);
+            }
+            break;
+        case 3: /* MOVE16 (xxx).L, (Ay) */
+            val = tcg_temp_new_i32();
+            tcg_gen_mov_i32(val, reg);
+            for (i = 0; i < 4; i++) {
+                tcg_gen_qemu_ld32u(tmp, tcg_const_i32(addr + i * 4), index);
+                tcg_gen_qemu_st32(tmp, val, index);
+                tcg_gen_addi_i32(val, val, 4);
+            }
+            break;
+        }
+    }
+}
+
 DISAS_INSN(wddata)
 {
     gen_exception(s, s->insn_pc, EXCP_PRIVILEGE);
@@ -5672,6 +5760,7 @@ void register_m68k_insns (CPUM68KState *env)
     INSN(cpushl,    f428, ff38, CF_ISA_A);
     INSN(cpush,     f420, ff20, M68000);
     INSN(cinv,      f400, ff20, M68000);
+    INSN(move16,    f600, ffc0, M68000);  /* FIXME: 68040 version only */
     INSN(wddata,    fb00, ff00, CF_ISA_A);
     INSN(wdebug,    fbc0, ffc0, CF_ISA_A);
 #undef INSN
