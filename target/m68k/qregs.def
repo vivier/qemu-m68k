@@ -1,5 +1,7 @@
 DEFO32(PC, pc)
 DEFO32(SR, sr)
+DEFO32(DFC, dfc)
+DEFO32(SFC, sfc)
 DEFO32(CC_OP, cc_op)
 DEFO32(CC_X, cc_x)
 DEFO32(CC_C, cc_c)

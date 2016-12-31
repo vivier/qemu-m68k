@@ -55,11 +55,15 @@ static void m68k_cpu_reset(CPUState *s)
     mcc->parent_reset(s);
 
     memset(env, 0, offsetof(CPUM68KState, end_reset_fields));
-#if !defined(CONFIG_USER_ONLY)
+#if defined(CONFIG_USER_ONLY)
+    env->pc = 0;
+    m68k_switch_sp(env);
+#else
+    env->mmu.tcr = 0x4000; /* disabled / 8 kB page size */
     env->sr = 0x2700;
+    env->vbr = 0;
     env->current_sp = M68K_ISP;
 #endif
-    m68k_switch_sp(env);
     for (i = 0; i < 8; i++) {
         env->fregs[i].d = nan;
     }
@@ -67,8 +71,7 @@ static void m68k_cpu_reset(CPUState *s)
     env->fpsr = 0;
 
     cpu_m68k_set_ccr(env, 0);
-    /* TODO: We should set PC from the interrupt vector.  */
-    env->pc = 0;
+    tlb_flush(s);
 }
 
 static void m68k_cpu_disas_set_info(CPUState *s, disassemble_info *info)
@@ -260,9 +263,8 @@ static void m68k_cpu_class_init(ObjectClass *c, void *data)
     cc->set_pc = m68k_cpu_set_pc;
     cc->gdb_read_register = m68k_cpu_gdb_read_register;
     cc->gdb_write_register = m68k_cpu_gdb_write_register;
-#ifdef CONFIG_USER_ONLY
     cc->handle_mmu_fault = m68k_cpu_handle_mmu_fault;
-#else
+#if defined(CONFIG_SOFTMMU)
     cc->get_phys_page_debug = m68k_cpu_get_phys_page_debug;
 #endif
     cc->disas_set_info = m68k_cpu_disas_set_info;
