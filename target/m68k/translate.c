@@ -4528,6 +4528,35 @@ DISAS_INSN(cinv)
     /* Invalidate cache line.  Implement as no-op.  */
 }
 
+#if defined(CONFIG_SOFTMMU)
+DISAS_INSN(pflush)
+{
+    TCGv reg;
+    int opmode;
+
+    if (IS_USER(s)) {
+        gen_exception(s, s->insn_pc, EXCP_PRIVILEGE);
+        return;
+    }
+
+    reg = AREG(insn, 0);
+    opmode = (insn >> 3) & 3;
+    gen_helper_pflush(cpu_env, reg, tcg_const_i32(opmode));
+}
+
+DISAS_INSN(ptest)
+{
+    TCGv reg;
+
+    if (IS_USER(s)) {
+        gen_exception(s, s->insn_pc, EXCP_PRIVILEGE);
+        return;
+    }
+    reg = AREG(insn, 0);
+    gen_helper_ptest(cpu_env, reg, tcg_const_i32(1 - ((insn >> 5) & 1)));
+}
+#endif
+
 DISAS_INSN(move16)
 {
     int use_areg;
@@ -5851,6 +5880,10 @@ void register_m68k_insns (CPUM68KState *env)
     INSN(cpushl,    f428, ff38, CF_ISA_A);
     INSN(cpush,     f420, ff20, M68000);
     INSN(cinv,      f400, ff20, M68000);
+#if !defined(CONFIG_USER_ONLY)
+    INSN(pflush,    f500, ffe0, M68000);  /* FIXME: 68040 version only*/
+    INSN(ptest,     f548, ffd8, M68000);  /* FIXME: 68040 version only*/
+#endif
     INSN(move16,    f600, ffc0, M68000);  /* FIXME: 68040 version only */
     INSN(wddata,    fb00, ff00, CF_ISA_A);
     INSN(wdebug,    fbc0, ffc0, CF_ISA_A);

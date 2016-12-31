@@ -1087,6 +1087,52 @@ void HELPER(set_mac_extu)(CPUM68KState *env, uint32_t val, uint32_t acc)
 }
 
 #if defined(CONFIG_SOFTMMU)
+void HELPER(ptest)(CPUM68KState * env, uint32_t addr, uint32_t is_write)
+{
+    M68kCPU *cpu = m68k_env_get_cpu(env);
+    CPUState *cs = CPU(cpu);
+    hwaddr physical;
+    int access_type;
+    int prot;
+    int ret;
+    target_ulong page_size;
+
+    access_type = ACCESS_PTEST;
+    access_type |= (env->dfc & 4) ? ACCESS_SUPER : 0;
+    if ((env->dfc & 3) == 2) {
+        access_type |= ACCESS_CODE;
+    }
+
+    env->mmu.mmusr = 0;
+    env->mmu.ssw = 0;
+    ret = get_physical_address(env, &physical, &prot, addr,
+                               access_type, &page_size);
+    if (ret == 0) {
+        tlb_set_page(cs, addr & TARGET_PAGE_MASK,
+                     physical & TARGET_PAGE_MASK,
+                     prot, access_type & ACCESS_SUPER ?
+                     MMU_KERNEL_IDX : MMU_USER_IDX, page_size);
+    }
+}
+
+void HELPER(pflush)(CPUM68KState * env, uint32_t addr, uint32_t opmode)
+{
+    M68kCPU *cpu = m68k_env_get_cpu(env);
+
+    switch (opmode) {
+    case 0: /* Flush page entry if not global */
+    case 1: /* Flush page entry */
+        tlb_flush_page(CPU(cpu), addr);
+        break;
+    case 2: /* Flush all except global entries */
+        tlb_flush(CPU(cpu));
+        break;
+    case 3: /* Flush all entries */
+        tlb_flush(CPU(cpu));
+        break;
+    }
+}
+
 void HELPER(reset)(CPUM68KState * env)
 {
     /* FIXME: reset all except CPU */
