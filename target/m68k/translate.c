@@ -5698,7 +5698,7 @@ DISAS_INSN(mac)
          * FIXME: Should address writeback happen with the masked or
          * unmasked value?
          */
-        switch ((insn >> 3) & 7) {
+        switch (extract32(insn, 3, 3)) {
         case 3: /* Post-increment.  */
             tcg_gen_addi_i32(AREG(insn, 0), addr, 4);
             break;
@@ -5936,7 +5936,6 @@ void register_m68k_insns (CPUM68KState *env)
     INSN(strldsr,   40e7, ffff, CF_ISA_APLUSC);
     INSN(negx,      4080, fff8, CF_ISA_A);
     INSN(negx,      4000, ff00, M68000);
-    INSN(undef,     40c0, ffc0, M68000);
     INSN(move_from_sr, 40c0, fff8, CF_ISA_A);
     INSN(move_from_sr, 40c0, ffc0, M68000);
     BASE(lea,       41c0, f1c0);
