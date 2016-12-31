@@ -495,4 +495,6 @@ static inline void cpu_get_tb_cpu_state(CPUM68KState *env, target_ulong *pc,
     *flags = (env->sr & SR_S)                   /* Bit  13 */
             | ((env->macsr >> 4) & 0xf);        /* Bits 0-3 */
 }
+
+void dump_mmu(FILE *f, fprintf_function cpu_fprintf, CPUM68KState *env);
 #endif
