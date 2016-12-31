@@ -5028,18 +5028,17 @@ DISAS_INSN(fscc)
 
 DISAS_INSN(frestore)
 {
-    M68kCPU *cpu = m68k_env_get_cpu(env);
+    TCGv addr;
 
-    /* TODO: Implement frestore.  */
-    cpu_abort(CPU(cpu), "FRESTORE not implemented");
+    SRC_EA(env, addr, OS_LONG, 0, NULL);
+    /* FIXME: check the state frame */
 }
 
 DISAS_INSN(fsave)
 {
-    M68kCPU *cpu = m68k_env_get_cpu(env);
-
-    /* TODO: Implement fsave.  */
-    cpu_abort(CPU(cpu), "FSAVE not implemented");
+    /* always write IDLE */
+    /* FIXME: 68040 only */
+    DEST_EA(env, insn, OS_LONG, tcg_const_i32(0x41000000), NULL);
 }
 
 static inline TCGv gen_mac_extract_word(DisasContext *s, TCGv val, int upper)
