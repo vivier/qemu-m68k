@@ -2895,6 +2895,13 @@ DISAS_INSN(unlk)
     tcg_temp_free(src);
 }
 
+#if defined(CONFIG_SOFTMMU)
+DISAS_INSN(reset)
+{
+    gen_helper_reset(cpu_env);
+}
+#endif
+
 DISAS_INSN(nop)
 {
 }
@@ -5729,6 +5736,9 @@ void register_m68k_insns (CPUM68KState *env)
     BASE(unlk,      4e58, fff8);
     INSN(move_to_usp, 4e60, fff8, USP);
     INSN(move_from_usp, 4e68, fff8, USP);
+#if defined(CONFIG_SOFTMMU)
+    INSN(reset,     4e70, ffff, M68000);
+#endif
     BASE(nop,       4e71, ffff);
     BASE(stop,      4e72, ffff);
     BASE(rte,       4e73, ffff);
