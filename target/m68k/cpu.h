@@ -45,6 +45,7 @@
 #define EXCP_ADDRESS        3   /* Address error.  */
 #define EXCP_ILLEGAL        4   /* Illegal instruction.  */
 #define EXCP_DIV0           5   /* Divide by zero */
+#define EXCP_CHK            6   /* CHK, CHK2 instruction */
 #define EXCP_PRIVILEGE      8   /* Privilege violation.  */
 #define EXCP_TRACE          9
 #define EXCP_LINEA          10  /* Unimplemented line-A (MAC) opcode.  */

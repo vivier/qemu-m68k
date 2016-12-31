@@ -4248,6 +4248,46 @@ DISAS_INSN(ff1)
     gen_helper_ff1(reg, reg);
 }
 
+DISAS_INSN(chk)
+{
+    TCGv tsrc;
+    TCGv src;
+    TCGv reg;
+    int opsize;
+    TCGLabel *l1, *l2;
+
+    switch ((insn >> 7) & 4) {
+    case 2:
+        opsize = OS_LONG;
+        break;
+    case 3:
+        opsize = OS_WORD;
+        break;
+    default:
+        gen_exception(s, s->insn_pc, EXCP_ILLEGAL);
+        return;
+    }
+    SRC_EA(env, tsrc, opsize, -1, NULL);
+    src = tcg_temp_local_new ();
+    tcg_gen_mov_i32(src, tsrc);
+
+    reg = DREG(insn, 9);
+    gen_flush_flags(s);
+
+    l1 = gen_new_label();
+    l2 = gen_new_label();
+    tcg_gen_brcondi_i32(TCG_COND_GE, reg, 0, l1);
+    tcg_gen_movi_i32(QREG_CC_N, -1);
+    gen_exception(s, s->insn_pc, EXCP_CHK);
+    tcg_gen_br(l2);
+    gen_set_label(l1);
+    tcg_gen_brcond_i32(TCG_COND_LE, reg, src, l2);
+    tcg_gen_movi_i32(QREG_CC_N, 0);
+    gen_exception(s, s->insn_pc, EXCP_CHK);
+    gen_set_label(l2);
+    tcg_temp_free(src);
+}
+
 DISAS_INSN(strldsr)
 {
     uint16_t ext;
@@ -5467,6 +5507,7 @@ void register_m68k_insns (CPUM68KState *env)
     BASE(move,      1000, f000);
     BASE(move,      2000, f000);
     BASE(move,      3000, f000);
+    INSN(chk,       4000, f040, M68000);
     INSN(strldsr,   40e7, ffff, CF_ISA_APLUSC);
     INSN(negx,      4080, fff8, CF_ISA_A);
     INSN(negx,      4000, ff00, M68000);
