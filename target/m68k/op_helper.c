@@ -360,6 +360,53 @@ static inline void do_interrupt_m68k_hardirq(CPUM68KState *env)
 {
     do_interrupt_all(env, 1);
 }
+
+void m68k_cpu_unassigned_access(CPUState *cs, hwaddr addr,
+                           bool is_write, bool is_exec, int is_asi, unsigned size)
+{
+    M68kCPU *cpu = M68K_CPU(cs);
+    CPUM68KState *env = &cpu->env;
+#ifdef DEBUG_UNASSIGNED
+    qemu_log_mask(CPU_LOG_INT, "Unassigned " TARGET_FMT_plx " wr=%d exe=%d\n",
+             addr, is_write, is_exec);
+#endif
+    if (env == NULL) {
+        /* when called from gdb, env is NULL */
+        return;
+    }
+
+    env->mmu.mmusr = 0;
+    env->mmu.ssw |= M68K_ATC_040;
+    /* FIXME: manage MMU table access error */
+    env->mmu.ssw &= ~M68K_TM_040;
+    if (env->sr & SR_S) /* SUPERVISOR */
+        env->mmu.ssw |= M68K_TM_040_SUPER;
+    if (is_exec) /* instruction or data */
+        env->mmu.ssw |= M68K_TM_040_CODE;
+    else
+        env->mmu.ssw |= M68K_TM_040_DATA;
+    env->mmu.ssw &= ~M68K_BA_SIZE_MASK;
+    switch (size) {
+    case 1:
+        env->mmu.ssw |= M68K_BA_SIZE_BYTE;
+        break;
+    case 2:
+        env->mmu.ssw |= M68K_BA_SIZE_WORD;
+        break;
+    case 4:
+        env->mmu.ssw |= M68K_BA_SIZE_LONG;
+        break;
+    }
+
+    if (!is_write) {
+        env->mmu.ssw |= M68K_RW_040;
+    }
+
+    env->mmu.ar = addr;
+
+    cs->exception_index = EXCP_ACCESS;
+    cpu_loop_exit(cs);
+}
 #endif
 
 bool m68k_cpu_exec_interrupt(CPUState *cs, int interrupt_request)

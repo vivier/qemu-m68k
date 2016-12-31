@@ -289,6 +289,7 @@ static void m68k_cpu_class_init(ObjectClass *c, void *data)
     cc->gdb_read_register = m68k_cpu_gdb_read_register;
     cc->gdb_write_register = m68k_cpu_gdb_write_register;
     cc->handle_mmu_fault = m68k_cpu_handle_mmu_fault;
+    cc->do_unassigned_access = m68k_cpu_unassigned_access;
     cc->get_phys_page_debug = m68k_cpu_get_phys_page_debug;
     cc->disas_set_info = m68k_cpu_disas_set_info;
 
