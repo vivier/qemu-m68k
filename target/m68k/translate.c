@@ -4365,7 +4365,11 @@ DISAS_INSN(movec)
     } else {
         reg = DREG(ext, 12);
     }
-    gen_helper_movec(cpu_env, tcg_const_i32(ext & 0xfff), reg);
+    if (insn & 1) {
+        gen_helper_movec_to(cpu_env, tcg_const_i32(ext & 0xfff), reg);
+    } else {
+        gen_helper_movec_from(reg, cpu_env, tcg_const_i32(ext & 0xfff));
+    }
     gen_lookup_tb(s);
 }
 
@@ -5502,7 +5506,7 @@ void register_m68k_insns (CPUM68KState *env)
     BASE(rte,       4e73, ffff);
     INSN(rtd,       4e74, ffff, RTD);
     BASE(rts,       4e75, ffff);
-    INSN(movec,     4e7b, ffff, CF_ISA_A);
+    BASE(movec,     4e7a, fffe);
     BASE(jump,      4e80, ffc0);
     BASE(jump,      4ec0, ffc0);
     INSN(addsubq,   5000, f080, M68000);
