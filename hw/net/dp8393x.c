@@ -808,9 +808,11 @@ static ssize_t dp8393x_receive(NetClientState *nc, const uint8_t * buf,
         /* EOL detected */
         s->regs[SONIC_ISR] |= SONIC_ISR_RDE;
     } else {
+        size = sizeof(uint16_t) * width;
         data[0 * width] = 0; /* in_use */
-        address_space_rw(&s->as, dp8393x_crda(s) + sizeof(uint16_t) * 6 * width,
-            MEMTXATTRS_UNSPECIFIED, (uint8_t *)data, sizeof(uint16_t), 1);
+        address_space_rw(&s->as,
+            dp8393x_crda(s) + sizeof(uint16_t) * 6 * width,
+            MEMTXATTRS_UNSPECIFIED, (uint8_t *)data, size, 1);
         s->regs[SONIC_CRDA] = s->regs[SONIC_LLFA];
         s->regs[SONIC_ISR] |= SONIC_ISR_PKTRX;
         s->regs[SONIC_RSC] = (s->regs[SONIC_RSC] & 0xff00) | (((s->regs[SONIC_RSC] & 0x00ff) + 1) & 0x00ff);
@@ -824,7 +826,7 @@ static ssize_t dp8393x_receive(NetClientState *nc, const uint8_t * buf,
     /* Done */
     dp8393x_update_irq(s);
 
-    return size;
+    return rx_len;
 }
 
 static void dp8393x_reset(DeviceState *dev)
