@@ -314,7 +314,7 @@ static void dp8393x_do_load_cam(dp8393xState *s)
     dp8393x_update_irq(s);
 }
 
-static void dp8393x_do_read_rra(dp8393xState *s)
+static void dp8393x_do_read_rra(dp8393xState *s, int next)
 {
     int width, size;
 
@@ -333,19 +333,21 @@ static void dp8393x_do_read_rra(dp8393xState *s)
         s->regs[SONIC_CRBA0], s->regs[SONIC_CRBA1],
         s->regs[SONIC_RBWC0], s->regs[SONIC_RBWC1]);
 
-    /* Go to next entry */
-    s->regs[SONIC_RRP] += size;
+    if (next) {
+        /* Go to next entry */
+        s->regs[SONIC_RRP] += size;
 
-    /* Handle wrap */
-    if (s->regs[SONIC_RRP] == s->regs[SONIC_REA]) {
-        s->regs[SONIC_RRP] = s->regs[SONIC_RSA];
-    }
+        /* Handle wrap */
+        if (s->regs[SONIC_RRP] == s->regs[SONIC_REA]) {
+            s->regs[SONIC_RRP] = s->regs[SONIC_RSA];
+        }
 
-    /* Check resource exhaustion */
-    if (s->regs[SONIC_RRP] == s->regs[SONIC_RWP])
-    {
-        s->regs[SONIC_ISR] |= SONIC_ISR_RBE;
-        dp8393x_update_irq(s);
+        /* Check resource exhaustion */
+        if (s->regs[SONIC_RRP] == s->regs[SONIC_RWP])
+        {
+            s->regs[SONIC_ISR] |= SONIC_ISR_RBE;
+            dp8393x_update_irq(s);
+        }
     }
 
     /* Done */
@@ -559,7 +561,7 @@ static void dp8393x_do_command(dp8393xState *s, uint16_t command)
     if (command & SONIC_CR_RST)
         dp8393x_do_software_reset(s);
     if (command & SONIC_CR_RRRA)
-        dp8393x_do_read_rra(s);
+        dp8393x_do_read_rra(s, 1);
     if (command & SONIC_CR_LCAM)
         dp8393x_do_load_cam(s);
 }
@@ -650,7 +652,7 @@ static void dp8393x_write(void *opaque, hwaddr addr, uint64_t data,
             data &= s->regs[reg];
             s->regs[reg] &= ~data;
             if (data & SONIC_ISR_RBE) {
-                dp8393x_do_read_rra(s);
+                dp8393x_do_read_rra(s, 0);
             }
             dp8393x_update_irq(s);
             if (dp8393x_can_receive(s->nic->ncs)) {
@@ -852,7 +854,7 @@ static ssize_t dp8393x_receive(NetClientState *nc, const uint8_t * buf,
 
         if (s->regs[SONIC_RCR] & SONIC_RCR_LPKT) {
             /* Read next RRA */
-            dp8393x_do_read_rra(s);
+            dp8393x_do_read_rra(s, 1);
         }
     }
 
