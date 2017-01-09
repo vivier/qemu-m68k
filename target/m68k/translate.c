@@ -2336,11 +2336,11 @@ DISAS_INSN(moves)
         /* FIXME: manage data  = (s->env->dfc & 3) != 2 */
 
         tmp = gen_load(s, opsize, addr, sign, MMU_USER_IDX);
-        tcg_gen_mov_i32(reg, tmp);
+        gen_partset_reg(opsize, reg, tmp);
         tcg_gen_br(l2);
         gen_set_label(l1);
         tmp = gen_load(s, opsize, addr, sign, MMU_KERNEL_IDX);
-        tcg_gen_mov_i32(reg, tmp);
+        gen_partset_reg(opsize, reg, tmp);
         gen_set_label(l2);
     }
     switch (extract32(insn, 3, 3)) {
