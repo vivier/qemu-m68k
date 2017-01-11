@@ -63,6 +63,8 @@ static void m68k_cpu_reset(CPUState *s)
     env->sr = 0x2700;
     env->vbr = 0;
     env->current_sp = M68K_ISP;
+    cpu->env.aregs[7] = ldl_phys(s->as, 0);
+    cpu->env.pc = ldl_phys(s->as, 4);
 #endif
     for (i = 0; i < 8; i++) {
         env->fregs[i].d = nan;
@@ -242,8 +244,8 @@ static void m68k_cpu_realizefn(DeviceState *dev, Error **errp)
 
     m68k_cpu_init_gdb(cpu);
 
-    cpu_reset(cs);
     qemu_init_vcpu(cs);
+    cpu_reset(cs);
 
     mcc->parent_realize(dev, errp);
 }

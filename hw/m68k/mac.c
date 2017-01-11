@@ -109,20 +109,26 @@ static void q800_glue_set_irq(void *opaque, int irq, int level)
     m68k_set_irq_level(s->cpu, 0, 0);
 }
 
+static MemoryRegion *rom_overlap;
+static int linux_boot;
 static void main_cpu_reset(void *opaque)
 {
     M68kCPU *cpu = opaque;
     CPUState *cs = CPU(cpu);
 
+    memory_region_set_enabled(rom_overlap, !linux_boot);
     cpu_reset(cs);
-    cpu->env.aregs[7] = ldl_phys(cs->as, 0);
-    cpu->env.pc = ldl_phys(cs->as, 4);
+    /* XXX: cpu_reset() doesn't read values from rom_overlap ??? */
+    if (!linux_boot) {
+        uint8_t *ptr = rom_ptr(MACROM_ADDR);
+        cpu->env.aregs[7] =  ldl_p(ptr);
+        cpu->env.pc =  ldl_p(ptr + 4);
+    }
 }
 
 static void q800_init(MachineState *machine)
 {
     M68kCPU *cpu = NULL;
-    int linux_boot;
     int32_t kernel_size;
     uint64_t elf_entry;
     char *filename;
@@ -160,10 +166,17 @@ static void q800_init(MachineState *machine)
     /* ROM */
 
     rom = g_malloc(sizeof(*rom));
-    memory_region_init_ram(rom, NULL, "m68k_mac.rom", MACROM_SIZE,
+    memory_region_init_ram(rom, NULL, "MacROM", MACROM_SIZE,
                            &error_abort);
     memory_region_set_readonly(rom, true);
     memory_region_add_subregion(get_system_memory(), MACROM_ADDR, rom);
+
+    rom_overlap = g_malloc(sizeof(*rom_overlap));
+    memory_region_init_alias(rom_overlap, NULL, "MacROM rom_overlap", rom, 0,
+                             MACROM_SIZE);
+    memory_region_add_subregion_overlap(get_system_memory(), 0, rom_overlap, 10);
+    /* rom_overlap is normally disabled by ROM, with the help of VIA */
+    memory_region_set_enabled(rom_overlap, false);
 
     /* Load MacROM binary */
 
@@ -374,12 +387,6 @@ static void q800_init(MachineState *machine)
             initrd_size = 0;
         }
         BOOTINFO0(cs->as, parameters_base, BI_LAST);
-    } else {
-        uint8_t *ptr;
-        ptr = rom_ptr(MACROM_ADDR);
-        stl_phys(cs->as, 0, ldl_p(ptr));    /* reset initial SP */
-        stl_phys(cs->as, 4,
-                 MACROM_ADDR + ldl_p(ptr + 4)); /* reset initial PC */
     }
 }
 
