@@ -151,6 +151,41 @@ static void q800_init(MachineState *machine)
 
     linux_boot = (kernel_filename != NULL);
 
+    /* RAM */
+
+    ram = g_malloc(sizeof (*ram));
+    memory_region_init_ram(ram, NULL, "m68k_mac.ram", ram_size, &error_abort);
+    memory_region_add_subregion(get_system_memory(), 0, ram);
+
+    /* ROM */
+
+    rom = g_malloc(sizeof(*rom));
+    memory_region_init_ram(rom, NULL, "m68k_mac.rom", MACROM_SIZE,
+                           &error_abort);
+    memory_region_set_readonly(rom, true);
+    memory_region_add_subregion(get_system_memory(), MACROM_ADDR, rom);
+
+    /* Load MacROM binary */
+
+    if (bios_name == NULL) {
+        bios_name = MACROM_FILENAME;
+    }
+    filename = qemu_find_file(QEMU_FILE_TYPE_BIOS, bios_name);
+
+    if (filename) {
+        bios_size = load_image_targphys(filename, MACROM_ADDR, MACROM_SIZE);
+        g_free(filename);
+    } else {
+        bios_size = -1;
+    }
+
+    if (!linux_boot) {
+        if (bios_size < 0 || bios_size > MACROM_SIZE) {
+            hw_error("qemu: could not load MacROM '%s'\n", bios_name);
+            exit(1);
+        }
+    }
+
     /* init CPUs */
     if (cpu_model == NULL) {
         cpu_model = "m68040";
@@ -161,10 +196,6 @@ static void q800_init(MachineState *machine)
             exit(1);
     }
     qemu_register_reset(main_cpu_reset, cpu);
-
-    ram = g_malloc(sizeof (*ram));
-    memory_region_init_ram(ram, NULL, "m68k_mac.ram", ram_size, &error_abort);
-    memory_region_add_subregion(get_system_memory(), 0, ram);
 
     /* Glue */
 
@@ -345,27 +376,6 @@ static void q800_init(MachineState *machine)
         BOOTINFO0(cs->as, parameters_base, BI_LAST);
     } else {
         uint8_t *ptr;
-        /* allocate and load BIOS */
-        rom = g_malloc(sizeof(*rom));
-        memory_region_init_ram(rom, NULL, "m68k_mac.rom", MACROM_SIZE, &error_abort);
-        if (bios_name == NULL) {
-            bios_name = MACROM_FILENAME;
-        }
-        filename = qemu_find_file(QEMU_FILE_TYPE_BIOS, bios_name);
-        memory_region_set_readonly(rom, true);
-        memory_region_add_subregion(get_system_memory(), MACROM_ADDR, rom);
-
-        /* Load MacROM binary */
-        if (filename) {
-            bios_size = load_image_targphys(filename, MACROM_ADDR, MACROM_SIZE);
-            g_free(filename);
-        } else {
-            bios_size = -1;
-        }
-        if (bios_size < 0 || bios_size > MACROM_SIZE) {
-            hw_error("qemu: could not load MacROM '%s'\n", bios_name);
-            exit(1);
-        }
         ptr = rom_ptr(MACROM_ADDR);
         stl_phys(cs->as, 0, ldl_p(ptr));    /* reset initial SP */
         stl_phys(cs->as, 4,
