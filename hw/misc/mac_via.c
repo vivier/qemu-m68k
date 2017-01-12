@@ -36,6 +36,7 @@
 #include "hw/input/adb.h"
 #include "sysemu/sysemu.h"
 #include "qemu/cutils.h"
+#include "hw/devices.h"
 
 /* debug VIA */
 #undef DEBUG_VIA
@@ -301,6 +302,7 @@ typedef struct MacVIAState {
     /* MMIO */
 
     MemoryRegion mmio;
+    void *overlap_mr;
 
     /* VIAs */
 
@@ -367,7 +369,7 @@ static void via_timer_update(VIAState *s, VIATimer *ti,
     if (!(s->ier & VIA_IRQ_TIMER1) &&
         (s->acr & T1MODE) != T1MODE_CONT) {
         timer_del(ti->timer);
-    } else {
+    } else if (ti->counter) {
         ti->counter = ti->latch;
         via_arm_timer(ti, current_time);
     }
@@ -654,6 +656,12 @@ static void via_write(void *opaque, hwaddr addr,
     case vBufA: /* Buffer A */
         VIA_DPRINTF("writeb: vBufA = %02"PRIx64"\n", val);
         s->a = (s->a & ~s->dira) | (val & s->dira);
+        switch (via) {
+        case 0:
+            if (m->overlap_mr && !(s->a & VIA1A_vOverlay)) {
+                memory_region_set_enabled(m->overlap_mr, false);
+            }
+        }
         break;
     case vBufB:  /* Register B */
         VIA_DPRINTF("writeb: vBufB = %02"PRIx64"\n", val);
@@ -849,7 +857,10 @@ static void mac_via_reset(DeviceState *dev)
 {
     MacVIAState *m = MAC_VIA(dev);
 
-    m->via[0].a = 0;
+    m->via[0].a = VIA1A_vOverlay;
+    if (m->overlap_mr) {
+        memory_region_set_enabled(m->overlap_mr, true);
+    }
     m->via[0].b = VIA1B_vADB_StateMask | VIA1B_vADBInt | VIA1B_vRTCEnb; /* 1 = disabled */
     m->via[0].dira = 0;
     m->via[0].dirb = 0;
@@ -949,12 +960,18 @@ static void mac_via_initfn(Object *obj)
                                              VIA1_IRQ_ADB_READY_BIT);
 }
 
+static Property mac_via_properties[] = {
+    DEFINE_PROP_PTR("overlap_mr", MacVIAState, overlap_mr),
+    DEFINE_PROP_END_OF_LIST(),
+};
+
 static void mac_via_class_init(ObjectClass *oc, void *data)
 {
     DeviceClass *dc = DEVICE_CLASS(oc);
 
     dc->realize = mac_via_realizefn;
     dc->reset = mac_via_reset;
+    dc->props = mac_via_properties;
     //dc->vmsd = &vmstate_mac_via;
 }
 
