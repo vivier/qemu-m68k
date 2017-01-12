@@ -109,14 +109,12 @@ static void q800_glue_set_irq(void *opaque, int irq, int level)
     m68k_set_irq_level(s->cpu, 0, 0);
 }
 
-static MemoryRegion *rom_overlap;
 static int linux_boot;
 static void main_cpu_reset(void *opaque)
 {
     M68kCPU *cpu = opaque;
     CPUState *cs = CPU(cpu);
 
-    memory_region_set_enabled(rom_overlap, !linux_boot);
     cpu_reset(cs);
     /* XXX: cpu_reset() doesn't read values from rom_overlap ??? */
     if (!linux_boot) {
@@ -136,6 +134,8 @@ static void q800_init(MachineState *machine)
     ram_addr_t initrd_base;
     int32_t initrd_size;
     MemoryRegion *rom;
+    MemoryRegion *rom_overlap;
+    MemoryRegion *io;
     MemoryRegion *ram;
     ram_addr_t ram_size = machine->ram_size;
     const char *kernel_filename = machine->kernel_filename;
@@ -163,6 +163,12 @@ static void q800_init(MachineState *machine)
     memory_region_init_ram(ram, NULL, "m68k_mac.ram", ram_size, &error_abort);
     memory_region_add_subregion(get_system_memory(), 0, ram);
 
+    /* I/O */
+
+    io = g_malloc(sizeof (*io));
+    memory_region_init_ram(io, NULL, "I/O", 0x10000000, &error_abort);
+    memory_region_add_subregion_overlap(get_system_memory(), 0x50000000, io, -1);
+
     /* ROM */
 
     rom = g_malloc(sizeof(*rom));
@@ -175,7 +181,6 @@ static void q800_init(MachineState *machine)
     memory_region_init_alias(rom_overlap, NULL, "MacROM rom_overlap", rom, 0,
                              MACROM_SIZE);
     memory_region_add_subregion_overlap(get_system_memory(), 0, rom_overlap, 10);
-    /* rom_overlap is normally disabled by ROM, with the help of VIA */
     memory_region_set_enabled(rom_overlap, false);
 
     /* Load MacROM binary */
@@ -219,6 +224,7 @@ static void q800_init(MachineState *machine)
     /* VIA */
 
     via_dev = qdev_create(NULL, TYPE_MAC_VIA);
+    qdev_prop_set_ptr(via_dev, "overlap_mr", linux_boot ? NULL : rom_overlap);
     qdev_init_nofail(via_dev);
     sysbus = SYS_BUS_DEVICE(via_dev);
     sysbus_mmio_map(sysbus, 0, VIA_BASE);
