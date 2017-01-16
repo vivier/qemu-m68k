@@ -30,6 +30,7 @@
  */
 
 #include "qemu/osdep.h"
+#include "exec/address-spaces.h"
 #include "hw/sysbus.h"
 #include "qemu/timer.h"
 #include "hw/misc/mac_via.h"
@@ -302,7 +303,9 @@ typedef struct MacVIAState {
     /* MMIO */
 
     MemoryRegion mmio;
-    void *overlap_mr;
+    MemoryRegion rom_overlay;
+    MemoryRegion rom_watcher;
+    void *rom_mr;
 
     /* VIAs */
 
@@ -658,8 +661,8 @@ static void via_write(void *opaque, hwaddr addr,
         s->a = (s->a & ~s->dira) | (val & s->dira);
         switch (via) {
         case 0:
-            if (m->overlap_mr && !(s->a & VIA1A_vOverlay)) {
-                memory_region_set_enabled(m->overlap_mr, false);
+            if (m->rom_mr && !(s->a & VIA1A_vOverlay)) {
+                memory_region_set_enabled(&m->rom_overlay, false);
             }
         }
         break;
@@ -858,8 +861,8 @@ static void mac_via_reset(DeviceState *dev)
     MacVIAState *m = MAC_VIA(dev);
 
     m->via[0].a = VIA1A_vOverlay;
-    if (m->overlap_mr) {
-        memory_region_set_enabled(m->overlap_mr, true);
+    if (m->rom_mr) {
+        memory_region_set_enabled(&m->rom_overlay, true);
     }
     m->via[0].b = VIA1B_vADB_StateMask | VIA1B_vADBInt | VIA1B_vRTCEnb; /* 1 = disabled */
     m->via[0].dira = 0;
@@ -932,6 +935,15 @@ static void mac_via_realizefn(DeviceState *dev, Error **errp)
     m->via[1].timers[0].index = 0;
     m->via[1].timers[0].timer = timer_new_ns(QEMU_CLOCK_VIRTUAL, via_timer1, &m->via[1]);
     m->via[1].timers[1].index = 1;
+
+    /* ROM overlay */
+
+    if (m->rom_mr) {
+        memory_region_init_alias(&m->rom_overlay, NULL, "ROM overlay", m->rom_mr, 0,
+                                 memory_region_size(m->rom_mr));
+        memory_region_add_subregion_overlap(get_system_memory(), 0, &m->rom_overlay, 1);
+        memory_region_set_enabled(&m->rom_overlay, false);
+    }
 }
 
 static void mac_via_initfn(Object *obj)
@@ -961,7 +973,7 @@ static void mac_via_initfn(Object *obj)
 }
 
 static Property mac_via_properties[] = {
-    DEFINE_PROP_PTR("overlap_mr", MacVIAState, overlap_mr),
+    DEFINE_PROP_PTR("rom_mr", MacVIAState, rom_mr),
     DEFINE_PROP_END_OF_LIST(),
 };
 

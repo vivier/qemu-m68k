@@ -134,7 +134,6 @@ static void q800_init(MachineState *machine)
     ram_addr_t initrd_base;
     int32_t initrd_size;
     MemoryRegion *rom;
-    MemoryRegion *rom_overlap;
     MemoryRegion *io;
     MemoryRegion *ram;
     ram_addr_t ram_size = machine->ram_size;
@@ -177,12 +176,6 @@ static void q800_init(MachineState *machine)
     memory_region_set_readonly(rom, true);
     memory_region_add_subregion(get_system_memory(), MACROM_ADDR, rom);
 
-    rom_overlap = g_malloc(sizeof(*rom_overlap));
-    memory_region_init_alias(rom_overlap, NULL, "MacROM rom_overlap", rom, 0,
-                             MACROM_SIZE);
-    memory_region_add_subregion_overlap(get_system_memory(), 0, rom_overlap, 10);
-    memory_region_set_enabled(rom_overlap, false);
-
     /* Load MacROM binary */
 
     if (bios_name == NULL) {
@@ -224,7 +217,7 @@ static void q800_init(MachineState *machine)
     /* VIA */
 
     via_dev = qdev_create(NULL, TYPE_MAC_VIA);
-    qdev_prop_set_ptr(via_dev, "overlap_mr", linux_boot ? NULL : rom_overlap);
+    qdev_prop_set_ptr(via_dev, "rom_mr", linux_boot ? NULL : rom);
     qdev_init_nofail(via_dev);
     sysbus = SYS_BUS_DEVICE(via_dev);
     sysbus_mmio_map(sysbus, 0, VIA_BASE);
