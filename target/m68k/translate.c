@@ -2905,6 +2905,7 @@ DISAS_INSN(branch)
         gen_jmp_tb(s, 0, s->pc);
     } else {
         /* Unconditional branch.  */
+        update_cc_op(s);
         gen_jmp_tb(s, 0, base + offset);
     }
 }
@@ -4957,6 +4958,7 @@ static void gen_fjmpcc(DisasContext *s, int cond, TCGLabel *l1)
     DisasCompare c;
 
     gen_fcc_cond(&c, s, cond);
+    update_cc_op(s);
     tcg_gen_brcond_i32(c.tcond, c.v1, c.v2, l1);
     free_cond(&c);
 }
