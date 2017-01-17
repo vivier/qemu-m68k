@@ -4799,6 +4799,37 @@ int float64_unordered_quiet(float64 a, float64 b, float_status *status)
 }
 
 /*----------------------------------------------------------------------------
+| Return whether the given value is an invalid floatx80 encoding.
+| Invalid floatx80 encodings arise when the integer bit is not set, but
+| the exponent is not zero. The only times the integer bit is permitted to
+| be zero is in subnormal numbers and the value zero.
+| This includes what the Intel software developer's manual calls pseudo-NaNs,
+| pseudo-infinities and un-normal numbers. It does not include
+| pseudo-denormals, which must still be correctly handled as inputs even
+| if they are never generated as outputs.
+*----------------------------------------------------------------------------*/
+static inline bool floatx80_invalid_encoding(floatx80 a)
+{
+#if defined(TARGET_M68K)
+    /*-------------------------------------------------------------------------
+    |  M68000 FAMILY PROGRAMMER’S REFERENCE MANUAL
+    |  1.6.2 Denormalized Numbers
+    |  Since the extended-precision data format has an explicit integer bit,
+    |  a number can be formatted with a nonzero exponent, less than the maximum
+    |  value, and a zero integer bit.  The IEEE 754 standard does not define a
+    |  zero integer bit. Such a number is an unnormalized number. Hardware does
+    |  not directly support denormalized and unnormalized numbers, but
+    |  implicitly supports them by trapping them as unimplemented data types,
+    |  allowing efficient conversion in software.
+    *------------------------------------------------------------------------*/
+    return 0;
+#else
+    return (a.low & (1ULL << 63)) == 0 && (a.high & 0x7FFF) != 0;
+#endif
+}
+
+
+/*----------------------------------------------------------------------------
 | Returns the result of converting the extended double-precision floating-
 | point value `a' to the 32-bit two's complement integer format.  The
 | conversion is performed according to the IEC/IEEE Standard for Binary
