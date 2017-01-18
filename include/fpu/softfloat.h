@@ -700,10 +700,7 @@ static inline int floatx80_is_zero_or_denormal(floatx80 a)
     return (a.high & 0x7fff) == 0;
 }
 
-static inline int floatx80_is_any_nan(floatx80 a)
-{
-    return ((a.high & 0x7fff) == 0x7fff) && (a.low<<1);
-}
+int floatx80_is_any_nan(floatx80 a);
 
 /*----------------------------------------------------------------------------
 | Return whether the given value is an invalid floatx80 encoding.
