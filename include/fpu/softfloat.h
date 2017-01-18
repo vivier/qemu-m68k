@@ -677,10 +677,7 @@ static inline int floatx80_is_zero_or_denormal(floatx80 a)
     return (a.high & 0x7fff) == 0;
 }
 
-static inline int floatx80_is_any_nan(floatx80 a)
-{
-    return ((a.high & 0x7fff) == 0x7fff) && (a.low<<1);
-}
+int floatx80_is_any_nan(floatx80 a);
 
 #define floatx80_zero make_floatx80(0x0000, 0x0000000000000000LL)
 #define floatx80_one make_floatx80(0x3fff, 0x8000000000000000LL)
