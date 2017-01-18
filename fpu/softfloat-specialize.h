@@ -983,6 +983,19 @@ static float64 propagateFloat64MulAddNaN(float64 a, float64 b,
     }
 }
 
+int floatx80_is_any_nan(floatx80 a)
+{
+#if defined(TARGET_M68K)
+    /* Sign and explicit integer bit: Don't care
+     * Exponent: 0x7fff, Mantissa: Non zero
+     */
+    return ((a.high & 0x7fff) == 0x7fff)
+        && (a.low & ~LIT64(0xC000000000000000));
+#else
+    return ((a.high & 0x7fff) == 0x7fff) && (a.low<<1);
+#endif
+}
+
 #ifdef NO_SIGNALING_NANS
 int floatx80_is_quiet_nan(floatx80 a_, float_status *status)
 {
@@ -1002,6 +1015,11 @@ int floatx80_is_signaling_nan(floatx80 a_, float_status *status)
 
 int floatx80_is_quiet_nan(floatx80 a, float_status *status)
 {
+#if defined(TARGET_M68K)
+    return ((a.high & 0x7FFF) == 0x7FFF)
+        && (a.low & ~0xC000000000000000ULL)
+        && (a.low & 0x4000000000000000ULL);
+#else
     if (status->snan_bit_is_one) {
         uint64_t aLow;
 
@@ -1013,6 +1031,7 @@ int floatx80_is_quiet_nan(floatx80 a, float_status *status)
         return ((a.high & 0x7FFF) == 0x7FFF)
             && (LIT64(0x8000000000000000) <= ((uint64_t)(a.low << 1)));
     }
+#endif
 }
 
 /*----------------------------------------------------------------------------
@@ -1023,6 +1042,11 @@ int floatx80_is_quiet_nan(floatx80 a, float_status *status)
 
 int floatx80_is_signaling_nan(floatx80 a, float_status *status)
 {
+#if defined(TARGET_M68K)
+    return ((a.high & 0x7FFF) == 0x7FFF)
+        && (a.low & ~0xC000000000000000ULL)
+        && !(a.low & 0x4000000000000000ULL);
+#else
     if (status->snan_bit_is_one) {
         return ((a.high & 0x7FFF) == 0x7FFF)
             && ((a.low << 1) >= 0x8000000000000000ULL);
@@ -1034,6 +1058,7 @@ int floatx80_is_signaling_nan(floatx80 a, float_status *status)
             && (uint64_t)(aLow << 1)
             && (a.low == aLow);
     }
+#endif
 }
 #endif
 
@@ -1048,7 +1073,11 @@ floatx80 floatx80_maybe_silence_nan(floatx80 a, float_status *status)
         if (status->snan_bit_is_one) {
             a = floatx80_default_nan(status);
         } else {
+#if defined(TARGET_M68K)
+            a.low |= LIT64(0x4000000000000000);
+#else
             a.low |= LIT64(0xC000000000000000);
+#endif
             return a;
         }
     }
@@ -1069,10 +1098,18 @@ static commonNaNT floatx80ToCommonNaN(floatx80 a, float_status *status)
     if (floatx80_is_signaling_nan(a, status)) {
         float_raise(float_flag_invalid, status);
     }
-    if (a.low >> 63) {
+#if defined(TARGET_M68K)
+    if ((a.low >> 62) & 1) {
         z.sign = a.high >> 15;
         z.low = 0;
         z.high = a.low << 1;
+#else
+    if (a.low >> 63) {
+        z.sign = a.high >> 15;
+        z.low = 0;
+        z.high =(a.low & LIT64(0x8000000000000000)) | 
+                ((a.low << 1) & ~LIT64(0x4000000000000000));;
+#endif
     } else {
         dflt = floatx80_default_nan(status);
         z.sign = dflt.high >> 15;
@@ -1096,7 +1133,11 @@ static floatx80 commonNaNToFloatx80(commonNaNT a, float_status *status)
     }
 
     if (a.high >> 1) {
+#if defined(TARGET_M68K)
+        z.low = LIT64(0x4000000000000000) | a.high >> 1;
+#else
         z.low = LIT64(0x8000000000000000) | a.high >> 1;
+#endif
         z.high = (((uint16_t)a.sign) << 15) | 0x7FFF;
     } else {
         z = floatx80_default_nan(status);
