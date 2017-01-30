@@ -4555,16 +4555,26 @@ static void gen_op_fmovem(CPUM68KState *env, DisasContext *s,
 DISAS_INSN(fpu)
 {
     uint16_t ext;
+    uint8_t rom_offset;
     int opmode;
     int opsize;
 
     ext = read_im16(env, s);
     opmode = ext & 0x7f;
     switch ((ext >> 13) & 7) {
-    case 0: case 2:
+    case 0:
         break;
     case 1:
         goto undef;
+    case 2:
+        if (insn == 0xf200 && (ext & 0xfc00) == 0x5c00) {
+            /* fmovecr */
+            rom_offset = ext & 0x7f;
+            gen_helper_const_FP0(cpu_env, tcg_const_i32(rom_offset));
+            gen_op_store_fpr_FP0(REG(ext, 7));
+            return;
+        }
+        break;
     case 3: /* fmove out */
         gen_op_load_fpr_FP0(REG(ext, 7));
         opsize = ext_opsize(ext, 10);
