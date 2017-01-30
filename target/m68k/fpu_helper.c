@@ -458,3 +458,59 @@ void HELPER(const_FP0)(CPUM68KState *env, uint32_t offset)
     env->fp0l = fpu_rom[offset].low;
     env->fp0h = fpu_rom[offset].high;
 }
+
+void HELPER(getexp_FP0)(CPUM68KState *env)
+{
+    int32_t exp;
+    floatx80 res;
+
+    res = FP0_to_floatx80(env);
+    if (floatx80_is_zero_or_denormal(res) || floatx80_is_any_nan(res) ||
+        floatx80_is_infinity(res)) {
+        return;
+    }
+    exp = (env->fp0h & 0x7fff) - 0x3fff;
+
+    res = int32_to_floatx80(exp, &env->fp_status);
+
+    floatx80_to_FP0(env, res);
+}
+
+void HELPER(getman_FP0)(CPUM68KState *env)
+{
+    floatx80 res;
+    res = int64_to_floatx80(env->fp0l, &env->fp_status);
+    floatx80_to_FP0(env, res);
+}
+
+void HELPER(scale_FP0_FP1)(CPUM68KState *env)
+{
+    int32_t scale;
+    int32_t exp;
+
+    scale = floatx80_to_int32(FP0_to_floatx80(env), &env->fp_status);
+
+    exp = (env->fp1h & 0x7fff) + scale;
+
+    env->fp0h = (env->fp1h & 0x8000) | (exp & 0x7fff);
+    env->fp0l = env->fp1l;
+}
+
+static void make_quotient(CPUM68KState *env, floatx80 val)
+{
+    uint32_t quotient = floatx80_to_int32(val, &env->fp_status);
+    uint32_t sign = (quotient >> 24) & 0x80;
+    quotient = sign | (quotient & 0x7f);
+    env->fpsr = (env->fpsr & ~FPSR_QT_MASK) | (quotient << FPSR_QT_SHIFT);
+}
+
+void HELPER(mod_FP0_FP1)(CPUM68KState *env)
+{
+    floatx80 res;
+
+    res = floatx80_rem(FP1_to_floatx80(env), FP0_to_floatx80(env),
+                       &env->fp_status);
+    make_quotient(env, res);
+
+    floatx80_to_FP0(env, res);
+}
