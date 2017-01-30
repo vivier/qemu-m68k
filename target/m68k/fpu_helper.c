@@ -541,3 +541,109 @@ void HELPER(frem)(CPUM68KState *env, FPReg *res, FPReg *val0, FPReg *val1)
 
     make_quotient(env, res->d);
 }
+
+void HELPER(fgetexp)(CPUM68KState *env, FPReg *res, FPReg *val)
+{
+    int32_t exp;
+
+    if (floatx80_is_infinity(val->d)) {
+        res->d = floatx80_default_nan(NULL);
+        /* FIXME: set the OPERR bit int he FPSR */
+        return;
+    }
+    if (floatx80_is_zero(val->d)) {
+        *res = *val;
+        return;
+    }
+    if (floatx80_is_zero_or_denormal(val->d)) {
+        res->d = int32_to_floatx80(-16384, &env->fp_status);
+        return;
+    }
+
+    if (floatx80_is_any_nan(val->d)) {
+        res->d = floatx80_default_nan(NULL);
+        return;
+    }
+
+    exp = (val->l.upper & 0x7fff) - 0x3fff;
+
+    res->d = int32_to_floatx80(exp, &env->fp_status);
+}
+
+void HELPER(fgetman)(CPUM68KState *env, FPReg *res, FPReg *val)
+{
+    if (floatx80_is_infinity(val->d)) {
+        res->d = floatx80_default_nan(NULL);
+        /* FIXME: set the OPERR bit int he FPSR */
+        return;
+    }
+    if (floatx80_is_zero(val->d) ||
+        floatx80_is_any_nan(val->d)) {
+        *res = *val;
+        return;
+    }
+
+    res->l.upper = (val->l.upper & 0x8000) | 0x3fff;
+    if (floatx80_is_zero_or_denormal(val->d)) {
+        res->l.lower = val->l.lower << 1;
+    } else {
+        res->l.lower = val->l.lower;
+    }
+}
+
+void HELPER(fscale)(CPUM68KState *env, FPReg *res, FPReg *val0, FPReg *val1)
+{
+    int rounding_mode;
+    int32_t scale;
+    int32_t exp;
+
+    if (floatx80_is_infinity(val0->d)) {
+        res->d = floatx80_default_nan(NULL);
+        /* FIXME: set the OPERR bit in the FPSR */
+        return;
+    }
+    if (floatx80_is_any_nan(val0->d)) {
+        res->d = floatx80_default_nan(NULL);
+        return;
+    }
+    if (floatx80_is_infinity(val1->d) ||
+        floatx80_is_zero_or_denormal(val1->d)) {
+        *res = *val1;
+        return;
+    }
+    if (floatx80_is_zero(val0->d)) {
+        res->d = floatx80_round(val1->d, &env->fp_status);
+        return;
+    }
+
+    rounding_mode = get_float_rounding_mode(&env->fp_status);
+    set_float_rounding_mode(float_round_to_zero, &env->fp_status);
+    scale = floatx80_to_int32(val0->d, &env->fp_status);
+    set_float_rounding_mode(rounding_mode, &env->fp_status);
+
+    if (scale >= 16384) {
+        if (floatx80_is_neg(val1->d)) {
+            res->d = floatx80_chs(floatx80_infinity);
+        } else {
+            res->d = floatx80_infinity;
+        }
+        /* FIXME: set OVFL in FPSR */
+        return;
+    }
+    if (scale <= -16384) {
+        if (floatx80_is_neg(val1->d)) {
+            res->d = floatx80_chs(floatx80_zero);
+        } else {
+            res->d = floatx80_zero;
+        }
+        /* FIXME: set UNFL in FPSR */
+        return;
+    }
+
+    exp = (val1->l.upper & 0x7fff) + scale;
+
+    res->l.upper = (val1->l.upper & 0x8000) | (exp & 0x7fff);
+    res->l.lower = val1->l.lower;
+
+    res->d = floatx80_round(res->d, &env->fp_status);
+}
