@@ -4629,9 +4629,19 @@ DISAS_INSN(fpu)
     case 0x1a: case 0x5a: case 0x5e: /* fneg */
         gen_helper_chs_FP0(cpu_env);
         break;
+    case 0x1e: /* fgetexp */
+        gen_helper_getexp_FP0(cpu_env);
+        break;
+    case 0x1f: /* fgetman */
+        gen_helper_getman_FP0(cpu_env);
+        break;
     case 0x20: case 0x60: case 0x64: /* fdiv */
         gen_op_load_fpr_FP1(REG(ext, 7));
         gen_helper_div_FP0_FP1(cpu_env);
+        break;
+    case 0x21: /* fmod */
+        gen_op_load_fpr_FP1(REG(ext, 7));
+        gen_helper_mod_FP0_FP1(cpu_env);
         break;
     case 0x22: case 0x62: case 0x66: /* fadd */
         gen_op_load_fpr_FP1(REG(ext, 7));
@@ -4640,6 +4650,10 @@ DISAS_INSN(fpu)
     case 0x23: case 0x63: case 0x67: /* fmul */
         gen_op_load_fpr_FP1(REG(ext, 7));
         gen_helper_mul_FP0_FP1(cpu_env);
+        break;
+    case 0x26: /* fscale */
+        gen_op_load_fpr_FP1(REG(ext, 7));
+        gen_helper_scale_FP0_FP1(cpu_env);
         break;
     case 0x28: case 0x68: case 0x6c: /* fsub */
         gen_op_load_fpr_FP1(REG(ext, 7));
