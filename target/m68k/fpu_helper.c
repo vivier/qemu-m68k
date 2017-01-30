@@ -95,6 +95,12 @@ static floatx80 FP1_to_floatx80(CPUM68KState *env)
     return (floatx80){ .low = env->fp1l, .high = env->fp1h };
 }
 
+static void floatx80_to_FP1(CPUM68KState *env, floatx80 res)
+{
+    env->fp1l = res.low;
+    env->fp1h = res.high;
+}
+
 void HELPER(exts32_FP0)(CPUM68KState *env)
 {
     floatx80 res;
@@ -948,4 +954,19 @@ void HELPER(cos_FP0)(CPUM68KState *env)
     val = cosl(val);
     res = ldouble_to_floatx80(val);
     floatx80_to_FP0(env, res);
+}
+
+void HELPER(sincos_FP0_FP1)(CPUM68KState *env)
+{
+    floatx80 res;
+    long double val, valsin, valcos;
+
+    val = floatx80_to_ldouble(FP0_to_floatx80(env));
+
+    sincosl(val, &valsin, &valcos);
+    res = ldouble_to_floatx80(valsin);
+    floatx80_to_FP0(env, res);
+    res = ldouble_to_floatx80(valcos);
+    floatx80_to_FP1(env, res);
+
 }
