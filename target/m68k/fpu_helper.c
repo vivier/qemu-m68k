@@ -351,6 +351,17 @@ void HELPER(mul_FP0_FP1)(CPUM68KState *env)
     floatx80_to_FP0(env, res);
 }
 
+void HELPER(sglmul_FP0_FP1)(CPUM68KState *env)
+{
+    float64 a, b, res;
+
+    a = floatx80_to_float64(FP0_to_floatx80(env), &env->fp_status);
+    b = floatx80_to_float64(FP1_to_floatx80(env), &env->fp_status);
+    res = float64_mul(a, b, &env->fp_status);
+
+    floatx80_to_FP0(env, float64_to_floatx80(res, &env->fp_status));
+}
+
 void HELPER(div_FP0_FP1)(CPUM68KState *env)
 {
     floatx80 res;
@@ -359,6 +370,17 @@ void HELPER(div_FP0_FP1)(CPUM68KState *env)
                        &env->fp_status);
 
     floatx80_to_FP0(env, res);
+}
+
+void HELPER(sgldiv_FP0_FP1)(CPUM68KState *env)
+{
+    float64 a, b, res;
+
+    a = floatx80_to_float64(FP1_to_floatx80(env), &env->fp_status);
+    b = floatx80_to_float64(FP0_to_floatx80(env), &env->fp_status);
+    res = float64_div(a, b, &env->fp_status);
+
+    floatx80_to_FP0(env, float64_to_floatx80(res, &env->fp_status));
 }
 
 static int float_comp_to_cc(int float_compare)
