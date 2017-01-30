@@ -69,6 +69,7 @@ DEF_HELPER_1(log10_FP0, void, env)
 DEF_HELPER_1(cosh_FP0, void, env)
 DEF_HELPER_1(acos_FP0, void, env)
 DEF_HELPER_1(cos_FP0, void, env)
+DEF_HELPER_1(sincos_FP0_FP1, void, env)
 
 DEF_HELPER_3(mac_move, void, env, i32, i32)
 DEF_HELPER_3(macmulf, i64, env, i32, i32)
