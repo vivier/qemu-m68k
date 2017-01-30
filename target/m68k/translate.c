@@ -4720,6 +4720,12 @@ DISAS_INSN(fpu)
     case 0x1d: /* fcos */
         gen_helper_fcos(cpu_env, cpu_dest, cpu_src);
         break;
+    case 0x1e: /* fgetexp */
+        gen_helper_fgetexp(cpu_env, cpu_dest, cpu_src);
+        break;
+    case 0x1f: /* fgetman */
+        gen_helper_fgetman(cpu_env, cpu_dest, cpu_src);
+        break;
     case 0x20: /* fdiv */
         gen_helper_fdiv(cpu_env, cpu_dest, cpu_src, cpu_dest);
         break;
@@ -4755,6 +4761,9 @@ DISAS_INSN(fpu)
         break;
     case 0x25: /* frem */
         gen_helper_frem(cpu_env, cpu_dest, cpu_src, cpu_dest);
+        break;
+    case 0x26: /* fscale */
+        gen_helper_fscale(cpu_env, cpu_dest, cpu_src, cpu_dest);
         break;
     case 0x27: /* fsglmul */
         gen_helper_fsglmul(cpu_env, cpu_dest, cpu_src, cpu_dest);
