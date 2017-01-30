@@ -294,11 +294,43 @@ void HELPER(itrunc_FP0)(CPUM68KState *env)
     floatx80_to_FP0(env, res);
 }
 
+#define PREC_BEGIN(prec)                                        \
+    do {                                                        \
+        int old;                                                \
+        old = get_floatx80_rounding_precision(&env->fp_status); \
+        set_floatx80_rounding_precision(prec, &env->fp_status)  \
+
+#define PREC_END()                                              \
+        set_floatx80_rounding_precision(old, &env->fp_status);  \
+    } while (0)
+
 void HELPER(sqrt_FP0)(CPUM68KState *env)
 {
     floatx80 res;
 
     res = floatx80_sqrt(FP0_to_floatx80(env), &env->fp_status);
+
+    floatx80_to_FP0(env, res);
+}
+
+void HELPER(ssqrt_FP0)(CPUM68KState *env)
+{
+    floatx80 res;
+
+    PREC_BEGIN(32);
+    res = floatx80_sqrt(FP0_to_floatx80(env), &env->fp_status);
+    PREC_END();
+
+    floatx80_to_FP0(env, res);
+}
+
+void HELPER(dsqrt_FP0)(CPUM68KState *env)
+{
+    floatx80 res;
+
+    PREC_BEGIN(64);
+    res = floatx80_sqrt(FP0_to_floatx80(env), &env->fp_status);
+    PREC_END();
 
     floatx80_to_FP0(env, res);
 }
@@ -312,11 +344,59 @@ void HELPER(abs_FP0)(CPUM68KState *env)
     floatx80_to_FP0(env, res);
 }
 
-void HELPER(chs_FP0)(CPUM68KState *env)
+void HELPER(sabs_FP0)(CPUM68KState *env)
+{
+    floatx80 res;
+    float32 f32;
+
+    res = floatx80_abs(FP0_to_floatx80(env));
+    f32 = floatx80_to_float32(res, &env->fp_status);
+    res = float32_to_floatx80(f32, &env->fp_status);
+
+    floatx80_to_FP0(env, res);
+}
+
+void HELPER(dabs_FP0)(CPUM68KState *env)
+{
+    floatx80 res;
+    float64 f64;
+
+    res = floatx80_abs(FP0_to_floatx80(env));
+    f64 = floatx80_to_float64(res, &env->fp_status);
+    res = float64_to_floatx80(f64, &env->fp_status);
+
+    floatx80_to_FP0(env, res);
+}
+
+void HELPER(neg_FP0)(CPUM68KState *env)
 {
     floatx80 res;
 
     res = floatx80_chs(FP0_to_floatx80(env));
+
+    floatx80_to_FP0(env, res);
+}
+
+void HELPER(sneg_FP0)(CPUM68KState *env)
+{
+    floatx80 res;
+    float32 f32;
+
+    res = floatx80_chs(FP0_to_floatx80(env));
+    f32 = floatx80_to_float32(res, &env->fp_status);
+    res = float32_to_floatx80(f32, &env->fp_status);
+
+    floatx80_to_FP0(env, res);
+}
+
+void HELPER(dneg_FP0)(CPUM68KState *env)
+{
+    floatx80 res;
+    float64 f64;
+
+    res = floatx80_chs(FP0_to_floatx80(env));
+    f64 = floatx80_to_float64(res, &env->fp_status);
+    res = float64_to_floatx80(f64, &env->fp_status);
 
     floatx80_to_FP0(env, res);
 }
@@ -331,6 +411,30 @@ void HELPER(add_FP0_FP1)(CPUM68KState *env)
     floatx80_to_FP0(env, res);
 }
 
+void HELPER(sadd_FP0_FP1)(CPUM68KState *env)
+{
+    floatx80 res;
+
+    PREC_BEGIN(32);
+    res = floatx80_add(FP0_to_floatx80(env), FP1_to_floatx80(env),
+                      &env->fp_status);
+    PREC_END();
+
+    floatx80_to_FP0(env, res);
+}
+
+void HELPER(dadd_FP0_FP1)(CPUM68KState *env)
+{
+    floatx80 res;
+
+    PREC_BEGIN(64);
+    res = floatx80_add(FP0_to_floatx80(env), FP1_to_floatx80(env),
+                      &env->fp_status);
+    PREC_END();
+
+    floatx80_to_FP0(env, res);
+}
+
 void HELPER(sub_FP0_FP1)(CPUM68KState *env)
 {
     floatx80 res;
@@ -341,12 +445,60 @@ void HELPER(sub_FP0_FP1)(CPUM68KState *env)
     floatx80_to_FP0(env, res);
 }
 
+void HELPER(ssub_FP0_FP1)(CPUM68KState *env)
+{
+    floatx80 res;
+
+    PREC_BEGIN(32);
+    res = floatx80_sub(FP1_to_floatx80(env), FP0_to_floatx80(env),
+                       &env->fp_status);
+    PREC_END();
+
+    floatx80_to_FP0(env, res);
+}
+
+void HELPER(dsub_FP0_FP1)(CPUM68KState *env)
+{
+    floatx80 res;
+
+    PREC_BEGIN(64);
+    res = floatx80_sub(FP1_to_floatx80(env), FP0_to_floatx80(env),
+                       &env->fp_status);
+    PREC_END();
+
+    floatx80_to_FP0(env, res);
+}
+
 void HELPER(mul_FP0_FP1)(CPUM68KState *env)
 {
     floatx80 res;
 
     res = floatx80_mul(FP0_to_floatx80(env), FP1_to_floatx80(env),
                        &env->fp_status);
+
+    floatx80_to_FP0(env, res);
+}
+
+void HELPER(smul_FP0_FP1)(CPUM68KState *env)
+{
+    floatx80 res;
+
+    PREC_BEGIN(32);
+    res = floatx80_mul(FP0_to_floatx80(env), FP1_to_floatx80(env),
+                       &env->fp_status);
+    PREC_END();
+
+    floatx80_to_FP0(env, res);
+}
+
+void HELPER(dmul_FP0_FP1)(CPUM68KState *env)
+{
+    floatx80 res;
+
+    PREC_BEGIN(64);
+    res = floatx80_mul(FP0_to_floatx80(env), FP1_to_floatx80(env),
+                       &env->fp_status);
+    PREC_END();
 
     floatx80_to_FP0(env, res);
 }
@@ -368,6 +520,30 @@ void HELPER(div_FP0_FP1)(CPUM68KState *env)
 
     res = floatx80_div(FP1_to_floatx80(env), FP0_to_floatx80(env),
                        &env->fp_status);
+
+    floatx80_to_FP0(env, res);
+}
+
+void HELPER(sdiv_FP0_FP1)(CPUM68KState *env)
+{
+    floatx80 res;
+
+    PREC_BEGIN(32);
+    res = floatx80_div(FP1_to_floatx80(env), FP0_to_floatx80(env),
+                       &env->fp_status);
+    PREC_END();
+
+    floatx80_to_FP0(env, res);
+}
+
+void HELPER(ddiv_FP0_FP1)(CPUM68KState *env)
+{
+    floatx80 res;
+
+    PREC_BEGIN(64);
+    res = floatx80_div(FP1_to_floatx80(env), FP0_to_floatx80(env),
+                       &env->fp_status);
+    PREC_END();
 
     floatx80_to_FP0(env, res);
 }
