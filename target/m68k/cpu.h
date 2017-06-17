@@ -81,7 +81,7 @@ typedef struct CPUM68KState {
 
     /* SSP and USP.  The current_sp is stored in aregs[7], the other here.  */
     int current_sp;
-    uint32_t sp[2];
+    uint32_t sp[3];
 
     /* Condition flags.  */
     uint32_t cc_op;
@@ -217,6 +217,7 @@ typedef enum {
 
 #define M68K_SSP    0
 #define M68K_USP    1
+#define M68K_ISP    2
 
 #define M68K_FPIAR_SHIFT  0
 #define M68K_FPIAR        (1 << M68K_FPIAR_SHIFT)
