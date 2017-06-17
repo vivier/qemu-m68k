@@ -2133,6 +2133,53 @@ DISAS_INSN(bitop_im)
     }
 }
 
+static TCGv gen_get_ccr(DisasContext *s)
+{
+    TCGv dest;
+
+    gen_flush_flags(s);
+    update_cc_op(s);
+    dest = tcg_temp_new();
+    gen_helper_get_ccr(dest, cpu_env);
+    return dest;
+}
+
+static TCGv gen_get_sr(DisasContext *s)
+{
+    TCGv ccr;
+    TCGv sr;
+
+    ccr = gen_get_ccr(s);
+    sr = tcg_temp_new();
+    tcg_gen_andi_i32(sr, QREG_SR, 0xffe0);
+    tcg_gen_or_i32(sr, sr, ccr);
+    return sr;
+}
+
+static void gen_set_sr_im(DisasContext *s, uint16_t val, int ccr_only)
+{
+    if (ccr_only) {
+        tcg_gen_movi_i32(QREG_CC_C, val & CCF_C ? 1 : 0);
+        tcg_gen_movi_i32(QREG_CC_V, val & CCF_V ? -1 : 0);
+        tcg_gen_movi_i32(QREG_CC_Z, val & CCF_Z ? 0 : 1);
+        tcg_gen_movi_i32(QREG_CC_N, val & CCF_N ? -1 : 0);
+        tcg_gen_movi_i32(QREG_CC_X, val & CCF_X ? 1 : 0);
+    } else {
+        gen_helper_set_sr(cpu_env, tcg_const_i32(val));
+    }
+    set_cc_op(s, CC_OP_FLAGS);
+}
+
+static void gen_set_sr(DisasContext *s, TCGv val, int ccr_only)
+{
+    if (ccr_only) {
+        gen_helper_set_ccr(cpu_env, val);
+    } else {
+        gen_helper_set_sr(cpu_env, val);
+    }
+    set_cc_op(s, CC_OP_FLAGS);
+}
+
 DISAS_INSN(arith_im)
 {
     int op;
@@ -2157,32 +2204,62 @@ DISAS_INSN(arith_im)
     default:
        abort();
     }
-    SRC_EA(env, src1, opsize, 1, (op == 6) ? NULL : &addr);
+    if ((op == 0 || op == 1) &&
+        (insn & 0x3f) == 0x3c) {
+        if (opsize == OS_BYTE) {
+            src1 = gen_get_ccr(s);
+        } else {
+            if (IS_USER(s)) {
+                gen_exception(s, s->insn_pc, EXCP_PRIVILEGE);
+                return;
+            }
+            src1 = gen_get_sr(s);
+        }
+    } else {
+        SRC_EA(env, src1, opsize, 1, (op == 6) ? NULL : &addr);
+    }
     dest = tcg_temp_new();
     switch (op) {
     case 0: /* ori */
         tcg_gen_or_i32(dest, src1, im);
-        gen_logic_cc(s, dest, opsize);
+        if ((insn & 0x3f) == 0x3c) {
+            gen_set_sr(s, dest, opsize == OS_BYTE);
+        } else {
+            DEST_EA(env, insn, opsize, dest, &addr);
+            gen_logic_cc(s, dest, opsize);
+        }
         break;
     case 1: /* andi */
         tcg_gen_and_i32(dest, src1, im);
-        gen_logic_cc(s, dest, opsize);
+        if ((insn & 0x3f) == 0x3c) {
+            gen_set_sr(s, dest, opsize == OS_BYTE);
+        } else {
+            DEST_EA(env, insn, opsize, dest, &addr);
+            gen_logic_cc(s, dest, opsize);
+        }
         break;
     case 2: /* subi */
         tcg_gen_setcond_i32(TCG_COND_LTU, QREG_CC_X, src1, im);
         tcg_gen_sub_i32(dest, src1, im);
         gen_update_cc_add(dest, im, opsize);
         set_cc_op(s, CC_OP_SUBB + opsize);
+        DEST_EA(env, insn, opsize, dest, &addr);
         break;
     case 3: /* addi */
         tcg_gen_add_i32(dest, src1, im);
         gen_update_cc_add(dest, im, opsize);
         tcg_gen_setcond_i32(TCG_COND_LTU, QREG_CC_X, dest, im);
         set_cc_op(s, CC_OP_ADDB + opsize);
+        DEST_EA(env, insn, opsize, dest, &addr);
         break;
     case 5: /* eori */
         tcg_gen_xor_i32(dest, src1, im);
-        gen_logic_cc(s, dest, opsize);
+        if ((insn & 0x3f) == 0x3c) {
+            gen_set_sr(s, dest, opsize == OS_BYTE);
+        } else {
+            DEST_EA(env, insn, opsize, dest, &addr);
+            gen_logic_cc(s, dest, opsize);
+        }
         break;
     case 6: /* cmpi */
         gen_update_cc_cmp(s, src1, im, opsize);
@@ -2191,9 +2268,6 @@ DISAS_INSN(arith_im)
         abort();
     }
     tcg_temp_free(im);
-    if (op != 6) {
-        DEST_EA(env, insn, opsize, dest, &addr);
-    }
     tcg_temp_free(dest);
 }
 
@@ -2476,17 +2550,6 @@ DISAS_INSN(clr)
     tcg_temp_free(zero);
 }
 
-static TCGv gen_get_ccr(DisasContext *s)
-{
-    TCGv dest;
-
-    gen_flush_flags(s);
-    update_cc_op(s);
-    dest = tcg_temp_new();
-    gen_helper_get_ccr(dest, cpu_env);
-    return dest;
-}
-
 DISAS_INSN(move_from_ccr)
 {
     TCGv ccr;
@@ -2513,43 +2576,24 @@ DISAS_INSN(neg)
     tcg_temp_free(dest);
 }
 
-static void gen_set_sr_im(DisasContext *s, uint16_t val, int ccr_only)
+static void gen_move_to_sr(CPUM68KState *env, DisasContext *s, uint16_t insn,
+                           int ccr_only)
 {
-    if (ccr_only) {
-        tcg_gen_movi_i32(QREG_CC_C, val & CCF_C ? 1 : 0);
-        tcg_gen_movi_i32(QREG_CC_V, val & CCF_V ? -1 : 0);
-        tcg_gen_movi_i32(QREG_CC_Z, val & CCF_Z ? 0 : 1);
-        tcg_gen_movi_i32(QREG_CC_N, val & CCF_N ? -1 : 0);
-        tcg_gen_movi_i32(QREG_CC_X, val & CCF_X ? 1 : 0);
-    } else {
-        gen_helper_set_sr(cpu_env, tcg_const_i32(val));
-    }
-    set_cc_op(s, CC_OP_FLAGS);
-}
-
-static void gen_set_sr(CPUM68KState *env, DisasContext *s, uint16_t insn,
-                       int ccr_only)
-{
-    if ((insn & 0x38) == 0) {
-        if (ccr_only) {
-            gen_helper_set_ccr(cpu_env, DREG(insn, 0));
-        } else {
-            gen_helper_set_sr(cpu_env, DREG(insn, 0));
-        }
-        set_cc_op(s, CC_OP_FLAGS);
-    } else if ((insn & 0x3f) == 0x3c) {
+    if ((insn & 0x3f) == 0x3c) {
         uint16_t val;
         val = read_im16(env, s);
         gen_set_sr_im(s, val, ccr_only);
     } else {
-        disas_undef(env, s, insn);
+        TCGv src;
+        SRC_EA(env, src, OS_WORD, 0, NULL);
+        gen_set_sr(s, src, ccr_only);
     }
 }
 
 
 DISAS_INSN(move_to_ccr)
 {
-    gen_set_sr(env, s, insn, 1);
+    gen_move_to_sr(env, s, insn, 1);
 }
 
 DISAS_INSN(not)
@@ -4206,18 +4250,6 @@ DISAS_INSN(ff1)
     gen_helper_ff1(reg, reg);
 }
 
-static TCGv gen_get_sr(DisasContext *s)
-{
-    TCGv ccr;
-    TCGv sr;
-
-    ccr = gen_get_ccr(s);
-    sr = tcg_temp_new();
-    tcg_gen_andi_i32(sr, QREG_SR, 0xffe0);
-    tcg_gen_or_i32(sr, sr, ccr);
-    return sr;
-}
-
 DISAS_INSN(strldsr)
 {
     uint16_t ext;
@@ -4256,7 +4288,7 @@ DISAS_INSN(move_to_sr)
         gen_exception(s, s->insn_pc, EXCP_PRIVILEGE);
         return;
     }
-    gen_set_sr(env, s, insn, 0);
+    gen_move_to_sr(env, s, insn, 0);
     gen_lookup_tb(s);
 }
 
@@ -5433,8 +5465,7 @@ void register_m68k_insns (CPUM68KState *env)
     BASE(move_to_ccr, 44c0, ffc0);
     INSN(not,       4680, fff8, CF_ISA_A);
     INSN(not,       4600, ff00, M68000);
-    INSN(undef,     46c0, ffc0, M68000);
-    INSN(move_to_sr, 46c0, ffc0, CF_ISA_A);
+    BASE(move_to_sr, 46c0, ffc0);
     INSN(nbcd,      4800, ffc0, M68000);
     INSN(linkl,     4808, fff8, M68000);
     BASE(pea,       4840, ffc0);

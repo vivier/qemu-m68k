@@ -57,6 +57,7 @@ static void m68k_cpu_reset(CPUState *s)
     memset(env, 0, offsetof(CPUM68KState, end_reset_fields));
 #if !defined(CONFIG_USER_ONLY)
     env->sr = 0x2700;
+    env->current_sp = M68K_ISP;
 #endif
     m68k_switch_sp(env);
     for (i = 0; i < 8; i++) {
