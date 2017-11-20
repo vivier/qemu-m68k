@@ -4692,6 +4692,9 @@ DISAS_INSN(fpu)
     case 0x1c: /* facos */
         gen_helper_facos(cpu_env, cpu_dest, cpu_src);
         break;
+    case 0x1d: /* fcos */
+        gen_helper_fcos(cpu_env, cpu_dest, cpu_src);
+        break;
     case 0x1e: /* fgetexp */
         gen_helper_fgetexp(cpu_env, cpu_dest, cpu_src);
         break;
