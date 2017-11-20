@@ -634,6 +634,7 @@ floatx80 floatx80_getman(floatx80 a, float_status *status);
 floatx80 floatx80_getexp(floatx80 a, float_status *status);
 floatx80 floatx80_scale(floatx80 a, floatx80 b, float_status *status);
 floatx80 floatx80_move(floatx80 a, float_status *status);
+floatx80 floatx80_lognp1(floatx80 a, float_status *status);
 int floatx80_eq(floatx80, floatx80, float_status *status);
 int floatx80_le(floatx80, floatx80, float_status *status);
 int floatx80_lt(floatx80, floatx80, float_status *status);
