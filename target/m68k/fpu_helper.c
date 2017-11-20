@@ -647,3 +647,8 @@ void HELPER(fscale)(CPUM68KState *env, FPReg *res, FPReg *val0, FPReg *val1)
 
     res->d = floatx80_round(res->d, &env->fp_status);
 }
+
+void HELPER(fatan)(CPUM68KState *env, FPReg *res, FPReg *val)
+{
+    res->d = floatx80_atan(val->d, &env->fp_status);
+}

@@ -4659,6 +4659,9 @@ DISAS_INSN(fpu)
     case 0x45: /* fdsqrt */
         gen_helper_fdsqrt(cpu_env, cpu_dest, cpu_src);
         break;
+    case 0x0a: /* fatan */
+        gen_helper_fatan(cpu_env, cpu_dest, cpu_src);
+        break;
     case 0x18: /* fabs */
         gen_helper_fabs(cpu_env, cpu_dest, cpu_src);
         break;
