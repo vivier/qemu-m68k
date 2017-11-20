@@ -652,3 +652,8 @@ void HELPER(fatan)(CPUM68KState *env, FPReg *res, FPReg *val)
 {
     res->d = floatx80_atan(val->d, &env->fp_status);
 }
+
+void HELPER(facos)(CPUM68KState *env, FPReg *res, FPReg *val)
+{
+    res->d = floatx80_acos(val->d, &env->fp_status);
+}
