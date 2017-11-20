@@ -638,6 +638,7 @@ floatx80 floatx80_lognp1(floatx80 a, float_status *status);
 floatx80 floatx80_atanh(floatx80 a, float_status *status);
 floatx80 floatx80_cos(floatx80 a, float_status *status);
 floatx80 floatx80_etox(floatx80 a, float_status *status);
+floatx80 floatx80_cosh(floatx80 a, float_status *status);
 int floatx80_eq(floatx80, floatx80, float_status *status);
 int floatx80_le(floatx80, floatx80, float_status *status);
 int floatx80_lt(floatx80, floatx80, float_status *status);
