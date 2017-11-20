@@ -657,3 +657,8 @@ void HELPER(facos)(CPUM68KState *env, FPReg *res, FPReg *val)
 {
     res->d = floatx80_acos(val->d, &env->fp_status);
 }
+
+void HELPER(fasin)(CPUM68KState *env, FPReg *res, FPReg *val)
+{
+    res->d = floatx80_asin(val->d, &env->fp_status);
+}
