@@ -682,3 +682,8 @@ void HELPER(fetox)(CPUM68KState *env, FPReg *res, FPReg *val)
 {
     res->d = floatx80_etox(val->d, &env->fp_status);
 }
+
+void HELPER(fcosh)(CPUM68KState *env, FPReg *res, FPReg *val)
+{
+    res->d = floatx80_cosh(val->d, &env->fp_status);
+}
