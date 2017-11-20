@@ -677,3 +677,8 @@ void HELPER(fcos)(CPUM68KState *env, FPReg *res, FPReg *val)
 {
     res->d = floatx80_cos(val->d, &env->fp_status);
 }
+
+void HELPER(fetox)(CPUM68KState *env, FPReg *res, FPReg *val)
+{
+    res->d = floatx80_etox(val->d, &env->fp_status);
+}

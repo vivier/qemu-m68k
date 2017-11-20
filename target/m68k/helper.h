@@ -72,6 +72,7 @@ DEF_HELPER_3(fasin, void, env, fp, fp)
 DEF_HELPER_3(flognp1, void, env, fp, fp)
 DEF_HELPER_3(fatanh, void, env, fp, fp)
 DEF_HELPER_3(fcos, void, env, fp, fp)
+DEF_HELPER_3(fetox, void, env, fp, fp)
 
 DEF_HELPER_3(mac_move, void, env, i32, i32)
 DEF_HELPER_3(macmulf, i64, env, i32, i32)
