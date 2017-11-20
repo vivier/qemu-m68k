@@ -5783,6 +5783,33 @@ floatx80 floatx80_sqrt(floatx80 a, float_status *status)
                                 0, zExp, zSig0, zSig1, status);
 }
 
+floatx80 floatx80_move(floatx80 a, float_status *status)
+{
+    flag aSign;
+    int32_t aExp;
+    uint64_t aSig;
+
+    aSig = extractFloatx80Frac(a);
+    aExp = extractFloatx80Exp(a);
+    aSign = extractFloatx80Sign(a);
+
+    if (aExp == 0x7FFF) {
+        if ((uint64_t)(aSig << 1)) {
+            return propagateFloatx80NaNOneArg(a, status);
+        }
+        return a;
+    }
+    if (aExp == 0) {
+        if (aSig == 0) {
+            return a;
+        }
+        normalizeRoundAndPackFloatx80(status->floatx80_rounding_precision,
+                                      aSign, aExp, aSig, 0, status);
+    }
+    return roundAndPackFloatx80(status->floatx80_rounding_precision, aSign,
+                                aExp, aSig, 0, status);
+}
+
 /*----------------------------------------------------------------------------
 | Returns 1 if the extended double-precision floating-point value `a' is equal
 | to the corresponding value `b', and 0 otherwise.  The invalid exception is
