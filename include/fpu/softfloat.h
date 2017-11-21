@@ -641,6 +641,7 @@ floatx80 floatx80_log2(floatx80 a, float_status *status);
 floatx80 floatx80_etox(floatx80 a, float_status *status);
 floatx80 floatx80_twotox(floatx80 a, float_status *status);
 floatx80 floatx80_tentox(floatx80 a, float_status *status);
+floatx80 floatx80_tan(floatx80 a, float_status *status);
 int floatx80_eq(floatx80, floatx80, float_status *status);
 int floatx80_le(floatx80, floatx80, float_status *status);
 int floatx80_lt(floatx80, floatx80, float_status *status);
