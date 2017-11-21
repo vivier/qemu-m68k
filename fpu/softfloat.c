@@ -8303,6 +8303,121 @@ floatx80 floatx80_etoxm1(floatx80 a, float_status *status)
         }
     }
 }
+
+/*----------------------------------------------------------------------------
+ | Hyperbolic tangent
+ *----------------------------------------------------------------------------*/
+
+floatx80 floatx80_tanh(floatx80 a, float_status *status)
+{
+    flag aSign, vSign;
+    int32_t aExp, vExp;
+    uint64_t aSig, vSig;
+
+    int8_t user_rnd_mode, user_rnd_prec;
+
+    int32_t compact;
+    floatx80 fp0, fp1;
+    uint32_t sign;
+
+    aSig = extractFloatx80Frac(a);
+    aExp = extractFloatx80Exp(a);
+    aSign = extractFloatx80Sign(a);
+
+    if (aExp == 0x7FFF) {
+        if ((uint64_t) (aSig << 1)) {
+            return propagateFloatx80NaNOneArg(a, status);
+        }
+        return packFloatx80(aSign, one_exp, one_sig);
+    }
+
+    if (aExp == 0 && aSig == 0) {
+        return packFloatx80(aSign, 0, 0);
+    }
+
+    user_rnd_mode = status->float_rounding_mode;
+    user_rnd_prec = status->floatx80_rounding_precision;
+    status->float_rounding_mode = float_round_nearest_even;
+    status->floatx80_rounding_precision = 80;
+
+    compact = floatx80_make_compact(aExp, aSig);
+
+    if (compact < 0x3FD78000 || compact > 0x3FFFDDCE) {
+        /* TANHBORS */
+        if (compact < 0x3FFF8000) {
+            /* TANHSM */
+            status->float_rounding_mode = user_rnd_mode;
+            status->floatx80_rounding_precision = user_rnd_prec;
+
+            a = floatx80_move(a, status);
+
+            float_raise(float_flag_inexact, status);
+
+            return a;
+        } else {
+            if (compact > 0x40048AA1) {
+                /* TANHHUGE */
+                sign = 0x3F800000;
+                sign |= aSign ? 0x80000000 : 0x00000000;
+                fp0 = float32_to_floatx80(make_float32(sign), status);
+                sign &= 0x80000000;
+                sign ^= 0x80800000; /* -SIGN(X)*EPS */
+
+                status->float_rounding_mode = user_rnd_mode;
+                status->floatx80_rounding_precision = user_rnd_prec;
+
+                a = floatx80_add(fp0, float32_to_floatx80(make_float32(sign),
+                                 status), status);
+
+                float_raise(float_flag_inexact, status);
+
+                return a;
+            } else {
+                fp0 = packFloatx80(0, aExp + 1, aSig); /* Y = 2|X| */
+                fp0 = floatx80_etox(fp0, status); /* FP0 IS EXP(Y) */
+                fp0 = floatx80_add(fp0, float32_to_floatx80(
+                                   make_float32(0x3F800000),
+                                   status), status); /* EXP(Y)+1 */
+                sign = aSign ? 0x80000000 : 0x00000000;
+                fp1 = floatx80_div(float32_to_floatx80(make_float32(
+                                   sign ^ 0xC0000000), status), fp0,
+                                   status); /* -SIGN(X)*2 / [EXP(Y)+1] */
+                fp0 = float32_to_floatx80(make_float32(sign | 0x3F800000),
+                                          status); /* SIGN */
+
+                status->float_rounding_mode = user_rnd_mode;
+                status->floatx80_rounding_precision = user_rnd_prec;
+
+                a = floatx80_add(fp1, fp0, status);
+
+                float_raise(float_flag_inexact, status);
+
+                return a;
+            }
+        }
+    } else { /* 2**(-40) < |X| < (5/2)LOG2 */
+        fp0 = packFloatx80(0, aExp + 1, aSig); /* Y = 2|X| */
+        fp0 = floatx80_etoxm1(fp0, status); /* FP0 IS Z = EXPM1(Y) */
+        fp1 = floatx80_add(fp0, float32_to_floatx80(make_float32(0x40000000),
+                           status),
+                           status); /* Z+2 */
+
+        vSign = extractFloatx80Sign(fp1);
+        vExp = extractFloatx80Exp(fp1);
+        vSig = extractFloatx80Frac(fp1);
+
+        fp1 = packFloatx80(vSign ^ aSign, vExp, vSig);
+
+        status->float_rounding_mode = user_rnd_mode;
+        status->floatx80_rounding_precision = user_rnd_prec;
+
+        a = floatx80_div(fp0, fp1, status);
+
+        float_raise(float_flag_inexact, status);
+
+        return a;
+    }
+}
 #endif /* TARGET_M68K */
 
 /*----------------------------------------------------------------------------
