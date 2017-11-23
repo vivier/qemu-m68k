@@ -23,6 +23,7 @@
 #include "fpu/softfloat.h"
 #include "fpopcode.h"
 
+#if 0
 floatx80 floatx80_exp(floatx80 Fm);
 floatx80 floatx80_ln(floatx80 Fm);
 floatx80 floatx80_sin(floatx80 rFm);
@@ -34,6 +35,7 @@ floatx80 floatx80_tan(floatx80 rFm);
 floatx80 floatx80_arccos(floatx80 rFm);
 floatx80 floatx80_pow(floatx80 rFn,floatx80 rFm);
 floatx80 floatx80_pol(floatx80 rFn,floatx80 rFm);
+#endif
 
 unsigned int ExtendedCPDO(const unsigned int opcode)
 {
