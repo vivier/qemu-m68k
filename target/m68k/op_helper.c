@@ -17,6 +17,7 @@
  * License along with this library; if not, see <http://www.gnu.org/licenses/>.
  */
 #include "qemu/osdep.h"
+#include "sysemu/runstate.h"
 #include "cpu.h"
 #include "exec/helper-proto.h"
 #include "exec/exec-all.h"
@@ -349,6 +350,16 @@ static void m68k_interrupt_all(CPUM68KState *env, int is_hw)
 
     sp &= ~1;
     if (cs->exception_index == EXCP_ACCESS) {
+        /*
+         * horrible hack to reset macintosh Quadra 800.
+         * To reset, linux calls ROM entry point 0x4080000a
+         * as we have no ROM, this fails. We try to trap this here
+         */
+        if (env->mmu.ar == 0x4080000a &&
+            (env->mmu.ssw & M68K_TM_040_SUPER)) {
+            qemu_system_reset_request(SHUTDOWN_CAUSE_GUEST_RESET);
+            return;
+        }
         if (env->mmu.fault) {
             cpu_abort(cs, "DOUBLE MMU FAULT\n");
         }
