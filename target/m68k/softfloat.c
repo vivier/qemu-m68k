@@ -20,6 +20,7 @@
  */
 
 #include "qemu/osdep.h"
+#include "qemu/host-utils.h"
 #include "softfloat.h"
 #include "fpu/softfloat-macros.h"
 #include "softfloat_fpsp_tables.h"
@@ -27,6 +28,36 @@
 #define pi_exp      0x4000
 #define piby2_exp   0x3FFF
 #define pi_sig      UINT64_C(0xc90fdaa22168c235)
+
+floatx80 floatx80_normalize(floatx80 a)
+{
+    flag aSign;
+    int16_t aExp;
+    uint64_t aSig;
+    int8_t shiftCount;
+
+    aSig = extractFloatx80Frac(a);
+    aExp = extractFloatx80Exp(a);
+    aSign = extractFloatx80Sign(a);
+
+    if (aExp == 0x7FFF || aExp == 0) {
+        return a;
+    }
+    if (aSig == 0) {
+        return packFloatx80(aSign, 0, 0);
+    }
+
+    shiftCount = clz64(aSig);
+
+    if (shiftCount > aExp) {
+        shiftCount = aExp;
+    }
+
+    aExp -= shiftCount;
+    aSig <<= shiftCount;
+
+    return packFloatx80(aSign, aExp, aSig);
+}
 
 static floatx80 propagateFloatx80NaNOneArg(floatx80 a, float_status *status)
 {

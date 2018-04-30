@@ -23,6 +23,38 @@
 #define TARGET_M68K_SOFTFLOAT_H
 #include "fpu/softfloat.h"
 
+/*----------------------------------------------------------------------------
+ * Return true if the given number is unnormal:
+ * a number with a nonzero exponent, less than the maximum value,
+ * and a zero integer bit
+ *----------------------------------------------------------------------------*/
+static inline bool floatx80_is_unnormal(floatx80 a)
+{
+    return (a.low & (1ULL << 63)) == 0 &&
+           (a.high & 0x7FFF) > 0 &&
+           (a.high & 0x7FFF) < 0x7FFF;
+}
+
+/*----------------------------------------------------------------------------
+ * Return true if the given number is unnormal zero
+ *----------------------------------------------------------------------------*/
+static inline bool floatx80_is_unnormal_zero(floatx80 a)
+{
+    return (a.high & 0x7FFF) < 0x7FFF && a.low == 0;
+}
+
+/*----------------------------------------------------------------------------
+ * Return true if the given number is denormal:
+ * a number with a zero exponent and a non-zero mantissa,
+ * the explicit integer bit can only be a zero
+ *----------------------------------------------------------------------------*/
+static inline bool floatx80_is_denormal(floatx80 a)
+{
+    return (a.low & (1ULL << 63)) == 0 && (a.low << 1) &&
+           (a.high & 0x7FFF) == 0;
+}
+
+floatx80 floatx80_normalize(floatx80 a);
 floatx80 floatx80_mod(floatx80 a, floatx80 b, float_status *status);
 floatx80 floatx80_getman(floatx80 a, float_status *status);
 floatx80 floatx80_getexp(floatx80 a, float_status *status);

@@ -987,7 +987,7 @@ static void gen_fp_move(TCGv_ptr dest, TCGv_ptr src)
 static void gen_load_fp(DisasContext *s, int opsize, TCGv addr, TCGv_ptr fp,
                         int index)
 {
-    TCGv tmp;
+    TCGv tmp, next;
     TCGv_i64 t64;
 
     t64 = tcg_temp_new_i64();
@@ -1018,12 +1018,12 @@ static void gen_load_fp(DisasContext *s, int opsize, TCGv addr, TCGv_ptr fp,
             gen_exception(s, s->base.pc_next, EXCP_FP_UNIMP);
             break;
         }
+        next = tcg_temp_new();
+        tcg_gen_addi_i32(next, addr, 4);
         tcg_gen_qemu_ld32u(tmp, addr, index);
-        tcg_gen_shri_i32(tmp, tmp, 16);
-        tcg_gen_st16_i32(tmp, fp, offsetof(FPReg, l.upper));
-        tcg_gen_addi_i32(tmp, addr, 4);
-        tcg_gen_qemu_ld64(t64, tmp, index);
-        tcg_gen_st_i64(t64, fp, offsetof(FPReg, l.lower));
+        tcg_gen_qemu_ld64(t64, next, index);
+        tcg_temp_free(next);
+        gen_helper_fload(cpu_env, fp, tmp, t64);
         break;
     case OS_PACKED:
         /*
@@ -1220,11 +1220,10 @@ static int gen_ea_mode_fp(CPUM68KState *env, DisasContext *s, int mode,
                     gen_exception(s, s->base.pc_next, EXCP_FP_UNIMP);
                     break;
                 }
-                tmp = tcg_const_i32(read_im32(env, s) >> 16);
-                tcg_gen_st16_i32(tmp, fp, offsetof(FPReg, l.upper));
-                tcg_temp_free(tmp);
+                tmp = tcg_const_i32(read_im32(env, s));
                 t64 = tcg_const_i64(read_im64(env, s));
-                tcg_gen_st_i64(t64, fp, offsetof(FPReg, l.lower));
+                gen_helper_fload(cpu_env, fp, tmp, t64);
+                tcg_temp_free(tmp);
                 tcg_temp_free_i64(t64);
                 break;
             case OS_PACKED:
