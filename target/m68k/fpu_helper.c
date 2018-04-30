@@ -433,6 +433,57 @@ static uint32_t fmovem_postinc(CPUM68KState *env, uint32_t addr, uint32_t mask,
     return addr;
 }
 
+
+#ifdef CONFIG_SOFTMMU
+static void fpu_exception_unimplemented(CPUM68KState *env, FPReg *fp,
+                                        uintptr_t ra)
+{
+    /*
+     * FIXME: if we trigger the FP_UNIMP exception,
+     * we must fill the unimplemented frame in the case of fsave/frestore
+     *
+     * CPUState *cs = env_cpu(env);
+     * cs->exception_index = EXCP_FP_UNIMP;
+     * cpu_loop_exit_restore(cs, ra);
+     *
+     * for the moment, as we don't create the frame, normalize the number
+     * in QEMU:
+     */
+    fp->d = floatx80_normalize(fp->d);
+}
+#endif
+
+static void m68k_load_extended(CPUM68KState *env, FPReg *fp, uint32_t high,
+                               uint64_t low, uintptr_t ra)
+{
+    fp->l.upper = high >> 16;
+    fp->l.lower = low;
+
+    /* denormalized/unnormalized number generates unimplemented
+     * data type exception
+     */
+    if (floatx80_is_unnormal(fp->d) || floatx80_is_denormal(fp->d)) {
+#ifdef CONFIG_SOFTMMU
+        if (floatx80_is_unnormal_zero(fp->d)) {
+             /* unnormal zero can be normalized */
+            fp->d = floatx80_normalize(fp->d);
+        } else {
+            /* normalize is managed by the kernel */
+            fpu_exception_unimplemented(env, fp, ra);
+        }
+#else
+        fp->d = floatx80_normalize(fp->d);
+#endif
+    }
+}
+
+void HELPER(fload)(CPUM68KState *env, FPReg *fp, uint32_t high, uint64_t low)
+{
+    uintptr_t ra = GETPC();
+
+    m68k_load_extended(env, fp, high, low, ra);
+}
+
 static int cpu_ld_floatx80_ra(CPUM68KState *env, uint32_t addr, FPReg *fp,
                               uintptr_t ra)
 {
@@ -442,8 +493,7 @@ static int cpu_ld_floatx80_ra(CPUM68KState *env, uint32_t addr, FPReg *fp,
     high = cpu_ldl_data_ra(env, addr, ra);
     low = cpu_ldq_data_ra(env, addr + 4, ra);
 
-    fp->l.upper = high >> 16;
-    fp->l.lower = low;
+    m68k_load_extended(env, fp, high, low, ra);
 
     return 12;
 }
