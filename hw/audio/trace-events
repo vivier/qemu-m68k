@@ -23,3 +23,11 @@ hda_audio_running(const char *stream, int nr, bool running) "st %s, nr %d, run %
 hda_audio_format(const char *stream, int chan, const char *fmt, int freq) "st %s, %d x %s @ %d Hz"
 hda_audio_adjust(const char *stream, int pos) "st %s, pos %d"
 hda_audio_overrun(const char *stream) "st %s"
+
+# asc.c
+asc_read_fifo(int reg, unsigned size, uint64_t value) "reg=0x%03x size=%u value=0x%"PRIx64
+asc_read_unknown(int reg, unsigned size, uint64_t value) "reg=0x%03x size=%u value=0x%"PRIx64
+asc_read_reg(int reg, unsigned size, uint64_t value) "reg=0x%03x size=%u value=0x%"PRIx64
+asc_write_fifo(int reg, unsigned size, uint64_t value) "reg=0x%03x size=%u value=0x%"PRIx64
+asc_write_unknown(int reg, unsigned size, uint64_t value) "reg=0x%03x size=%u value=0x%"PRIx64
+asc_write_reg(int reg, unsigned size, uint64_t value) "reg=0x%03x size=%u value=0x%"PRIx64
