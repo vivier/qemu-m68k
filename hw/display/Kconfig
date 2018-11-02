@@ -130,3 +130,6 @@ config ATI_VGA
     default y if PCI_DEVICES
     depends on PCI
     select VGA
+
+config MACFB
+    bool
