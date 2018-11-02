@@ -117,4 +117,8 @@ config AUX
     bool
     select I2C
 
+config MAC_VIA
+    bool
+    select MOS6522
+
 source macio/Kconfig
