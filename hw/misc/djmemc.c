@@ -12,9 +12,11 @@
 
 #include "qemu/osdep.h"
 #include "migration/vmstate.h"
+#include "hw/irq.h"
 #include "hw/misc/djmemc.h"
 #include "hw/qdev-properties.h"
 #include "trace.h"
+#include "hw/nmi.h"
 
 #define DJMEMC_SIZE       0x2000
 
@@ -164,12 +166,19 @@ static void djMEMC_reset(DeviceState *d)
     }
 }
 
+static void djMEMC_nmi(NMIState *n, int cpu_index, Error **errp)
+{
+    djMEMC_set_irq(DJMEMC(n), 6, 1);
+}
+
 static void djMEMC_class_init(ObjectClass *oc, void *data)
 {
     DeviceClass *dc = DEVICE_CLASS(oc);
+    NMIClass *nc = NMI_CLASS(oc);
 
     dc->reset = djMEMC_reset;
     dc->vmsd = &vmstate_djMEMC;
+    nc->nmi_monitor_handler = djMEMC_nmi;
 }
 
 static TypeInfo djMEMC_info = {
@@ -178,6 +187,10 @@ static TypeInfo djMEMC_info = {
     .instance_size = sizeof(DjMEMCState),
     .instance_init = djMEMC_init,
     .class_init    = djMEMC_class_init,
+    .interfaces = (InterfaceInfo[]) {
+         { TYPE_NMI },
+         { }
+    },
 };
 
 static void djMEMC_register_types(void)
