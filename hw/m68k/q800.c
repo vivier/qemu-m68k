@@ -46,6 +46,7 @@
 #include "sysemu/qtest.h"
 #include "sysemu/runstate.h"
 #include "sysemu/reset.h"
+#include "hw/nmi.h"
 
 #define MACROM_ADDR     0x40000000
 #define MACROM_SIZE     0x00100000
@@ -123,6 +124,7 @@ static void main_cpu_reset(void *opaque)
     cpu->env.pc = ldl_phys(cs->as, 4);
 }
 
+static qemu_irq *pic;
 static void q800_init(MachineState *machine)
 {
     M68kCPU *cpu = NULL;
@@ -149,7 +151,6 @@ static void q800_init(MachineState *machine)
     BusState *adb_bus;
     NubusBus *nubus;
     GLUEState *irq;
-    qemu_irq *pic;
 
     linux_boot = (kernel_filename != NULL);
 
@@ -376,21 +377,33 @@ static void q800_init(MachineState *machine)
     }
 }
 
+static void q800_nmi(NMIState *n, int cpu_index, Error **errp)
+{
+    qemu_irq_raise(pic[6]);
+}
+
 static void q800_machine_class_init(ObjectClass *oc, void *data)
 {
     MachineClass *mc = MACHINE_CLASS(oc);
+    NMIClass *nc = NMI_CLASS(oc);
+
     mc->desc = "Macintosh Quadra 800";
     mc->init = q800_init;
     mc->default_cpu_type = M68K_CPU_TYPE_NAME("m68040");
     mc->max_cpus = 1;
     mc->is_default = 0;
     mc->block_default_type = IF_SCSI;
+    nc->nmi_monitor_handler = q800_nmi;
 }
 
 static const TypeInfo q800_machine_typeinfo = {
     .name       = MACHINE_TYPE_NAME("q800"),
     .parent     = TYPE_MACHINE,
     .class_init = q800_machine_class_init,
+    .interfaces = (InterfaceInfo[]) {
+         { TYPE_NMI },
+         { }
+    },
 };
 
 static void q800_machine_register_types(void)
