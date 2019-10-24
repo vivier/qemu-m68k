@@ -62,14 +62,14 @@
 #define MACH_MAC        3
 #define Q800_MAC_CPU_ID 2
 
-#define VIA_BASE              0x50f00000
-#define SONIC_PROM_BASE       0x50f08000
-#define SONIC_BASE            0x50f0a000
-#define SCC_BASE              0x50f0c020
-#define ESP_BASE              0x50f10000
-#define ESP_PDMA              0x50f10100
-#define ASC_BASE              0x50F14000
-#define SWIM_BASE             0x50F1E000
+#define VIA_BASE              0x50000000
+#define SONIC_PROM_BASE       0x50008000
+#define SONIC_BASE            0x5000a000
+#define SCC_BASE              0x5000c020
+#define ESP_BASE              0x50010000
+#define ESP_PDMA              0x50010100
+#define ASC_BASE              0x50014000
+#define SWIM_BASE             0x5001E000
 #define NUBUS_SUPER_SLOT_BASE 0x60000000
 #define NUBUS_SLOT_BASE       0xf0000000
 
@@ -138,6 +138,7 @@ static void q800_init(MachineState *machine)
     int32_t initrd_size;
     MemoryRegion *rom;
     MemoryRegion *ram;
+    int i;
     ram_addr_t ram_size = machine->ram_size;
     const char *kernel_filename = machine->kernel_filename;
     const char *initrd_filename = machine->initrd_filename;
@@ -165,9 +166,25 @@ static void q800_init(MachineState *machine)
     cpu = M68K_CPU(cpu_create(machine->cpu_type));
     qemu_register_reset(main_cpu_reset, cpu);
 
+    /* RAM */
     ram = g_malloc(sizeof(*ram));
     memory_region_init_ram(ram, NULL, "m68k_mac.ram", ram_size, &error_abort);
     memory_region_add_subregion(get_system_memory(), 0, ram);
+
+    /*
+     * Memore from VIA_BASE to VIA_BASE + 0x40000 is repeated
+     * from VIA_BASE + 0x40000 to VIA_BASE + 0x4000000
+     */
+    for (i = 1; i < 256; i++) {
+        MemoryRegion *io = g_malloc(sizeof(*io));
+        char *name = g_strdup_printf("mac_m68k.io[%d]", i);
+
+        memory_region_init_alias(io, NULL, name, get_system_memory(),
+                                 VIA_BASE, 0x40000);
+        memory_region_add_subregion(get_system_memory(),
+                                    VIA_BASE + i * 0x40000, io);
+        g_free(name);
+    }
 
     /* IRQ Glue */
 
