@@ -92,8 +92,18 @@ static void main_cpu_reset(void *opaque)
 {
     M68kCPU *cpu = opaque;
     CPUState *cs = CPU(cpu);
+    uint8_t *rom;
 
     cpu_reset(cs);
+    rom = rom_ptr(MACROM_ADDR, MACROM_SIZE);
+    if (rom) {
+        /*
+         * Boot from Quadra 800 ROM
+         * This should be managed by the ROM overlay
+         */
+        cpu->env.aregs[7] = ldl_p(rom);
+        cpu->env.pc = ldl_p(rom + 4);
+   }
 }
 
 static uint8_t fake_mac_rom[] = {
@@ -127,7 +137,7 @@ static void q800_init(MachineState *machine)
     int bios_size;
     ram_addr_t initrd_base;
     int32_t initrd_size;
-    MemoryRegion *rom;
+    MemoryRegion *rom = NULL;
     MemoryRegion *io;
     MemoryRegion *dp8393x_prom = g_new(MemoryRegion, 1);
     uint8_t *prom;
@@ -166,6 +176,34 @@ static void q800_init(MachineState *machine)
     /* RAM */
     memory_region_add_subregion(get_system_memory(), 0, machine->ram);
 
+    /* ROM */
+    if (!linux_boot) {
+        if (bios_name == NULL) {
+            bios_name = MACROM_FILENAME;
+        }
+        /* allocate and load BIOS */
+        rom = g_malloc(sizeof(*rom));
+        memory_region_init_rom(rom, NULL, "m68k_mac.rom", MACROM_SIZE,
+                               &error_abort);
+        memory_region_add_subregion(get_system_memory(), MACROM_ADDR, rom);
+        /* Load MacROM binary */
+        filename = qemu_find_file(QEMU_FILE_TYPE_BIOS, bios_name);
+        if (filename) {
+            bios_size = load_image_targphys(filename, MACROM_ADDR, MACROM_SIZE);
+            g_free(filename);
+        } else {
+            bios_size = -1;
+        }
+
+        /* Remove qtest_enabled() check once firmware files are in the tree */
+        if (!qtest_enabled()) {
+            if (bios_size < 0 || bios_size > MACROM_SIZE) {
+                error_report("could not load MacROM '%s'", bios_name);
+                exit(1);
+            }
+        }
+    }
+
     /*
      * Memory from IO_BASE to IO_BASE + IO_SLICE is repeated
      * from IO_BASE + IO_SLICE to IO_BASE + IO_SIZE
@@ -196,6 +234,8 @@ static void q800_init(MachineState *machine)
     if (dinfo) {
         qdev_prop_set_drive(via1_dev, "drive", blk_by_legacy_dinfo(dinfo));
     }
+    object_property_set_link(OBJECT(via1_dev), "rom_mr", OBJECT(rom),
+                             &error_abort);
     sysbus = SYS_BUS_DEVICE(via1_dev);
     sysbus_realize_and_unref(sysbus, &error_fatal);
     sysbus_mmio_map(sysbus, 1, VIA_BASE);
@@ -409,35 +449,6 @@ static void q800_init(MachineState *machine)
             initrd_size = 0;
         }
         BOOTINFO0(cs->as, parameters_base, BI_LAST);
-    } else {
-        uint8_t *ptr;
-        /* allocate and load BIOS */
-        rom = g_malloc(sizeof(*rom));
-        memory_region_init_rom(rom, NULL, "m68k_mac.rom", MACROM_SIZE,
-                               &error_abort);
-        filename = qemu_find_file(QEMU_FILE_TYPE_BIOS, bios_name);
-        memory_region_add_subregion(get_system_memory(), MACROM_ADDR, rom);
-
-        /* Load MacROM binary */
-        if (filename) {
-            bios_size = load_image_targphys(filename, MACROM_ADDR, MACROM_SIZE);
-            g_free(filename);
-        } else {
-            bios_size = -1;
-        }
-
-        /* Remove qtest_enabled() check once firmware files are in the tree */
-        if (!qtest_enabled()) {
-            if (bios_size < 0 || bios_size > MACROM_SIZE) {
-                error_report("could not load MacROM '%s'", bios_name);
-                exit(1);
-            }
-
-            ptr = rom_ptr(MACROM_ADDR, MACROM_SIZE);
-            stl_phys(cs->as, 0, ldl_p(ptr));    /* reset initial SP */
-            stl_phys(cs->as, 4,
-                     MACROM_ADDR + ldl_p(ptr + 4)); /* reset initial PC */
-        }
     }
 }
 

@@ -41,6 +41,8 @@ struct MOS6522Q800VIA1State {
     MOS6522State parent_obj;
 
     MemoryRegion via_mem;
+    MemoryRegion rom_overlay;
+    MemoryRegion *rom_mr;
 
     qemu_irq irqs[VIA1_IRQ_NB];
     uint8_t last_b;
