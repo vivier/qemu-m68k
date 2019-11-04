@@ -127,6 +127,23 @@ static uint8_t fake_mac_rom[] = {
     0x60, 0xFE                          /* bras [self] */
 };
 
+static uint64_t machine_id_read(void *opaque, hwaddr addr, unsigned size)
+{
+    return 0xa55a2bad; /* Quadra 800 ID */
+}
+
+static void machine_id_write(void *opaque, hwaddr addr, uint64_t val,
+                             unsigned size)
+{
+}
+
+static const MemoryRegionOps machine_id_ops = {
+    .read = machine_id_read,
+    .write = machine_id_write,
+    .valid.min_access_size = 4,
+    .valid.max_access_size = 4,
+};
+
 static void q800_init(MachineState *machine)
 {
     M68kCPU *cpu = NULL;
@@ -139,6 +156,7 @@ static void q800_init(MachineState *machine)
     int32_t initrd_size;
     MemoryRegion *rom = NULL;
     MemoryRegion *io;
+    MemoryRegion *machine_id;
     MemoryRegion *dp8393x_prom = g_new(MemoryRegion, 1);
     uint8_t *prom;
     const int io_slice_nb = (IO_SIZE / IO_SLICE) - 1;
@@ -218,6 +236,10 @@ static void q800_init(MachineState *machine)
                                     IO_BASE + (i + 1) * IO_SLICE, &io[i]);
         g_free(name);
     }
+
+    machine_id = g_malloc(sizeof(*machine_id));
+    memory_region_init_io(machine_id, NULL, &machine_id_ops, NULL, "Machine ID", 4);
+    memory_region_add_subregion(get_system_memory(), 0x5ffffffc, machine_id);
 
     /* djMEMC memory and interrupt controller */
 
