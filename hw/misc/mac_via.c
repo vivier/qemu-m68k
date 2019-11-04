@@ -31,6 +31,7 @@
 #include "sysemu/block-backend.h"
 #include "trace.h"
 #include "qemu/log.h"
+#include "exec/address-spaces.h"
 
 /*
  * VIAs: There are two in every machine,
@@ -940,6 +941,11 @@ static void mos6522_q800_via1_write(void *opaque, hwaddr addr, uint64_t val,
     mos6522_write(ms, addr, val, size);
 
     switch (addr) {
+    case VIA_REG_A:
+        if (m->rom_mr && !(ms->a & VIA1A_vOverlay)) {
+            memory_region_set_enabled(&m->rom_overlay, false);
+        }
+        break;
     case VIA_REG_B:
         via1_rtc_update(m);
         via1_adb_update(m);
@@ -1073,6 +1079,16 @@ static void mac_via_realize(DeviceState *dev, Error **errp)
             return;
         }
     }
+
+    /* ROM overlay */
+    if (m->rom_mr) {
+        memory_region_init_alias(&m->rom_overlay, NULL, "ROM overlay",
+                                 m->rom_mr, 0,
+                                 memory_region_size(m->rom_mr));
+        memory_region_add_subregion_overlap(get_system_memory(), 0,
+                                            &m->rom_overlay, 1);
+        memory_region_set_enabled(&m->rom_overlay, false);
+    }
 }
 
 static void mac_via_init(Object *obj)
@@ -1158,6 +1174,8 @@ static const VMStateDescription vmstate_mac_via = {
 
 static Property mac_via_properties[] = {
     DEFINE_PROP_DRIVE("drive", MacVIAState, blk),
+    DEFINE_PROP_LINK("rom_mr", MacVIAState, rom_mr,
+                     TYPE_MEMORY_REGION, MemoryRegion *),
     DEFINE_PROP_END_OF_LIST(),
 };
 
@@ -1184,12 +1202,19 @@ static void mos6522_q800_via1_reset(DeviceState *dev)
 {
     MOS6522State *ms = MOS6522(dev);
     MOS6522DeviceClass *mdc = MOS6522_GET_CLASS(ms);
+    MOS6522Q800VIA1State *v1s = container_of(ms, MOS6522Q800VIA1State,
+                                             parent_obj);
+    MacVIAState *m = container_of(v1s, MacVIAState, mos6522_via1);
 
     mdc->parent_reset(dev);
 
     ms->timers[0].frequency = VIA_TIMER_FREQ;
     ms->timers[1].frequency = VIA_TIMER_FREQ;
 
+    if (m->rom_mr) {
+        ms->a = VIA1A_vOverlay;
+        memory_region_set_enabled(&m->rom_overlay, true);
+    }
     ms->b = VIA1B_vADB_StateMask | VIA1B_vADBInt | VIA1B_vRTCEnb;
 }
 
