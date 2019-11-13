@@ -67,7 +67,7 @@
 #define VIA_BASE              (IO_BASE + 0x00000)
 #define SONIC_PROM_BASE       (IO_BASE + 0x08000)
 #define SONIC_BASE            (IO_BASE + 0x0a000)
-#define SCC_BASE              (IO_BASE + 0x0c020)
+#define SCC_BASE              (IO_BASE + 0x0c000)
 #define ESP_BASE              (IO_BASE + 0x10000)
 #define ESP_PDMA              (IO_BASE + 0x10100)
 #define ASC_BASE              (IO_BASE + 0x14000)
