@@ -46,6 +46,7 @@
 #include "sysemu/qtest.h"
 #include "sysemu/runstate.h"
 #include "sysemu/reset.h"
+#include "hw/misc/djmemc.h"
 
 #define MACROM_ADDR     0x40800000
 #define MACROM_SIZE     0x00100000
@@ -68,6 +69,7 @@
 #define SONIC_PROM_BASE       (IO_BASE + 0x08000)
 #define SONIC_BASE            (IO_BASE + 0x0a000)
 #define SCC_BASE              (IO_BASE + 0x0c000)
+#define DJMEMC_BASE           (IO_BASE + 0x0e000)
 #define ESP_BASE              (IO_BASE + 0x10000)
 #define ESP_PDMA              (IO_BASE + 0x10100)
 #define ASC_BASE              (IO_BASE + 0x14000)
@@ -84,39 +86,6 @@
 #define VIDEO_BASE            0xf9001000
 
 #define MAC_CLOCK  3686418
-
-/*
- * The GLUE (General Logic Unit) is an Apple custom integrated circuit chip
- * that performs a variety of functions (RAM management, clock generation, ...).
- * The GLUE chip receives interrupt requests from various devices,
- * assign priority to each, and asserts one or more interrupt line to the
- * CPU.
- */
-
-typedef struct {
-    M68kCPU *cpu;
-    uint8_t ipr;
-} GLUEState;
-
-static void GLUE_set_irq(void *opaque, int irq, int level)
-{
-    GLUEState *s = opaque;
-    int i;
-
-    if (level) {
-        s->ipr |= 1 << irq;
-    } else {
-        s->ipr &= ~(1 << irq);
-    }
-
-    for (i = 7; i >= 0; i--) {
-        if ((s->ipr >> i) & 1) {
-            m68k_set_irq_level(s->cpu, i + 1, i + 25);
-            return;
-        }
-    }
-    m68k_set_irq_level(s->cpu, 0, 0);
-}
 
 static void main_cpu_reset(void *opaque)
 {
@@ -169,6 +138,7 @@ static void q800_init(MachineState *machine)
     const char *kernel_cmdline = machine->kernel_cmdline;
     hwaddr parameters_base;
     CPUState *cs;
+    DeviceState *djmemc_dev;
     DeviceState *dev;
     DeviceState *via_dev;
     SysBusESPState *sysbus_esp;
@@ -176,8 +146,6 @@ static void q800_init(MachineState *machine)
     SysBusDevice *sysbus;
     BusState *adb_bus;
     NubusBus *nubus;
-    GLUEState *irq;
-    qemu_irq *pic;
     DriveInfo *dinfo;
 
     linux_boot = (kernel_filename != NULL);
@@ -210,11 +178,14 @@ static void q800_init(MachineState *machine)
         g_free(name);
     }
 
-    /* IRQ Glue */
+    /* djMEMC memory and interrupt controller */
 
-    irq = g_new0(GLUEState, 1);
-    irq->cpu = cpu;
-    pic = qemu_allocate_irqs(GLUE_set_irq, irq, 8);
+    djmemc_dev = qdev_new(TYPE_DJMEMC);
+    object_property_set_link(OBJECT(djmemc_dev), "cpu", OBJECT(cpu),
+                             &error_abort);
+    sysbus = SYS_BUS_DEVICE(djmemc_dev);
+    sysbus_realize_and_unref(sysbus, &error_fatal);
+    sysbus_mmio_map(sysbus, 0, DJMEMC_BASE);
 
     /* VIA */
 
@@ -226,9 +197,10 @@ static void q800_init(MachineState *machine)
     sysbus = SYS_BUS_DEVICE(via_dev);
     sysbus_realize_and_unref(sysbus, &error_fatal);
     sysbus_mmio_map(sysbus, 0, VIA_BASE);
-    qdev_connect_gpio_out_named(DEVICE(sysbus), "irq", 0, pic[0]);
-    qdev_connect_gpio_out_named(DEVICE(sysbus), "irq", 1, pic[1]);
-
+    qdev_connect_gpio_out_named(DEVICE(sysbus), "irq", 0,
+                                qdev_get_gpio_in(djmemc_dev, 0));
+    qdev_connect_gpio_out_named(DEVICE(sysbus),
+                                "irq", 1, qdev_get_gpio_in(djmemc_dev, 1));
 
     adb_bus = qdev_get_child_bus(via_dev, "adb.0");
     dev = qdev_new(TYPE_ADB_KEYBOARD);
@@ -268,7 +240,7 @@ static void q800_init(MachineState *machine)
     sysbus_realize_and_unref(sysbus, &error_fatal);
     sysbus_mmio_map(sysbus, 0, SONIC_BASE);
     sysbus_mmio_map(sysbus, 1, SONIC_PROM_BASE);
-    sysbus_connect_irq(sysbus, 0, pic[2]);
+    sysbus_connect_irq(sysbus, 0, qdev_get_gpio_in(djmemc_dev, 2));
 
     /* SCC */
 
@@ -283,8 +255,8 @@ static void q800_init(MachineState *machine)
     qdev_prop_set_uint32(dev, "chnAtype", 0);
     sysbus = SYS_BUS_DEVICE(dev);
     sysbus_realize_and_unref(sysbus, &error_fatal);
-    sysbus_connect_irq(sysbus, 0, pic[3]);
-    sysbus_connect_irq(sysbus, 1, pic[3]);
+    sysbus_connect_irq(sysbus, 0, qdev_get_gpio_in(djmemc_dev, 3));
+    sysbus_connect_irq(sysbus, 1, qdev_get_gpio_in(djmemc_dev, 3));
     sysbus_mmio_map(sysbus, 0, SCC_BASE);
 
     /* SCSI */
