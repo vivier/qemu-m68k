@@ -44,6 +44,7 @@
 #include "hw/display/macfb.h"
 #include "hw/block/swim.h"
 #include "hw/misc/djmemc.h"
+#include "hw/misc/iosb.h"
 #include "net/net.h"
 #include "qapi/error.h"
 #include "sysemu/qtest.h"
@@ -68,6 +69,7 @@
 #define ESP_BASE              (IO_BASE + 0x10000)
 #define ESP_PDMA              (IO_BASE + 0x10100)
 #define ASC_BASE              (IO_BASE + 0x14000)
+#define IOSB_BASE             (IO_BASE + 0x18000)
 #define SWIM_BASE             (IO_BASE + 0x1E000)
 
 #define SONIC_PROM_SIZE       0x1000
@@ -249,6 +251,13 @@ static void q800_init(MachineState *machine)
     sysbus = SYS_BUS_DEVICE(djmemc_dev);
     sysbus_realize_and_unref(sysbus, &error_fatal);
     sysbus_mmio_map(sysbus, 0, DJMEMC_BASE);
+
+    /* IOSB subsystem */
+
+    dev = qdev_new(TYPE_IOSB);
+    sysbus = SYS_BUS_DEVICE(dev);
+    sysbus_realize_and_unref(sysbus, &error_fatal);
+    sysbus_mmio_map(sysbus, 0, IOSB_BASE);
 
     /* VIA 1 */
     via1_dev = qdev_new(TYPE_MOS6522_Q800_VIA1);

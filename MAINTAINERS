@@ -1133,6 +1133,7 @@ F: hw/display/macfb.c
 F: hw/block/swim.c
 F: hw/misc/djmemc.c
 F: hw/audio/asc.c
+F: hw/misc/iosb.c
 F: hw/m68k/bootinfo.h
 F: include/standard-headers/asm-m68k/bootinfo.h
 F: include/standard-headers/asm-m68k/bootinfo-mac.h
@@ -1142,6 +1143,7 @@ F: include/hw/display/macfb.h
 F: include/hw/block/swim.h
 F: include/hw/misc/djmemc.c
 F: include/hw/audio/asc.h
+F: include/hw/misc/iosb.c
 
 virt
 M: Laurent Vivier <laurent@vivier.eu>

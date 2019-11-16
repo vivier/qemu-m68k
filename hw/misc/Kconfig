@@ -174,4 +174,7 @@ config VIRT_CTRL
 config DJMEMC
     bool
 
+config IOSB
+    bool
+
 source macio/Kconfig

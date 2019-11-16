@@ -256,3 +256,7 @@ virt_ctrl_instance_init(void *dev) "ctrl: %p"
 # djmemc.c
 djMEMC_read(int reg, unsigned size, uint64_t value) "reg=%d size=%u value=0x%"PRIx64
 djMEMC_write(int reg, unsigned size, uint64_t value) "reg=%d size=%u value=0x%"PRIx64
+
+# iosb.c
+IOSB_read(int reg, unsigned size, uint64_t value) "reg=%d size=%u value=0x%"PRIx64
+IOSB_write(int reg, unsigned size, uint64_t value) "reg=%d size=%u value=0x%"PRIx64
