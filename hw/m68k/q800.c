@@ -48,6 +48,7 @@
 #include "sysemu/runstate.h"
 #include "sysemu/reset.h"
 #include "hw/misc/djmemc.h"
+#include "hw/misc/iosb.h"
 
 #define MACROM_ADDR     0x40800000
 #define MACROM_SIZE     0x00100000
@@ -74,6 +75,7 @@
 #define ESP_BASE              (IO_BASE + 0x10000)
 #define ESP_PDMA              (IO_BASE + 0x10100)
 #define ASC_BASE              (IO_BASE + 0x14000)
+#define IOSB_BASE             (IO_BASE + 0x18000)
 #define SWIM_BASE             (IO_BASE + 0x1E000)
 
 #define NUBUS_SUPER_SLOT_BASE 0x60000000
@@ -245,6 +247,13 @@ static void q800_init(MachineState *machine)
     sysbus = SYS_BUS_DEVICE(djmemc_dev);
     sysbus_realize_and_unref(sysbus, &error_fatal);
     sysbus_mmio_map(sysbus, 0, DJMEMC_BASE);
+
+    /* IOSB subsystem */
+
+    dev = qdev_new(TYPE_IOSB);
+    sysbus = SYS_BUS_DEVICE(dev);
+    sysbus_realize_and_unref(sysbus, &error_fatal);
+    sysbus_mmio_map(sysbus, 0, IOSB_BASE);
 
     /* VIA */
 

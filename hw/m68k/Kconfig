@@ -23,4 +23,5 @@ config Q800
     select ESP
     select DP8393X
     select DJMEMC
+    select IOSB
     select ASC
