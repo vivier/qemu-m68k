@@ -42,6 +42,7 @@
 #include "hw/nubus/mac-nubus-bridge.h"
 #include "hw/display/macfb.h"
 #include "hw/block/swim.h"
+#include "hw/misc/djmemc.h"
 #include "net/net.h"
 #include "qapi/error.h"
 #include "sysemu/qtest.h"
@@ -62,6 +63,7 @@
 #define SONIC_PROM_BASE       (IO_BASE + 0x08000)
 #define SONIC_BASE            (IO_BASE + 0x0a000)
 #define SCC_BASE              (IO_BASE + 0x0c000)
+#define DJMEMC_BASE           (IO_BASE + 0x0e000)
 #define ESP_BASE              (IO_BASE + 0x10000)
 #define ESP_PDMA              (IO_BASE + 0x10100)
 #define ASC_BASE              (IO_BASE + 0x14000)
@@ -84,95 +86,6 @@
  */
 #define Q800_NUBUS_SLOTS_AVAILABLE    (BIT(0x9) | BIT(0xc) | BIT(0xd) | \
                                        BIT(0xe))
-
-/*
- * The GLUE (General Logic Unit) is an Apple custom integrated circuit chip
- * that performs a variety of functions (RAM management, clock generation, ...).
- * The GLUE chip receives interrupt requests from various devices,
- * assign priority to each, and asserts one or more interrupt line to the
- * CPU.
- */
-
-#define TYPE_GLUE "q800-glue"
-OBJECT_DECLARE_SIMPLE_TYPE(GLUEState, GLUE)
-
-struct GLUEState {
-    SysBusDevice parent_obj;
-    M68kCPU *cpu;
-    uint8_t ipr;
-};
-
-static void GLUE_set_irq(void *opaque, int irq, int level)
-{
-    GLUEState *s = opaque;
-    int i;
-
-    if (level) {
-        s->ipr |= 1 << irq;
-    } else {
-        s->ipr &= ~(1 << irq);
-    }
-
-    for (i = 7; i >= 0; i--) {
-        if ((s->ipr >> i) & 1) {
-            m68k_set_irq_level(s->cpu, i + 1, i + 25);
-            return;
-        }
-    }
-    m68k_set_irq_level(s->cpu, 0, 0);
-}
-
-static void glue_reset(DeviceState *dev)
-{
-    GLUEState *s = GLUE(dev);
-
-    s->ipr = 0;
-}
-
-static const VMStateDescription vmstate_glue = {
-    .name = "q800-glue",
-    .version_id = 0,
-    .minimum_version_id = 0,
-    .fields = (VMStateField[]) {
-        VMSTATE_UINT8(ipr, GLUEState),
-        VMSTATE_END_OF_LIST(),
-    },
-};
-
-/*
- * If the m68k CPU implemented its inbound irq lines as GPIO lines
- * rather than via the m68k_set_irq_level() function we would not need
- * this cpu link property and could instead provide outbound IRQ lines
- * that the board could wire up to the CPU.
- */
-static Property glue_properties[] = {
-    DEFINE_PROP_LINK("cpu", GLUEState, cpu, TYPE_M68K_CPU, M68kCPU *),
-    DEFINE_PROP_END_OF_LIST(),
-};
-
-static void glue_init(Object *obj)
-{
-    DeviceState *dev = DEVICE(obj);
-
-    qdev_init_gpio_in(dev, GLUE_set_irq, 8);
-}
-
-static void glue_class_init(ObjectClass *klass, void *data)
-{
-    DeviceClass *dc = DEVICE_CLASS(klass);
-
-    dc->vmsd = &vmstate_glue;
-    dc->reset = glue_reset;
-    device_class_set_props(dc, glue_properties);
-}
-
-static const TypeInfo glue_info = {
-    .name = TYPE_GLUE,
-    .parent = TYPE_SYS_BUS_DEVICE,
-    .instance_size = sizeof(GLUEState),
-    .instance_init = glue_init,
-    .class_init = glue_class_init,
-};
 
 static void main_cpu_reset(void *opaque)
 {
@@ -228,6 +141,7 @@ static void q800_init(MachineState *machine)
     const char *bios_name = machine->firmware ?: MACROM_FILENAME;
     hwaddr parameters_base;
     CPUState *cs;
+    DeviceState *djmemc_dev;
     DeviceState *dev;
     DeviceState *via1_dev, *via2_dev;
     DeviceState *escc_orgate;
@@ -236,7 +150,6 @@ static void q800_init(MachineState *machine)
     SysBusDevice *sysbus;
     BusState *adb_bus;
     NubusBus *nubus;
-    DeviceState *glue;
     DriveInfo *dinfo;
 
     linux_boot = (kernel_filename != NULL);
@@ -269,10 +182,14 @@ static void q800_init(MachineState *machine)
         g_free(name);
     }
 
-    /* IRQ Glue */
-    glue = qdev_new(TYPE_GLUE);
-    object_property_set_link(OBJECT(glue), "cpu", OBJECT(cpu), &error_abort);
-    sysbus_realize_and_unref(SYS_BUS_DEVICE(glue), &error_fatal);
+    /* djMEMC memory and interrupt controller */
+
+    djmemc_dev = qdev_new(TYPE_DJMEMC);
+    object_property_set_link(OBJECT(djmemc_dev), "cpu", OBJECT(cpu),
+                             &error_abort);
+    sysbus = SYS_BUS_DEVICE(djmemc_dev);
+    sysbus_realize_and_unref(sysbus, &error_fatal);
+    sysbus_mmio_map(sysbus, 0, DJMEMC_BASE);
 
     /* VIA 1 */
     via1_dev = qdev_new(TYPE_MOS6522_Q800_VIA1);
@@ -283,7 +200,7 @@ static void q800_init(MachineState *machine)
     sysbus = SYS_BUS_DEVICE(via1_dev);
     sysbus_realize_and_unref(sysbus, &error_fatal);
     sysbus_mmio_map(sysbus, 1, VIA_BASE);
-    sysbus_connect_irq(sysbus, 0, qdev_get_gpio_in(glue, 0));
+    sysbus_connect_irq(sysbus, 0, qdev_get_gpio_in(djmemc_dev, 0));
 
     adb_bus = qdev_get_child_bus(via1_dev, "adb.0");
     dev = qdev_new(TYPE_ADB_KEYBOARD);
@@ -296,7 +213,7 @@ static void q800_init(MachineState *machine)
     sysbus = SYS_BUS_DEVICE(via2_dev);
     sysbus_realize_and_unref(sysbus, &error_fatal);
     sysbus_mmio_map(sysbus, 1, VIA_BASE + VIA_SIZE);
-    sysbus_connect_irq(sysbus, 0, qdev_get_gpio_in(glue, 1));
+    sysbus_connect_irq(sysbus, 0, qdev_get_gpio_in(djmemc_dev, 1));
 
     /* MACSONIC */
 
@@ -329,7 +246,7 @@ static void q800_init(MachineState *machine)
     sysbus = SYS_BUS_DEVICE(dev);
     sysbus_realize_and_unref(sysbus, &error_fatal);
     sysbus_mmio_map(sysbus, 0, SONIC_BASE);
-    sysbus_connect_irq(sysbus, 0, qdev_get_gpio_in(glue, 2));
+    sysbus_connect_irq(sysbus, 0, qdev_get_gpio_in(djmemc_dev, 2));
 
     memory_region_init_rom(dp8393x_prom, NULL, "dp8393x-q800.prom",
                            SONIC_PROM_SIZE, &error_fatal);
@@ -365,7 +282,7 @@ static void q800_init(MachineState *machine)
     qdev_realize_and_unref(escc_orgate, NULL, &error_fatal);
     sysbus_connect_irq(sysbus, 0, qdev_get_gpio_in(escc_orgate, 0));
     sysbus_connect_irq(sysbus, 1, qdev_get_gpio_in(escc_orgate, 1));
-    qdev_connect_gpio_out(DEVICE(escc_orgate), 0, qdev_get_gpio_in(glue, 3));
+    qdev_connect_gpio_out(DEVICE(escc_orgate), 0, qdev_get_gpio_in(djmemc_dev, 3));
     sysbus_mmio_map(sysbus, 0, SCC_BASE);
 
     /* SCSI */
@@ -535,7 +452,6 @@ static const TypeInfo q800_machine_typeinfo = {
 static void q800_machine_register_types(void)
 {
     type_register_static(&q800_machine_typeinfo);
-    type_register_static(&glue_info);
 }
 
 type_init(q800_machine_register_types)
