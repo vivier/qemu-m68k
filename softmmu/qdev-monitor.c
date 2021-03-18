@@ -42,6 +42,8 @@
 #include "hw/qdev-properties.h"
 #include "hw/clock.h"
 
+#define QEMU_ARCH_NO_PCI (QEMU_ARCH_S390X | QEMU_ARCH_M68K)
+
 /*
  * Aliases were a bad idea from the start.  Let's keep them
  * from spreading further.
@@ -60,34 +62,46 @@ static const QDevAlias qdev_alias_table[] = {
     { "ES1370", "es1370" }, /* -soundhw name */
     { "ich9-ahci", "ahci" },
     { "lsi53c895a", "lsi" },
+    { "virtio-9p-device", "virtio-9p", QEMU_ARCH_M68K },
     { "virtio-9p-ccw", "virtio-9p", QEMU_ARCH_S390X },
-    { "virtio-9p-pci", "virtio-9p", QEMU_ARCH_ALL & ~QEMU_ARCH_S390X },
+    { "virtio-9p-pci", "virtio-9p", QEMU_ARCH_ALL & ~QEMU_ARCH_NO_PCI },
+    { "virtio-balloon-device", "virtio-balloon", QEMU_ARCH_M68K },
     { "virtio-balloon-ccw", "virtio-balloon", QEMU_ARCH_S390X },
-    { "virtio-balloon-pci", "virtio-balloon",
-            QEMU_ARCH_ALL & ~QEMU_ARCH_S390X },
+    { "virtio-balloon-pci", "virtio-balloon", QEMU_ARCH_ALL &
+                                             ~QEMU_ARCH_NO_PCI },
+    { "virtio-blk-device", "virtio-blk", QEMU_ARCH_M68K },
     { "virtio-blk-ccw", "virtio-blk", QEMU_ARCH_S390X },
-    { "virtio-blk-pci", "virtio-blk", QEMU_ARCH_ALL & ~QEMU_ARCH_S390X },
+    { "virtio-blk-pci", "virtio-blk", QEMU_ARCH_ALL & ~QEMU_ARCH_NO_PCI },
     { "virtio-gpu-ccw", "virtio-gpu", QEMU_ARCH_S390X },
-    { "virtio-gpu-pci", "virtio-gpu", QEMU_ARCH_ALL & ~QEMU_ARCH_S390X },
+    { "virtio-gpu-device", "virtio-gpu", QEMU_ARCH_M68K },
+    { "virtio-gpu-pci", "virtio-gpu", QEMU_ARCH_ALL & ~QEMU_ARCH_NO_PCI },
+    { "virtio-input-host-device", "virtio-input-host", QEMU_ARCH_M68K },
     { "virtio-input-host-ccw", "virtio-input-host", QEMU_ARCH_S390X },
-    { "virtio-input-host-pci", "virtio-input-host",
-            QEMU_ARCH_ALL & ~QEMU_ARCH_S390X },
-    { "virtio-iommu-pci", "virtio-iommu", QEMU_ARCH_ALL & ~QEMU_ARCH_S390X },
+    { "virtio-input-host-pci", "virtio-input-host", QEMU_ARCH_ALL &
+                                                   ~QEMU_ARCH_NO_PCI },
+    { "virtio-iommu-pci", "virtio-iommu", QEMU_ARCH_ALL & ~QEMU_ARCH_NO_PCI },
+    { "virtio-keyboard-device", "virtio-keyboard", QEMU_ARCH_M68K },
     { "virtio-keyboard-ccw", "virtio-keyboard", QEMU_ARCH_S390X },
-    { "virtio-keyboard-pci", "virtio-keyboard",
-            QEMU_ARCH_ALL & ~QEMU_ARCH_S390X },
+    { "virtio-keyboard-pci", "virtio-keyboard", QEMU_ARCH_ALL &
+                                               ~QEMU_ARCH_NO_PCI },
+    { "virtio-mouse-device", "virtio-mouse", QEMU_ARCH_M68K },
     { "virtio-mouse-ccw", "virtio-mouse", QEMU_ARCH_S390X },
-    { "virtio-mouse-pci", "virtio-mouse", QEMU_ARCH_ALL & ~QEMU_ARCH_S390X },
+    { "virtio-mouse-pci", "virtio-mouse", QEMU_ARCH_ALL & ~QEMU_ARCH_NO_PCI },
+    { "virtio-net-device", "virtio-net", QEMU_ARCH_M68K },
     { "virtio-net-ccw", "virtio-net", QEMU_ARCH_S390X },
-    { "virtio-net-pci", "virtio-net", QEMU_ARCH_ALL & ~QEMU_ARCH_S390X },
+    { "virtio-net-pci", "virtio-net", QEMU_ARCH_ALL & ~QEMU_ARCH_NO_PCI },
+    { "virtio-rng-device", "virtio-rng", QEMU_ARCH_M68K },
     { "virtio-rng-ccw", "virtio-rng", QEMU_ARCH_S390X },
-    { "virtio-rng-pci", "virtio-rng", QEMU_ARCH_ALL & ~QEMU_ARCH_S390X },
+    { "virtio-rng-pci", "virtio-rng", QEMU_ARCH_ALL & ~QEMU_ARCH_NO_PCI },
+    { "virtio-scsi-device", "virtio-scsi", QEMU_ARCH_M68K },
     { "virtio-scsi-ccw", "virtio-scsi", QEMU_ARCH_S390X },
-    { "virtio-scsi-pci", "virtio-scsi", QEMU_ARCH_ALL & ~QEMU_ARCH_S390X },
+    { "virtio-scsi-pci", "virtio-scsi", QEMU_ARCH_ALL & ~QEMU_ARCH_NO_PCI },
+    { "virtio-serial-device", "virtio-serial", QEMU_ARCH_M68K },
     { "virtio-serial-ccw", "virtio-serial", QEMU_ARCH_S390X },
-    { "virtio-serial-pci", "virtio-serial", QEMU_ARCH_ALL & ~QEMU_ARCH_S390X },
+    { "virtio-serial-pci", "virtio-serial", QEMU_ARCH_ALL & ~QEMU_ARCH_NO_PCI},
+    { "virtio-tablet-device", "virtio-tablet", QEMU_ARCH_M68K },
     { "virtio-tablet-ccw", "virtio-tablet", QEMU_ARCH_S390X },
-    { "virtio-tablet-pci", "virtio-tablet", QEMU_ARCH_ALL & ~QEMU_ARCH_S390X },
+    { "virtio-tablet-pci", "virtio-tablet", QEMU_ARCH_ALL & ~QEMU_ARCH_NO_PCI },
     { }
 };
 
