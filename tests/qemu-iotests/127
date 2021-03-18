@@ -44,7 +44,7 @@ trap "_cleanup; exit \$status" 0 1 2 3 15
 _supported_fmt qcow2
 _supported_proto file fuse
 
-_require_devices virtio-scsi scsi-hd
+_require_devices virtio-scsi-pci scsi-hd
 
 IMG_SIZE=64K
 
@@ -62,7 +62,7 @@ $QEMU_IO -c 'write 0 42' "$TEST_IMG.overlay0" | _filter_qemu_io
 _launch_qemu \
     -object iothread,id=iothr \
     -blockdev node-name=source,driver=$IMGFMT,file.driver=file,file.filename="$TEST_IMG.overlay0" \
-    -device virtio-scsi,id=scsi-bus,iothread=iothr \
+    -device virtio-scsi-pci,id=scsi-bus,iothread=iothr \
     -device scsi-hd,bus=scsi-bus.0,drive=source
 
 _send_qemu_cmd $QEMU_HANDLE \
