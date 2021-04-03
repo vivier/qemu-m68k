@@ -81,6 +81,7 @@ blobs = files(
   'opensbi-riscv32-generic-fw_dynamic.elf',
   'opensbi-riscv64-generic-fw_dynamic.elf',
   'npcm7xx_bootrom.bin',
+  'm68k-virt.rom',
 )
 
 if get_option('install_blobs')
