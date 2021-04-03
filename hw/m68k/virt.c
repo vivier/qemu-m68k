@@ -9,6 +9,7 @@
 
 #include "qemu/osdep.h"
 #include "qemu/units.h"
+#include "qemu/datadir.h"
 #include "qemu/guest-random.h"
 #include "sysemu/sysemu.h"
 #include "cpu.h"
@@ -86,6 +87,13 @@
 #define VIRT_VIRTIO_MMIO_BASE 0xff010000     /* MMIO: 0xff010000 - 0xff01ffff */
 #define VIRT_VIRTIO_IRQ_BASE  PIC_IRQ(2, 1)  /* PIC: 2, 3, 4, 5, IRQ: ALL */
 
+/*
+ * At the end of the memory address space we have a 1 MB ROM
+ */
+#define VIRT_ROM_ADDR 0xfff00000
+#define VIRT_ROM_SIZE 0x00100000
+#define VIRT_ROM_NAME "m68k-virt.rom"
+
 typedef struct {
     M68kCPU *cpu;
     hwaddr initial_pc;
@@ -121,12 +129,16 @@ static void virt_init(MachineState *machine)
     const char *kernel_filename = machine->kernel_filename;
     const char *initrd_filename = machine->initrd_filename;
     const char *kernel_cmdline = machine->kernel_cmdline;
+    const char *bios_name = machine->firmware ?: VIRT_ROM_NAME;
     hwaddr parameters_base;
     DeviceState *dev;
     DeviceState *irqc_dev;
     DeviceState *pic_dev[VIRT_GF_PIC_NB];
     SysBusDevice *sysbus;
     hwaddr io_base;
+    MemoryRegion *rom;
+    int bios_size;
+    char *filename;
     int i;
     ResetInfo *reset_info;
     uint8_t rng_seed[32];
@@ -216,6 +228,19 @@ static void virt_init(MachineState *machine)
         io_base += 0x200;
     }
 
+    /* Load ROM */
+    filename = qemu_find_file(QEMU_FILE_TYPE_BIOS, bios_name);
+    if (filename) {
+        rom = g_malloc(sizeof(*rom));
+        memory_region_init_rom(rom, NULL, "m68k-virt.rom", VIRT_ROM_SIZE,
+                           &error_abort);
+        memory_region_add_subregion(get_system_memory(), VIRT_ROM_ADDR, rom);
+        bios_size = load_image_targphys(filename, VIRT_ROM_ADDR, VIRT_ROM_SIZE);
+    } else {
+        bios_size = -1;
+    }
+
+    /* Load kernel if needed */
     if (kernel_filename) {
         CPUState *cs = CPU(cpu);
         uint64_t high;
@@ -306,6 +331,13 @@ static void virt_init(MachineState *machine)
                                            param_ptr - param_blob) +
                             (param_rng_seed - param_blob));
         g_free(param_blob);
+    } else {
+        if (bios_size != VIRT_ROM_SIZE) {
+            error_report("ROM not found (%s) and no kernel provided",
+                         bios_name);
+            exit(EXIT_FAILURE);
+        }
+        reset_info->initial_pc = VIRT_ROM_ADDR;
     }
 }
 

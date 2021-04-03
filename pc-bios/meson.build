@@ -79,6 +79,7 @@ blobs = [
   'npcm7xx_bootrom.bin',
   'vof.bin',
   'vof-nvram.bin',
+  'm68k-virt.rom',
 ]
 
 dtc = find_program('dtc', required: false)

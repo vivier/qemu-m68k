@@ -43,3 +43,9 @@
 [submodule "tests/lcitool/libvirt-ci"]
 	path = tests/lcitool/libvirt-ci
 	url = https://gitlab.com/libvirt/libvirt-ci.git
+[submodule "subprojects/libvfio-user"]
+	path = subprojects/libvfio-user
+	url = https://gitlab.com/qemu-project/libvfio-user.git
+[submodule "roms/m68k-virt"]
+	path = roms/m68k-virt
+	url = https://github.com/vivier/m68k-virt-bootstrap.git
