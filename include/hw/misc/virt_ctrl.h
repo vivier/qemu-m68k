@@ -17,6 +17,12 @@ struct VirtCtrlState {
     qemu_irq irq;
 
     uint32_t irq_enabled;
+
+    MachineState *machine;
+    char *fw_elf;
+    char *fw_ramfs;
+    uint32_t fw_bootinfo_size;
+    uint8_t *fw_bootinfo;
 };
 
 #endif

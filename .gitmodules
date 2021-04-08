@@ -64,3 +64,6 @@
 [submodule "roms/vbootrom"]
 	path = roms/vbootrom
 	url = https://gitlab.com/qemu-project/vbootrom.git
+[submodule "roms/buildroot"]
+	path = roms/buildroot
+	url = git@github.com:vivier/buildroot.git
