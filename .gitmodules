@@ -49,3 +49,6 @@
 [submodule "roms/m68k-virt"]
 	path = roms/m68k-virt
 	url = https://github.com/vivier/m68k-virt-bootstrap.git
+[submodule "roms/buildroot"]
+	path = roms/buildroot
+	url = https://gitlab.com/laurent_vivier/buildroot.git

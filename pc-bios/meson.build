@@ -80,6 +80,8 @@ blobs = [
   'vof.bin',
   'vof-nvram.bin',
   'm68k-virt.rom',
+  'm68k-virt.vmlinux',
+  'm68k-virt.petitboot',
 ]
 
 dtc = find_program('dtc', required: false)

@@ -90,9 +90,11 @@
 /*
  * At the end of the memory address space we have a 1 MB ROM
  */
-#define VIRT_ROM_ADDR 0xfff00000
-#define VIRT_ROM_SIZE 0x00100000
-#define VIRT_ROM_NAME "m68k-virt.rom"
+#define VIRT_ROM_ADDR      0xfff00000
+#define VIRT_ROM_SIZE      0x00100000
+#define VIRT_ROM_NAME      "m68k-virt.rom"
+#define VIRT_FW_ELF_NAME   "m68k-virt.vmlinux"
+#define VIRT_FW_RAMFS_NAME "m68k-virt.petitboot"
 
 typedef struct {
     M68kCPU *cpu;
@@ -213,8 +215,15 @@ static void virt_init(MachineState *machine)
     sysbus_connect_irq(sysbus, 0, PIC_GPIO(VIRT_GF_TTY_IRQ_BASE));
 
     /* virt controller */
-    dev = sysbus_create_simple(TYPE_VIRT_CTRL, VIRT_CTRL_MMIO_BASE,
-                               PIC_GPIO(VIRT_CTRL_IRQ_BASE));
+    dev = qdev_new(TYPE_VIRT_CTRL);
+    object_property_set_link(OBJECT(dev), "machine", OBJECT(machine),
+                             &error_abort);
+    qdev_prop_set_string(dev, "fw.elf", VIRT_FW_ELF_NAME);
+    qdev_prop_set_string(dev, "fw.ramfs", VIRT_FW_RAMFS_NAME);
+    sysbus = SYS_BUS_DEVICE(dev);
+    sysbus_realize_and_unref(sysbus, &error_fatal);
+    sysbus_mmio_map(sysbus, 0, VIRT_CTRL_MMIO_BASE);
+    sysbus_connect_irq(sysbus, 0, PIC_GPIO(VIRT_CTRL_IRQ_BASE));
 
     /* virtio-mmio */
     io_base = VIRT_VIRTIO_MMIO_BASE;

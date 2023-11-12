@@ -5,27 +5,97 @@
  */
 
 #include "qemu/osdep.h"
+#include "qemu/datadir.h"
 #include "hw/qdev-properties.h"
 #include "hw/sysbus.h"
+#include "hw/loader.h"
+#include "hw/boards.h"
 #include "migration/vmstate.h"
 #include "qemu/log.h"
 #include "trace.h"
+#include "elf.h"
 #include "sysemu/runstate.h"
 #include "hw/misc/virt_ctrl.h"
 
 enum {
     REG_FEATURES = 0x00,
     REG_CMD      = 0x04,
+    REG_PARAM    = 0x08,
 };
 
 #define FEAT_POWER_CTRL 0x00000001
+#define FEAT_FW_CTRL    0x00000002
+
+#define FEAT_SUPPORTED (FEAT_POWER_CTRL | FEAT_FW_CTRL)
 
 enum {
+    /* Power Control */
     CMD_NOOP,
     CMD_RESET,
     CMD_HALT,
     CMD_PANIC,
+    /* Firmware Control */
+    CMD_FW_MACHINE_ID,
+    CMD_FW_LOAD,
+    CMD_FW_RAMSIZE,
+    CMD_FW_QEMU_VERSION
 };
+
+enum {
+   FW_M68K,
+};
+
+static uint32_t param;
+
+#define RESULT_ERROR (-1)
+
+static uint32_t fw_load_m68k(VirtCtrlState *s)
+{
+    char *elf_filename, *ramfs_filename;
+    int32_t kernel_size;
+    uint64_t elf_entry, high;
+    int32_t ramfs_size;
+    ram_addr_t ramfs_base;
+    void *ram_ptr;
+
+    elf_filename = qemu_find_file(QEMU_FILE_TYPE_BIOS, s->fw_elf);
+    if (elf_filename == NULL) {
+        error_report("Cannot find %s", s->fw_elf);
+        return RESULT_ERROR;
+    }
+    ramfs_filename = qemu_find_file(QEMU_FILE_TYPE_BIOS, s->fw_ramfs);
+    if (ramfs_filename == NULL) {
+        error_report("Cannot find %s", s->fw_ramfs);
+        return RESULT_ERROR;
+    }
+
+    kernel_size = load_elf_ram(elf_filename, NULL, NULL, NULL,
+                               &elf_entry, NULL, &high, NULL, 1,
+                               EM_68K, 0, 0, NULL, false);
+    if (kernel_size < 0) {
+        error_report("could not load kernel '%s'", elf_filename);
+        return RESULT_ERROR;
+    }
+
+    ramfs_size = get_image_size(ramfs_filename);
+    if (ramfs_size < 0) {
+        error_report("could not load initial ram disk '%s'",
+                     ramfs_filename);
+        return RESULT_ERROR;
+    }
+
+    ram_ptr = memory_region_get_ram_ptr(s->machine->ram);
+
+    ramfs_base = (s->machine->ram_size - ramfs_size) & ~0xfff;
+    load_image_size(ramfs_filename, ram_ptr + ramfs_base, ramfs_size);
+
+    high = (high + 1) & ~1;
+    *(uint32_t *)(ram_ptr + high) = cpu_to_be32(elf_entry);
+    *(uint32_t *)(ram_ptr + high + 4) = cpu_to_be32(ramfs_base);
+    *(uint32_t *)(ram_ptr + high + 8) = cpu_to_be32(ramfs_size);
+
+    return high;
+}
 
 static uint64_t virt_ctrl_read(void *opaque, hwaddr addr, unsigned size)
 {
@@ -34,7 +104,10 @@ static uint64_t virt_ctrl_read(void *opaque, hwaddr addr, unsigned size)
 
     switch (addr) {
     case REG_FEATURES:
-        value = FEAT_POWER_CTRL;
+        value = FEAT_SUPPORTED;
+        break;
+    case REG_PARAM:
+        value = param;
         break;
     default:
         qemu_log_mask(LOG_UNIMP,
@@ -43,7 +116,7 @@ static uint64_t virt_ctrl_read(void *opaque, hwaddr addr, unsigned size)
         break;
     }
 
-    trace_virt_ctrl_write(s, addr, size, value);
+    trace_virt_ctrl_read(s, addr, size, value);
 
     return value;
 }
@@ -69,7 +142,31 @@ static void virt_ctrl_write(void *opaque, hwaddr addr, uint64_t value,
         case CMD_PANIC:
             qemu_system_shutdown_request(SHUTDOWN_CAUSE_GUEST_PANIC);
             break;
+        case CMD_FW_LOAD:
+            switch (param) {
+            case FW_M68K:
+                param = fw_load_m68k(s);
+                break;
+            default:
+                qemu_log_mask(LOG_UNIMP, "%s: unimplemented FW type %d\n",
+                              __func__, param);
+                break;
+            }
+            break;
+        case CMD_FW_RAMSIZE:
+            param = s->machine->ram_size;
+            break;
+        case CMD_FW_QEMU_VERSION:
+            param = (QEMU_VERSION_MAJOR << 24) | (QEMU_VERSION_MINOR << 16) |
+                    (QEMU_VERSION_MICRO << 8);
+            break;
+        case CMD_FW_MACHINE_ID:
+            param = 0;
+            break;
         }
+        break;
+    case REG_PARAM:
+        param = value;
         break;
     default:
         qemu_log_mask(LOG_UNIMP,
@@ -114,6 +211,14 @@ static const VMStateDescription vmstate_virt_ctrl = {
     }
 };
 
+static Property virt_ctl_properties[] = {
+    DEFINE_PROP_LINK("machine", VirtCtrlState, machine,
+                     TYPE_MACHINE, MachineState *),
+    DEFINE_PROP_STRING("fw.elf", VirtCtrlState, fw_elf),
+    DEFINE_PROP_STRING("fw.ramfs", VirtCtrlState, fw_ramfs),
+    DEFINE_PROP_END_OF_LIST(),
+};
+
 static void virt_ctrl_instance_init(Object *obj)
 {
     SysBusDevice *dev = SYS_BUS_DEVICE(obj);
@@ -132,6 +237,8 @@ static void virt_ctrl_class_init(ObjectClass *oc, void *data)
     dc->reset = virt_ctrl_reset;
     dc->realize = virt_ctrl_realize;
     dc->vmsd = &vmstate_virt_ctrl;
+
+    device_class_set_props(dc, virt_ctl_properties);
 }
 
 static const TypeInfo virt_ctrl_info = {
